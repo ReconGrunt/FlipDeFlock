@@ -24,3 +24,4 @@ __pycache__/
 # Internal multi-agent process notes (kept local, not part of the project)
 AGENT_SWARM.md
 SPRINT_SUMMARY.md
+TESTING.md
