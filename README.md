@@ -42,6 +42,17 @@ counter-surveillance **site-survey** tool:
 Built for the [Momentum firmware](https://github.com/Next-Flip/Momentum-Firmware)
 (works on stock OFW too).
 
+## Status — a work in progress
+
+**FlipDeFlock is actively developed, not a finished product.** It's already
+useful in the field, but features are still landing, the detection signatures
+evolve as surveillance hardware changes, and not every path is hardware-tested on
+every board — expect rough edges and the occasional breaking change between
+versions. Treat detections as **indicators, not proof**: verify by eye. If you're
+relying on it for anything that matters, read the code and confirm the behavior
+yourself. Feedback and field data are what move it forward — see
+[Contributing](#contributing).
+
 ## Why an ESP32?
 
 The Flipper's onboard radio is BLE-only and can't do Wi-Fi monitor mode. Flock
@@ -232,6 +243,27 @@ these signatures. GPS NMEA approach inspired by the Momentum Sub-GHz GPS helper.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Contributing
+
+Contributions are genuinely welcome — this is a community counter-surveillance
+effort and it gets better with more eyes, more boards, and more field data. Some
+of the most useful things you can do:
+
+- **Field reports & signatures** — new Flock/ALPR OUIs, SSID/BLE patterns, or
+  false positives and misses you hit in the wild (precision feedback is gold).
+- **Board support** — try it on your ESP32 hardware and report wiring/quirks.
+- **Code** — bug fixes, new report formats, or any of the deferred roadmap items.
+
+Open an issue or a pull request. A few ground rules keep the project coherent:
+
+- **Passive recon only** — no deauth, injection, or jamming, ever.
+- **Correctness over features** — a false positive is worse than a missed
+  detection; don't trade precision for recall without good reason.
+- Target **API 87.1**, and it must build with **both `ufbt` and `fbt`**.
+- Keep it lean — the `.fap` loads entirely into the Flipper's 256 KB of RAM.
+
+By contributing you agree to license your work under this repo's MIT license.
 
 ## Roadmap
 
