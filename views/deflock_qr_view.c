@@ -4,7 +4,7 @@
 #include <gui/elements.h>
 #include "../lib/qrcodegen/qrcodegen.h"
 
-// Cap the encoder at version 8 (49x49 modules). A geo:/deflock.me URL with
+// Cap the encoder at version 8 (49x49 modules). A geo:/deflock.org URL with
 // ~6-decimal coordinates is well under that mode's byte-capacity, and it keeps
 // the two transient buffers small: BUFFER_LEN_FOR_VERSION(8) = 302 B each, so
 // the qrcode+temp pair in the model is ~604 B (within the <600 B budget for the

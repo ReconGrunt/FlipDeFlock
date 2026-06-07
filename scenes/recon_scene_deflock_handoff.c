@@ -41,7 +41,7 @@ static void recon_scene_deflock_handoff_show(ReconApp* app) {
 
     char url[64];
     snprintf(
-        url, sizeof(url), "https://deflock.me/?lat=%.6f&lng=%.6f", (double)c->lat, (double)c->lon);
+        url, sizeof(url), "https://deflock.org/?lat=%.6f&lng=%.6f", (double)c->lat, (double)c->lon);
 
     char coords[28];
     snprintf(coords, sizeof(coords), "%.6f,%.6f", (double)c->lat, (double)c->lon);

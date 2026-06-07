@@ -28,7 +28,7 @@ counter-surveillance site surveys:
   computer. Lets you switch between Marauder and the FlipDeFlock companion. (Built
   on Espressif's esp-serial-flasher; put the ESP in bootloader mode first.)
 - 🗺️ **Reports** — exports to Markdown, DeFlock-compatible GeoJSON (ready to
-  contribute to [deflock.me](https://deflock.me)), CSV, and WiGLE CSV (the
+  contribute to [deflock.org](https://deflock.org)), CSV, and WiGLE CSV (the
   wardriving format) on the SD card.
 - 📲 **Share to DeFlock** — renders a QR per camera that opens DeFlock on your
   phone at that location, so you contribute through the official app. The
@@ -195,7 +195,7 @@ in Settings. You can't brick it: the ROM bootloader always allows a re-flash.
 
 Saved reports land on the SD under **`apps_data/flipdeflock/reports/`**:
 Markdown (human-readable), DeFlock-compatible GeoJSON (ready for
-[deflock.me](https://deflock.me)), KML, plain CSV, and WiGLE CSV (WiFi and BLE)
+[deflock.org](https://deflock.org)), KML, plain CSV, and WiGLE CSV (WiFi and BLE)
 for wardriving uploads. Pull them with qFlipper or a card reader.
 
 ### 9. Share to DeFlock (phone handoff)
@@ -265,13 +265,21 @@ The detection method and Flock OUI prefixes build on the open
 counter-surveillance work of
 [colonelpanichacks/flock-you](https://github.com/colonelpanichacks/flock-you),
 [0xXyc/flock-you-wifi-recon](https://github.com/0xXyc/flock-you-wifi-recon), and
-the [DeFlock](https://deflock.me) community. Thanks to the researchers who mapped
+the [DeFlock](https://deflock.org) community. Thanks to the researchers who mapped
 these signatures. The GPS NMEA approach is based on the Momentum Sub-GHz GPS
 helper.
 
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Support
+
+FlipDeFlock is free and MIT-licensed, and it stays that way. If it's useful and
+you want to help cover development (and any legal costs that come with mapping
+surveillance hardware), there's a **Sponsor** button at the top of the repo.
+Donations are optional and never gate a feature. Spreading the word, filing good
+detections, and sending patches help just as much — see [Contributing](#contributing).
 
 ## Contributing
 

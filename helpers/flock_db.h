@@ -6,7 +6,7 @@
  *
  * Detection data is sourced from the open-source counter-surveillance research
  * projects (colonelpanichacks/flock-you, 0xXyc/flock-you-wifi-recon) and the
- * DeFlock community (deflock.me). The OUI prefixes are generic vendor prefixes
+ * DeFlock community (deflock.org). The OUI prefixes are generic vendor prefixes
  * observed in fielded Flock deployments, so an OUI match alone is "possible",
  * not "confirmed" -- behaviour (probe requests) and SSID naming raise the
  * confidence. We never present an OUI-only hit as certain.

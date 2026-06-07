@@ -98,4 +98,4 @@ Flock), `flockwifi`, `wifiscan`, `blescan`, `stop`, `ver`, `ch <1-14>` (0 = hop)
 
 OUI list and detection approach build on the open counter-surveillance work of
 `colonelpanichacks/flock-you`, `0xXyc/flock-you-wifi-recon`, and the DeFlock
-community (deflock.me). Thanks to the researchers who mapped these signatures.
+community (deflock.org). Thanks to the researchers who mapped these signatures.
