@@ -8,6 +8,9 @@ counter-surveillance **site-survey** tool:
 - 🛰️ **Flock / ALPR Detect** — find Flock Safety / ALPR surveillance cameras
   over **Wi-Fi *and* BLE** (the companion FW interleaves a 2.4 GHz sniff with a
   BLE scan), geotag them with GPS, and mark them for a report.
+- 🗺️ **On-device Map** — a live Flipper-screen map plotting detected cameras by
+  **bearing and distance around your GPS position** (auto-fit, heading, scale
+  bar) — see what's around you in the field without exporting.
 - 📶 **WiFi Audit** — scan nearby networks and grade each one's security
   (Open/WEP/WPA1/WPA2/WPA3, WPS, TKIP, hidden), spelling out exactly what's
   weak, and flag **evil-twin** SSIDs (same name, multiple BSSIDs). Plus passive
@@ -17,7 +20,9 @@ counter-surveillance **site-survey** tool:
   / SmartTag trackers**, and flag any tracker that **follows you across GPS
   waypoints** (anti-stalking). Companion FW.
 - 💳 **NFC / RFID Audit** — identify a presented card's protocol and grade its
-  security posture for access-control reviews.
+  security posture for access-control reviews. On a MIFARE Classic, a **Deep
+  check** captures the UID and tries the Flipper's on-SD key dictionary to report
+  how many sectors open with **factory/default keys** (= trivially cloneable).
 - ⚡ **ESP32 Firmware** — **back up** the board's current firmware to SD and
   **flash a `.bin`** (companion / Marauder / a backup) straight from the Flipper,
   no computer. Bounce between Marauder and the FlipDeFlock companion. (Built on
@@ -25,6 +30,10 @@ counter-surveillance **site-survey** tool:
 - 🗺️ **Reports** — export to Markdown, **DeFlock-compatible GeoJSON** (ready to
   contribute to [deflock.me](https://deflock.me)), CSV, and **WiGLE CSV**
   (wardriving standard) on the SD card.
+- 📲 **Share to DeFlock** — render a **QR per camera** that opens DeFlock on your
+  phone at that location, so you contribute through the official app. The
+  Flipper/ESP **never touch a network** — submission stays a deliberate,
+  off-device, phone-side action (keeping the passive-only promise intact).
 
 > **Passive recon only.** No deauth, no injection, no jamming. For lawful,
 > authorized use: your own security assessments, anti-surveillance awareness,
@@ -100,7 +109,14 @@ The main camera hunt. It shows a live list as the ESP32 sniffs:
   button) to flag it for the report. Press **Back** to return; the ESP goes idle
   when you leave.
 
-### 3. WiFi Audit *(Companion only)*
+### 3. Flock Map
+
+A live map around your GPS position: you're at center, detected cameras are
+plotted by **bearing and distance** (dot size = confidence), with a heading tick
+and a scale bar. **Left/Right** zoom, **OK** re-fits. Needs a GPS fix; cameras
+without a geotag aren't plotted.
+
+### 4. WiFi Audit *(Companion only)*
 
 Scans nearby networks and grades each one's security worst-first. Markers:
 `!` = rogue/evil-twin (same SSID, mismatched security), `~` = duplicate SSID,
@@ -108,20 +124,23 @@ Scans nearby networks and grades each one's security worst-first. Markers:
 exactly what's weak). Use **Save Report** to write it out. *(In Marauder mode
 this screen explains it needs the companion firmware.)*
 
-### 4. BLE / Tracker Scan *(Companion only)*
+### 5. BLE / Tracker Scan *(Companion only)*
 
 Continuously scans for **AirTag / Tile / SmartTag / Google Find My** trackers and
 Flock/Raven BLE. With **GPS on**, a tracker that stays with you across several
 waypoints is flagged **`!FOLLOWING`** (anti-stalking) — open it to see the track
 (distance / waypoints / time). **Tag** suspicious devices for the report.
 
-### 5. NFC / RFID Audit
+### 6. NFC / RFID Audit
 
 Present a card to the Flipper; the app identifies its protocol and grades the
 security posture (e.g. UID-only / cloneable vs. authenticated) for access-control
-reviews.
+reviews. If it's a **MIFARE Classic**, a **Deep** softkey appears: it captures
+the UID and tries the Flipper's on-SD key dictionary against every sector, then
+reports how many open with **default keys** (`N/total` = trivially cloneable).
+Audit only cards you own or are authorized to test.
 
-### 6. ESP32 Firmware — backup & flash
+### 7. ESP32 Firmware — backup & flash
 
 Manage your board's firmware from the Flipper, no computer:
 
@@ -135,12 +154,20 @@ When prompted, put the ESP32 into **bootloader/download mode** (hold **BOOT**, t
 **RESET**), then it connects. Flash speed is **Safe (115200)** or **Fast (921600)**
 in Settings. You can't brick it — the ROM bootloader always allows a re-flash.
 
-### 7. Reports
+### 8. Reports
 
 Saved reports land on the SD under **`apps_data/flipdeflock/reports/`**:
 Markdown (human-readable), **DeFlock-compatible GeoJSON** (ready for
 [deflock.me](https://deflock.me)), KML, plain CSV, and **WiGLE CSV** (WiFi *and*
 BLE) for wardriving uploads. Pull them with qFlipper or a card reader.
+
+### 9. Share to DeFlock (phone handoff)
+
+For each camera you **marked** (and that has a GPS geotag), this screen shows a
+**QR code** — scan it with your phone to open DeFlock at that location and submit
+through the official app's review flow. **Left/Right** pages between cameras; the
+lat/lon and OSM tags are shown on-screen too. The Flipper and ESP never connect
+to a network — the submission happens entirely on your phone.
 
 ## Build from source
 
@@ -173,16 +200,21 @@ Flock-associated OUIs are generic vendor prefixes, so the app never cries wolf:
 ```
 application.fam          manifest
 recon_app.c / _i.h       lifecycle, shared state, settings
-scenes/                  start, flock, wifi, ble, nfc, firmware, reports, settings, about
-views/flock_view.*       custom live-detection list view
+scenes/                  start, flock, map, wifi, ble, nfc, firmware, reports,
+                         deflock_handoff, settings, about
+views/
+  flock_view.*           custom live-detection list view
+  flock_map_view.*       on-device map (operator-centered camera plot)
+  deflock_qr_view.*      QR render for the DeFlock phone-handoff
 helpers/
   flock_db.*             Flock OUIs + SSID patterns + confidence scoring
   esp_link.*             ESP32 UART link (companion + generic backends)
   esp_flasher.*          in-app ESP32 backup/flash (esp-serial-flasher port)
   gps_link.*             NMEA GPS reader (2nd UART)
-  recon_nfc.*            NFC scanner + security grading
+  recon_nfc.*            NFC scanner + grading + default-key deep check
   recon_report.*         Markdown + GeoJSON + KML + CSV/WiGLE writers
 lib/esp-serial-flasher/  vendored Espressif flasher (Apache-2.0)
+lib/qrcodegen/           vendored Nayuki QR Code generator (MIT)
 esp32_companion/         universal ESP32 firmware + flashing guide
 ```
 
@@ -203,11 +235,14 @@ MIT — see [LICENSE](LICENSE).
 
 ## Roadmap
 
-- NFC: capture UID + run default-key / mfkey32 dictionary checks (poller framework).
-- Flock: on-device map view.
-- Direct DeFlock submission (needs a phone/network bridge).
+- NFC **mfkey32** — recover non-default Crypto1 keys (deferred: requires active
+  card emulation to harvest a reader's nonces, which is outside the passive
+  posture; the default-key audit that *is* defensible already ships).
+- **Direct on-device DeFlock/OSM submission** (deferred: OSM ingestion needs
+  OAuth2 + TLS on the ESP, which would break the "no network" promise — *Share to
+  DeFlock* ships the passive phone-handoff instead).
 
-Shipped since the early roadmap: dual-band Wi-Fi+BLE Flock detection, BLE
-anti-stalking tracker scan, WiFi security audit, deauth attribution, device
-tagging, WiGLE export (WiFi + BLE), and an in-app ESP32 backup/flasher. See
-[changelog.md](changelog.md).
+Shipped: dual-band Wi-Fi+BLE Flock detection, BLE anti-stalking tracker scan,
+WiFi security audit, deauth attribution, device tagging, WiGLE export (WiFi +
+BLE), in-app ESP32 backup/flasher, **on-device map**, **NFC default-key audit**,
+and **DeFlock phone-handoff (QR)**. See [changelog.md](changelog.md).
