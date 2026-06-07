@@ -9,8 +9,37 @@ App(
     fap_icon="icon.png",
     fap_category="Tools",
     fap_author="@ReconGrunt",
-    fap_version="0.11",
+    fap_version="0.12",
     fap_description="FlipDeFlock: detect Flock/ALPR surveillance cameras via any "
     "ESP32 (Marauder or companion FW), with NFC/RFID credential audit, GPS "
     "geotagging and DeFlock-compatible reports.",
+    fap_private_libs=[
+        # Espressif esp-serial-flasher (Apache-2.0), vendored under
+        # lib/esp-serial-flasher. Our port/worker/UI is original (MIT).
+        Lib(
+            name="esp-serial-flasher",
+            fap_include_paths=["include"],
+            sources=[
+                "src/esp_loader.c",
+                "src/esp_targets.c",
+                "src/md5_hash.c",
+                "src/protocol_serial.c",
+                "src/protocol_uart.c",
+                "src/slip.c",
+                "src/esp_stubs.c",
+            ],
+            cincludes=["lib/esp-serial-flasher/private_include"],
+            cdefines=[
+                "SERIAL_FLASHER_INTERFACE_UART=1",
+                "MD5_ENABLED=1",
+                "SERIAL_FLASHER_WRITE_BLOCK_RETRIES=10",
+            ],
+            cflags=["-Wno-sign-compare"],
+        ),
+    ],
+    cdefines=[
+        "SERIAL_FLASHER_INTERFACE_UART=1",
+        "MD5_ENABLED=1",
+        "SERIAL_FLASHER_WRITE_BLOCK_RETRIES=10",
+    ],
 )
