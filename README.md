@@ -70,6 +70,78 @@ Flipper's SD card, and launch **FlipDeFlock** from the Tools menu.
 > ("API mismatch"), just rebuild for your firmware with `ufbt` (below). Every
 > push also builds a fresh `.fap` as a CI artifact under the **Actions** tab.
 
+## Using the app
+
+Wire up your ESP32 (and optional GPS) per [Wiring](#wiring), launch **FlipDeFlock**
+from `Apps → Tools`, and start with **Settings**.
+
+### 1. Pick your Board Mode (Settings)
+
+Open **Settings** and set **Board Mode** to match your ESP32:
+
+- **Marauder** — keep your board's existing firmware, *no flashing*. You get
+  **Flock/ALPR Detect + NFC + GPS + Reports**.
+- **Companion** — our firmware (flash it with **ESP32 Firmware**, below). Adds
+  **WiFi Audit, BLE/Tracker Scan, deauth detection, and dual-band Flock**.
+
+While here, check **ESP Port/Baud** and **GPS** if your wiring differs from the
+defaults, and turn **GPS** on if you want detections geotagged. Settings persist.
+
+### 2. Flock / ALPR Detect
+
+The main camera hunt. It shows a live list as the ESP32 sniffs:
+
+- Each row is a detection with a **confidence** tag — `Possible` / `Likely` /
+  `CONFIRMED` (see [confidence](#how-detection-confidence-works)) — and the
+  detection source in the detail view (`probe` / `beacon` / `BLE`).
+- A `!DEAUTH ch<n> <bssid>` banner appears if a real deauth **flood** is detected
+  (it clears when the flood stops).
+- Press **OK** on a row to open its detail; press **OK** again (the **Mark**
+  button) to flag it for the report. Press **Back** to return; the ESP goes idle
+  when you leave.
+
+### 3. WiFi Audit *(Companion only)*
+
+Scans nearby networks and grades each one's security worst-first. Markers:
+`!` = rogue/evil-twin (same SSID, mismatched security), `~` = duplicate SSID,
+`*` = tagged. Open a row for the full breakdown (auth/cipher, WPS, vendor, and
+exactly what's weak). Use **Save Report** to write it out. *(In Marauder mode
+this screen explains it needs the companion firmware.)*
+
+### 4. BLE / Tracker Scan *(Companion only)*
+
+Continuously scans for **AirTag / Tile / SmartTag / Google Find My** trackers and
+Flock/Raven BLE. With **GPS on**, a tracker that stays with you across several
+waypoints is flagged **`!FOLLOWING`** (anti-stalking) — open it to see the track
+(distance / waypoints / time). **Tag** suspicious devices for the report.
+
+### 5. NFC / RFID Audit
+
+Present a card to the Flipper; the app identifies its protocol and grades the
+security posture (e.g. UID-only / cloneable vs. authenticated) for access-control
+reviews.
+
+### 6. ESP32 Firmware — backup & flash
+
+Manage your board's firmware from the Flipper, no computer:
+
+1. **Backup current FW → SD** *(do this first!)* — dumps the whole ESP32 flash to
+   `apps_data/flipdeflock/firmware/` so you can restore Marauder later. It's
+   read-only and safe.
+2. **Flash a .bin** — pick the companion `flock_companion-merged.bin` (from a
+   release, copied to SD), a backup, or any merged image; it writes at `0x0`.
+
+When prompted, put the ESP32 into **bootloader/download mode** (hold **BOOT**, tap
+**RESET**), then it connects. Flash speed is **Safe (115200)** or **Fast (921600)**
+in Settings. You can't brick it — the ROM bootloader always allows a re-flash.
+
+### 7. Reports
+
+Saved reports land on the SD under **`apps_data/flipdeflock/reports/`**:
+Markdown (human-readable), **DeFlock-compatible GeoJSON** (ready for
+[deflock.me](https://deflock.me)), KML, plain CSV, and **WiGLE CSV** (WiFi *and*
+BLE) for wardriving uploads. Pull them with qFlipper or a card reader.
+
 ## Build from source
 
 **With [ufbt](https://pypi.org/project/ufbt/) (standalone, recommended):**
@@ -101,14 +173,16 @@ Flock-associated OUIs are generic vendor prefixes, so the app never cries wolf:
 ```
 application.fam          manifest
 recon_app.c / _i.h       lifecycle, shared state, settings
-scenes/                  start, flock, flock_detail, nfc, reports, settings, about
+scenes/                  start, flock, wifi, ble, nfc, firmware, reports, settings, about
 views/flock_view.*       custom live-detection list view
 helpers/
-  flock_db.*             31 OUIs + SSID patterns + confidence scoring
+  flock_db.*             Flock OUIs + SSID patterns + confidence scoring
   esp_link.*             ESP32 UART link (companion + generic backends)
+  esp_flasher.*          in-app ESP32 backup/flash (esp-serial-flasher port)
   gps_link.*             NMEA GPS reader (2nd UART)
   recon_nfc.*            NFC scanner + security grading
-  recon_report.*         Markdown + GeoJSON + CSV writers
+  recon_report.*         Markdown + GeoJSON + KML + CSV/WiGLE writers
+lib/esp-serial-flasher/  vendored Espressif flasher (Apache-2.0)
 esp32_companion/         universal ESP32 firmware + flashing guide
 ```
 
@@ -117,7 +191,7 @@ per-push CI artifacts, not committed to the repo.
 
 ## Credits & data
 
-Detection method and the 31 OUI prefixes build on the open counter-surveillance
+Detection method and the Flock OUI prefixes build on the open counter-surveillance
 work of [colonelpanichacks/flock-you](https://github.com/colonelpanichacks/flock-you),
 [0xXyc/flock-you-wifi-recon](https://github.com/0xXyc/flock-you-wifi-recon), and
 the [DeFlock](https://deflock.me) community. Thanks to the researchers who mapped
