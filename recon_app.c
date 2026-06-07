@@ -411,6 +411,10 @@ static ReconApp* recon_app_alloc(void) {
     app->popup = popup_alloc();
     app->flock_view = flock_view_alloc();
     flock_view_set_app(app->flock_view, app);
+    app->flock_map_view = flock_map_view_alloc();
+    flock_map_view_set_app(app->flock_map_view, app);
+    app->deflock_qr_view = deflock_qr_view_alloc();
+    deflock_qr_view_set_app(app->deflock_qr_view, app);
 
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewSubmenu, submenu_get_view(app->submenu));
@@ -420,6 +424,10 @@ static ReconApp* recon_app_alloc(void) {
     view_dispatcher_add_view(app->view_dispatcher, ReconViewPopup, popup_get_view(app->popup));
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewFlock, flock_view_get_view(app->flock_view));
+    view_dispatcher_add_view(
+        app->view_dispatcher, ReconViewFlockMap, flock_map_view_get_view(app->flock_map_view));
+    view_dispatcher_add_view(
+        app->view_dispatcher, ReconViewDeflockQr, deflock_qr_view_get_view(app->deflock_qr_view));
 
     view_dispatcher_attach_to_gui(
         app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
@@ -433,12 +441,16 @@ static void recon_app_free(ReconApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewWidget);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewPopup);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlock);
+    view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlockMap);
+    view_dispatcher_remove_view(app->view_dispatcher, ReconViewDeflockQr);
 
     submenu_free(app->submenu);
     variable_item_list_free(app->var_item_list);
     widget_free(app->widget);
     popup_free(app->popup);
     flock_view_free(app->flock_view);
+    flock_map_view_free(app->flock_map_view);
+    deflock_qr_view_free(app->deflock_qr_view);
 
     scene_manager_free(app->scene_manager);
     view_dispatcher_free(app->view_dispatcher);

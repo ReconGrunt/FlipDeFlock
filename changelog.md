@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.21
+Roadmap sprint (3-agent design + implement, see AGENT_SWARM.md):
+- **NFC default-key audit:** on a MIFARE Classic, a new "Deep" check captures the
+  UID and tries the Flipper's on-SD key dictionary against every sector, then
+  reports how many open with **factory/default keys** (trivially cloneable) — the
+  core "is this badge using default keys?" access-control question. Reads the
+  stock dictionary (no bundled keys); UID + default-keyed count go into the
+  report. (mfkey32 intentionally deferred — it requires active card emulation.)
+- **On-device Flock map:** a live map that plots detected ALPR cameras by
+  bearing/distance around your GPS position — auto-fit zoom, heading tick,
+  confidence-by-dot-size, scale bar. Pure visualization, no new radio activity.
+- **Share to DeFlock (phone handoff):** renders a QR per marked camera that opens
+  DeFlock on your phone at that location, so you contribute through the official
+  app's review flow. The Flipper/ESP **never touch a network** — passive-only
+  stays literally true. (Direct OSM submission deferred: it needs OAuth2/TLS on
+  the ESP, which would break the no-network promise.) QR via vendored Nayuki
+  qrcodegen (MIT).
+
 ## v0.20
 - **Anti-stalking precision model** (Tier-2): a BLE tracker is flagged
   "following" only when seen >=4 times over a >=90 s window at >=3 distinct

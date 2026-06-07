@@ -9,6 +9,8 @@ typedef enum {
     StartItemReports,
     StartItemSettings,
     StartItemAbout,
+    StartItemFlockMap,
+    StartItemDeflockShare,
 } StartItem;
 
 static void recon_scene_start_submenu_cb(void* context, uint32_t index) {
@@ -24,6 +26,8 @@ void recon_scene_start_on_enter(void* context) {
     submenu_add_item(
         submenu, "Flock / ALPR Detect", StartItemFlock, recon_scene_start_submenu_cb, app);
     submenu_add_item(
+        submenu, "Flock Map", StartItemFlockMap, recon_scene_start_submenu_cb, app);
+    submenu_add_item(
         submenu, "WiFi Audit", StartItemWifi, recon_scene_start_submenu_cb, app);
     submenu_add_item(
         submenu, "BLE / Tracker Scan", StartItemBle, recon_scene_start_submenu_cb, app);
@@ -32,6 +36,8 @@ void recon_scene_start_on_enter(void* context) {
     submenu_add_item(
         submenu, "ESP32 Firmware", StartItemFirmware, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Reports", StartItemReports, recon_scene_start_submenu_cb, app);
+    submenu_add_item(
+        submenu, "Share to DeFlock", StartItemDeflockShare, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Settings", StartItemSettings, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "About", StartItemAbout, recon_scene_start_submenu_cb, app);
     submenu_set_selected_item(
@@ -49,6 +55,9 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
         case StartItemFlock:
             scene_manager_next_scene(app->scene_manager, ReconSceneFlock);
             break;
+        case StartItemFlockMap:
+            scene_manager_next_scene(app->scene_manager, ReconSceneFlockMap);
+            break;
         case StartItemWifi:
             scene_manager_next_scene(app->scene_manager, ReconSceneWifi);
             break;
@@ -63,6 +72,9 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
             break;
         case StartItemReports:
             scene_manager_next_scene(app->scene_manager, ReconSceneReports);
+            break;
+        case StartItemDeflockShare:
+            scene_manager_next_scene(app->scene_manager, ReconSceneDeflockHandoff);
             break;
         case StartItemSettings:
             scene_manager_next_scene(app->scene_manager, ReconSceneSettings);
