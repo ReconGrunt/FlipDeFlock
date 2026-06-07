@@ -41,7 +41,7 @@
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 
-// ---- Flock-associated OUI prefixes (31) ----------------------------------
+// ---- Flock-associated OUI prefixes (32) ----------------------------------
 static const uint8_t FLOCK_OUIS[][3] = {
     {0x70, 0xc9, 0x4e}, {0x3c, 0x91, 0x80}, {0xd8, 0xf3, 0xbc}, {0x80, 0x30, 0x49},
     {0xb8, 0x35, 0x32}, {0x14, 0x5a, 0xfc}, {0x74, 0x4c, 0xa1}, {0x08, 0x3a, 0x88},
@@ -51,6 +51,7 @@ static const uint8_t FLOCK_OUIS[][3] = {
     {0x70, 0x08, 0x94}, {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x3c, 0x71, 0xbf},
     {0x58, 0x00, 0xe3}, {0x90, 0x35, 0xea}, {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69},
     {0x48, 0x27, 0xea}, {0xa4, 0xcf, 0x12}, {0x82, 0x6b, 0xf2},
+    {0xb4, 0x1e, 0x52}, // Flock Safety's own registered OUI (GainSec)
 };
 static const size_t FLOCK_OUI_COUNT = sizeof(FLOCK_OUIS) / sizeof(FLOCK_OUIS[0]);
 
@@ -340,6 +341,8 @@ static void ble_do_scan(int seconds) {
                 cat = 3; // Tile
             else if(cat == 0 && u.find("fd5a") != std::string::npos)
                 cat = 4; // Samsung SmartTag
+            else if(cat == 0 && u.find("feaa") != std::string::npos)
+                cat = 5; // Google Find My Device network (Pebblebee/Chipolo/Moto/Eufy)
         }
         if(cat == 0) {
             BLEAddress ba = d.getAddress();

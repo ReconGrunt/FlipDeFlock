@@ -7,7 +7,9 @@
 #include <string.h>
 
 #define ESP_RX_BUF 512
-#define ESP_LINE_MAX 256
+// Marauder AP-scan / sniffraw lines can be long; an overlong line is dropped
+// whole, so keep this generous to avoid losing MACs on a long generic-backend line.
+#define ESP_LINE_MAX 384
 
 typedef enum {
     EspEvtStop = (1 << 0),
@@ -241,9 +243,18 @@ static const char* const ESP_MARAUDER_CMDS[] = {
  */
 static const char* marauder_extract_ssid(const char* line) {
     static const char* const labels[] = {"ESSID: ", "SSID: ", "Requesting: "};
+    static char buf[RECON_SSID_LEN]; // 33: SSIDs are max 32 bytes
     for(size_t k = 0; k < 3; k++) {
         const char* p = strstr(line, labels[k]);
-        if(p) return p + strlen(labels[k]);
+        if(!p) continue;
+        p += strlen(labels[k]);
+        // Bound to an SSID length (preserves embedded spaces) so trailing
+        // fields on the line aren't absorbed and a far-away "flock" token can't
+        // spuriously raise confidence. Single-threaded ESP worker -> static ok.
+        size_t i = 0;
+        for(; i < RECON_SSID_LEN - 1 && p[i] && p[i] != '\r' && p[i] != '\n'; i++) buf[i] = p[i];
+        buf[i] = '\0';
+        return buf;
     }
     return NULL;
 }

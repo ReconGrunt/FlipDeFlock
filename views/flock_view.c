@@ -6,6 +6,10 @@
 #define ROW_H 11
 #define LIST_TOP 14
 #define VISIBLE_ROWS 4
+// Deauth/disassoc frames per ~1s interval needed to call it a flood. Normal
+// roaming/idle churn is 1-2/s; a real flood is many. Below this we don't alert
+// (avoids false positives on benign disassoc churn).
+#define DEAUTH_FLOOD_MIN 5
 
 struct FlockView {
     View* view;
@@ -56,7 +60,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // takes over the header (drops channel/count to make room for the alert).
     canvas_set_font(canvas, FontSecondary);
     char hdr[42];
-    if(deauths > 0) {
+    if(deauths >= DEAUTH_FLOOD_MIN) {
         // Attribution: name the most-attacked BSSID + channel (mutex held here).
         int top = -1;
         uint32_t topc = 0;
