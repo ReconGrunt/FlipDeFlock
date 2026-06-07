@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.18
+5-agent audit sprint (see AGENT_SWARM.md / SPRINT_SUMMARY.md):
+- **Flasher:** fast-baud (921600) now actually works — it was calling the
+  non-stub rate API after loading the stub, which always failed.
+- **Reports:** GeoJSON now uses OSM/DeFlock tags (`man_made=surveillance`,
+  `surveillance:type=ALPR`) so points import; CSV/WiGLE fields are RFC-4180
+  escaped (a comma/quote in an SSID no longer corrupts rows); WiGLE omits
+  no-GPS-fix rows (no "Null Island"); partial report-write failures now surface.
+- **Detection:** deauth alert needs a real flood (>=5/interval), not a single
+  frame; added Flock's own registered OUI `B4:1E:52`; ISO15693 graded WEAK
+  (UID-only/cloneable).
+- **BLE:** detect Google Find My Device trackers (`0xFEAA`:
+  Pebblebee/Chipolo/Motorola/Eufy). Geotag hysteresis removes tag jitter.
+- **Robustness:** settings baud clamped to valid values; Marauder scraper has a
+  bigger line buffer + bounded SSID extraction.
+
 ## v0.17
 - Clearer support for **not flashing** (keeping Marauder). Renamed the setting to
   "Board Mode" (Marauder / Companion). In Marauder mode the companion-only

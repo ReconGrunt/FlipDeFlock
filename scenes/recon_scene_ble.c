@@ -22,6 +22,8 @@ static const char* ble_cat_str(uint8_t cat) {
         return "Tile";
     case BleCatSmartTag:
         return "Tag";
+    case BleCatFindMyDevice:
+        return "FindMy";
     default:
         return "BLE";
     }

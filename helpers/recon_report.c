@@ -5,6 +5,8 @@
 #include <math.h>
 #include <string.h>
 
+static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-4180
+
 static void recon_report_timestamp(char* buf, size_t len) {
     DateTime dt;
     furi_hal_rtc_get_datetime(&dt);
@@ -120,19 +122,22 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
                 "    {\n"
                 "      \"type\": \"Feature\",\n"
                 "      \"geometry\": { \"type\": \"Point\", \"coordinates\": [%s, %s] },\n"
+                // OSM/DeFlock tagging so the points are importable to OSM (which
+                // deflock.me sources). Our extras are namespaced flipdeflock:*.
                 "      \"properties\": {\n"
-                "        \"operator\": \"Flock Safety\",\n"
-                "        \"type\": \"alpr\",\n"
-                "        \"observer_heading\": %s,\n"
-                "        \"confidence\": \"%s\",\n"
-                "        \"mac\": \"%02X:%02X:%02X:%02X:%02X:%02X\",\n"
-                "        \"ssid\": \"%s\"\n"
+                "        \"man_made\": \"surveillance\",\n"
+                "        \"surveillance:type\": \"ALPR\",\n"
+                "        \"manufacturer\": \"Flock Safety\",\n"
+                "        \"flipdeflock:confidence\": \"%s\",\n"
+                "        \"flipdeflock:heading\": %s,\n"
+                "        \"flipdeflock:mac\": \"%02X:%02X:%02X:%02X:%02X:%02X\",\n"
+                "        \"flipdeflock:ssid\": \"%s\"\n"
                 "      }\n"
                 "    }",
                 lon_s,
                 lat_s,
-                head_s,
                 flock_confidence_str(e->confidence),
+                head_s,
                 e->mac[0],
                 e->mac[1],
                 e->mac[2],
@@ -174,8 +179,8 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
 
     bool ok = (marked > 0);
     if(ok) ok = write_string(app->storage, path_md, md);
-    if(ok) write_string(app->storage, path_geo, geo);
-    if(ok) write_string(app->storage, path_kml, kml);
+    if(ok) ok = write_string(app->storage, path_geo, geo);
+    if(ok) ok = write_string(app->storage, path_kml, kml);
 
     if(ok && out_path_md) {
         snprintf(out_path_md, out_len, "%s", path_md);
@@ -197,6 +202,8 @@ static const char* ble_cat_name(uint8_t cat) {
         return "Tile";
     case 4:
         return "SmartTag";
+    case 5:
+        return "FindMyDevice";
     default:
         return "BLE";
     }
@@ -227,6 +234,8 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
         if(!isnan(d->last_lat)) snprintf(ll, sizeof(ll), "%.6f", (double)d->last_lat);
         if(!isnan(d->last_lon)) snprintf(lo, sizeof(lo), "%.6f", (double)d->last_lon);
 
+        char name_esc[72];
+        csv_field_escape(d->name[0] ? d->name : "", name_esc, sizeof(name_esc));
         furi_string_cat_printf(
             csv,
             "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,0x%04X,%d,%lu,%s,%s,%s,%s,%s,%s\n",
@@ -236,7 +245,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
             d->addr[3],
             d->addr[4],
             d->addr[5],
-            d->name[0] ? d->name : "",
+            name_esc,
             ble_cat_name(d->cat),
             (unsigned)d->company,
             d->rssi,
@@ -283,7 +292,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
 
     bool ok = (n > 0);
     if(ok) ok = write_string(app->storage, path_csv, csv);
-    if(ok) write_string(app->storage, path_geo, geo);
+    if(ok) ok = write_string(app->storage, path_geo, geo);
     if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_csv);
 
     furi_string_free(csv);
@@ -365,6 +374,31 @@ static void wigle_auth(uint8_t authmode, bool wps, char* buf, size_t len) {
     snprintf(buf, len, "%s%s", wps ? "[WPS]" : "", base);
 }
 
+// RFC-4180 CSV field: quote if it contains comma/quote/CR/LF; double quotes.
+// Prevents an SSID with a comma/quote from breaking the column count.
+static void csv_field_escape(const char* in, char* out, size_t out_len) {
+    if(out_len == 0) return;
+    bool needs = false;
+    for(const char* p = in; *p; p++) {
+        if(*p == ',' || *p == '"' || *p == '\n' || *p == '\r') {
+            needs = true;
+            break;
+        }
+    }
+    if(!needs) {
+        snprintf(out, out_len, "%s", in);
+        return;
+    }
+    size_t j = 0;
+    if(j < out_len - 1) out[j++] = '"';
+    for(const char* p = in; *p && j < out_len - 2; p++) {
+        if(*p == '"' && j < out_len - 2) out[j++] = '"';
+        out[j++] = *p;
+    }
+    if(j < out_len - 1) out[j++] = '"';
+    out[j] = '\0';
+}
+
 bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
     ReconApp* app = _app;
     recon_report_ensure_dirs(app);
@@ -442,11 +476,13 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
             a->wps ? "yes" : "no",
             furi_string_get_cstr(reasons));
 
+        char ssid_esc[72];
+        csv_field_escape(a->ssid[0] ? a->ssid : "(hidden)", ssid_esc, sizeof(ssid_esc));
         furi_string_cat_printf(
             csv,
             "%s,%s,%02X:%02X:%02X:%02X:%02X:%02X,%s,%u,%d,%s,%s\n",
             wifi_grade_str(g),
-            a->ssid[0] ? a->ssid : "(hidden)",
+            ssid_esc,
             a->bssid[0],
             a->bssid[1],
             a->bssid[2],
@@ -459,24 +495,30 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
             a->wps ? "yes" : "no",
             furi_string_get_cstr(reasons));
 
-        char authw[48];
-        wigle_auth(a->authmode, a->wps, authw, sizeof(authw));
-        furi_string_cat_printf(
-            wigle,
-            "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,%u,%d,%.6f,%.6f,0,0,WIFI\n",
-            a->bssid[0],
-            a->bssid[1],
-            a->bssid[2],
-            a->bssid[3],
-            a->bssid[4],
-            a->bssid[5],
-            a->ssid,
-            authw,
-            first_seen,
-            a->channel,
-            a->rssi,
-            (double)(gfix ? glat : 0.0f),
-            (double)(gfix ? glon : 0.0f));
+        // WiGLE: omit rows with no GPS fix (0,0 would plant the AP at Null
+        // Island); escape the SSID so a comma/quote can't break the columns.
+        if(gfix) {
+            char authw[48];
+            wigle_auth(a->authmode, a->wps, authw, sizeof(authw));
+            char wssid[72];
+            csv_field_escape(a->ssid, wssid, sizeof(wssid));
+            furi_string_cat_printf(
+                wigle,
+                "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,%u,%d,%.6f,%.6f,0,0,WIFI\n",
+                a->bssid[0],
+                a->bssid[1],
+                a->bssid[2],
+                a->bssid[3],
+                a->bssid[4],
+                a->bssid[5],
+                wssid,
+                authw,
+                first_seen,
+                a->channel,
+                a->rssi,
+                (double)glat,
+                (double)glon);
+        }
     }
     furi_mutex_release(app->mutex);
 
@@ -491,8 +533,8 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
 
     bool ok = (n > 0);
     if(ok) ok = write_string(app->storage, path_md, md);
-    if(ok) write_string(app->storage, path_csv, csv);
-    if(ok) write_string(app->storage, path_wigle, wigle);
+    if(ok) ok = write_string(app->storage, path_csv, csv);
+    if(ok) ok = write_string(app->storage, path_wigle, wigle);
     if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_md);
 
     furi_string_free(md);

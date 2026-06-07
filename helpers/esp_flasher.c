@@ -166,12 +166,15 @@ bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
     esp_flasher_logf(f, "Connected. Stub loaded.");
 
     if(fast_baud) {
-        err = esp_loader_change_transmission_rate(fast_baud);
+        // Must use the STUB variant after connect_with_stub — the plain
+        // esp_loader_change_transmission_rate returns UNSUPPORTED_FUNC while the
+        // stub is running. It takes the current rate so the stub can resync.
+        err = esp_loader_change_transmission_rate_stub(FLASH_BAUD, fast_baud);
         if(err == ESP_LOADER_SUCCESS) {
             esp_flasher_logf(f, "Speed -> %lu baud", (unsigned long)fast_baud);
         } else {
             esp_flasher_logf(f, "Fast baud failed (%d).", (int)err);
-            esp_flasher_logf(f, "Use Safe in Settings.");
+            esp_flasher_logf(f, "Re-enter bootloader, use Safe.");
             return false; // link may be desynced; bail rather than risk a bad flash
         }
     }

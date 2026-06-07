@@ -34,6 +34,7 @@ typedef enum {
     BleCatAirTag = 2, /**< Apple Find My / AirTag */
     BleCatTile = 3,
     BleCatSmartTag = 4, /**< Samsung SmartTag */
+    BleCatFindMyDevice = 5, /**< Google Find My Device network (0xFEAA): Pebblebee/Chipolo/Moto/Eufy */
 } BleCat;
 
 #define RECON_APP_FOLDER EXT_PATH("apps_data/flipdeflock")
@@ -79,6 +80,7 @@ typedef struct {
     float lat; /**< geotag of best sighting, NAN if none */
     float lon;
     float heading; /**< observer course-over-ground at sighting, NAN if none */
+    int8_t geotag_rssi; /**< rssi when the geotag was last set (hysteresis) */
     uint32_t count;
     uint32_t first_tick;
     uint32_t last_tick;

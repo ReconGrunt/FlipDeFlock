@@ -74,8 +74,8 @@ static void recon_nfc_grade(NfcProtocol p, const char** grade, const char** deta
         *detail = "FeliCa\nSecurity is service-defined.";
         break;
     case NfcProtocolIso15693_3:
-        *grade = "INFO";
-        *detail = "ISO15693 vicinity tag\nOften UID-only. Check use.";
+        *grade = "WEAK";
+        *detail = "ISO15693 vicinity tag\nUID-only; cloneable if used\nalone for access.";
         break;
     case NfcProtocolIso14443_3a:
         *grade = "WEAK";

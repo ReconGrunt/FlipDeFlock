@@ -53,12 +53,14 @@ void recon_app_report_flock(
             strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
             entry->ssid[RECON_SSID_LEN - 1] = '\0';
         }
-        // Geotag with the current fix if we have one and haven't tagged yet,
-        // or refresh to a stronger sighting.
-        if(app->gps_valid && (isnan(entry->lat) || rssi > entry->rssi)) {
+        // Geotag with the current fix if we have one and haven't tagged yet, or
+        // refresh only to a meaningfully stronger sighting. RSSI oscillates
+        // +/-5-10 dB scan-to-scan, so a 6 dB hysteresis stops the tag jittering.
+        if(app->gps_valid && (isnan(entry->lat) || rssi > entry->geotag_rssi + 6)) {
             entry->lat = app->gps_lat;
             entry->lon = app->gps_lon;
             entry->heading = app->gps_course;
+            entry->geotag_rssi = rssi;
         }
     }
 
@@ -282,9 +284,9 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.esp_uart = (val == FuriHalSerialIdLpuart) ? FuriHalSerialIdLpuart : FuriHalSerialIdUsart;
     else if(strcmp(key, "gps_uart") == 0)
         app->settings.gps_uart = (val == FuriHalSerialIdUsart) ? FuriHalSerialIdUsart : FuriHalSerialIdLpuart;
-    else if(strcmp(key, "esp_baud") == 0 && val > 0)
-        app->settings.esp_baud = (uint32_t)val;
-    else if(strcmp(key, "gps_baud") == 0 && val > 0)
+    else if(strcmp(key, "esp_baud") == 0 && (val == 115200 || val == 921600))
+        app->settings.esp_baud = (uint32_t)val; // clamp to known-valid; corrupt -> keep default
+    else if(strcmp(key, "gps_baud") == 0 && (val == 9600 || val == 57600 || val == 115200))
         app->settings.gps_baud = (uint32_t)val;
     else if(strcmp(key, "marauder_cmd") == 0 && val >= 0 && val < 4)
         app->settings.marauder_cmd = (uint8_t)val;
