@@ -305,14 +305,5 @@ By contributing you agree to license your work under this repo's MIT license.
 
 ## Roadmap
 
-- NFC **mfkey32** to recover non-default Crypto1 keys. Deferred: it requires
-  active card emulation to harvest a reader's nonces, which is outside the passive
-  posture. The default-key audit that is defensible already ships.
-- **Direct on-device DeFlock/OSM submission.** Deferred: OSM ingestion needs
-  OAuth2 + TLS on the ESP, which would break the no-network promise. *Share to
-  DeFlock* ships the passive phone-handoff instead.
-
-Shipped: dual-band Wi-Fi+BLE Flock detection, BLE anti-stalking tracker scan,
-WiFi security audit, deauth attribution, device tagging, WiGLE export (WiFi +
-BLE), in-app ESP32 backup/flasher, on-device map, NFC default-key audit, and
-DeFlock phone-handoff (QR). See [changelog.md](changelog.md).
+Planned work, deferred items (with reasons), and the community/funding track are
+in [ROADMAP.md](ROADMAP.md). Shipped history is in [changelog.md](changelog.md).
