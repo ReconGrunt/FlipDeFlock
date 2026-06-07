@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.14
+- Fix "not enough RAM to run app": the flasher bundled flash stubs for ~10 ESP
+  chips (a FAP loads fully into RAM). Trimmed to ESP32 only, cutting the .fap
+  from ~182 KB back to ~100 KB. (Flasher now supports classic ESP32 boards;
+  other chips can be re-added if RAM allows.)
+
 ## v0.13
 - Flasher "Flash Speed" setting: Safe (115200) or Fast (921600). Fast raises the
   link after connect for much quicker backup/flash; falls back to Safe on failure.
