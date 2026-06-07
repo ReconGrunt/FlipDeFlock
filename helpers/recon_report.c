@@ -7,6 +7,13 @@
 
 static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-4180
 
+// Shared WigleWifi-1.4 pre-header + column header (WiFi and BLE writers).
+#define WIGLE_HEADER                                                   \
+    "WigleWifi-1.4,appRelease=FlipDeFlock,model=FlipperZero,release=0," \
+    "device=FlipDeFlock,display=,board=ESP32,brand=Flipper\n"          \
+    "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,"        \
+    "CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n"
+
 static void recon_report_timestamp(char* buf, size_t len) {
     DateTime dt;
     furi_hal_rtc_get_datetime(&dt);
@@ -222,6 +229,23 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
         "addr,name,category,company,rssi,count,following,tagged,first_lat,first_lon,last_lat,last_lon\n");
     furi_string_set(geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
 
+    // WiGLE CSV (Type=BLE) for geotagged devices.
+    FuriString* wigle = furi_string_alloc();
+    furi_string_set(wigle, WIGLE_HEADER);
+    DateTime bdt;
+    furi_hal_rtc_get_datetime(&bdt);
+    char ble_seen[32];
+    snprintf(
+        ble_seen,
+        sizeof(ble_seen),
+        "%04u-%02u-%02u %02u:%02u:%02u",
+        bdt.year,
+        bdt.month,
+        bdt.day,
+        bdt.hour,
+        bdt.minute,
+        bdt.second);
+
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     size_t n = app->ble_count;
     bool first_feature = true;
@@ -280,6 +304,27 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
                 d->addr[5],
                 d->name[0] ? d->name : "");
         }
+
+        // WiGLE row only for geotagged devices (omit no-fix -> no Null Island).
+        if(!isnan(d->last_lat) && !isnan(d->last_lon)) {
+            char wname[72];
+            csv_field_escape(d->name[0] ? d->name : "", wname, sizeof(wname));
+            furi_string_cat_printf(
+                wigle,
+                "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,0,%d,%.6f,%.6f,0,0,BLE\n",
+                d->addr[0],
+                d->addr[1],
+                d->addr[2],
+                d->addr[3],
+                d->addr[4],
+                d->addr[5],
+                wname,
+                d->cat != BleCatUnknown ? "[BLE][Tracker]" : "[BLE]",
+                ble_seen,
+                d->rssi,
+                (double)d->last_lat,
+                (double)d->last_lon);
+        }
     }
     furi_mutex_release(app->mutex);
 
@@ -287,16 +332,20 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
 
     char path_csv[128];
     char path_geo[128];
+    char path_wigle[128];
     snprintf(path_csv, sizeof(path_csv), "%s/ble_%s.csv", RECON_REPORT_FOLDER, ts);
     snprintf(path_geo, sizeof(path_geo), "%s/ble_%s.geojson", RECON_REPORT_FOLDER, ts);
+    snprintf(path_wigle, sizeof(path_wigle), "%s/ble_%s.wigle.csv", RECON_REPORT_FOLDER, ts);
 
     bool ok = (n > 0);
     if(ok) ok = write_string(app->storage, path_csv, csv);
     if(ok) ok = write_string(app->storage, path_geo, geo);
+    if(ok) ok = write_string(app->storage, path_wigle, wigle);
     if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_csv);
 
     furi_string_free(csv);
     furi_string_free(geo);
+    furi_string_free(wigle);
     return ok;
 }
 
@@ -421,12 +470,7 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
 
     // WiGLE CSV (wardriving standard) - one snapshot at the current GPS fix.
     FuriString* wigle = furi_string_alloc();
-    furi_string_set(
-        wigle,
-        "WigleWifi-1.4,appRelease=FlipDeFlock,model=FlipperZero,release=0,"
-        "device=FlipDeFlock,display=,board=ESP32,brand=Flipper\n"
-        "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,"
-        "CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n");
+    furi_string_set(wigle, WIGLE_HEADER);
     DateTime wdt;
     furi_hal_rtc_get_datetime(&wdt);
     char first_seen[32];

@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.19
+- BLE WiGLE CSV export (Type=BLE): the BLE/Tracker scan now also writes a
+  `ble_*.wigle.csv` (geotagged devices only) next to the WiFi one, sharing one
+  WigleWifi-1.4 header. (Tier-2 "safe" item from the audit sprint.)
+
 ## v0.18
 5-agent audit sprint (see AGENT_SWARM.md / SPRINT_SUMMARY.md):
 - **Flasher:** fast-baud (921600) now actually works — it was calling the
