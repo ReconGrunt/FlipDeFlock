@@ -1,19 +1,19 @@
 # Flock Companion — universal ESP32 firmware
 
-A tiny Wi-Fi sniffer that turns **any** ESP32 board wired to the Flipper's UART
-into a Flock Safety / ALPR camera detector. It does the 802.11 work on-chip and
-streams candidate hits to the **FlipDeFlock** Flipper app.
+A Wi-Fi sniffer that turns any ESP32 board wired to the Flipper's UART into a
+Flock Safety / ALPR camera detector. It does the 802.11 work on-chip and streams
+candidate hits to the **FlipDeFlock** Flipper app.
 
 Works on any ESP32 with Wi-Fi: Flipper Wi-Fi Dev Board, ESP32 Marauder boards,
-**ReksLab Tri-Board**, bare WROOM/WROVER DevKitC, Xiao ESP32-S3, etc.
-The board only needs its UART on the Flipper's pins 13 (TX) / 14 (RX).
+ReksLab Tri-Board, bare WROOM/WROVER DevKitC, Xiao ESP32-S3, and so on. The board
+only needs its UART on the Flipper's pins 13 (TX) / 14 (RX).
 
-> Passive recon only — no deauth, no injection. Use lawfully and only where you
+> Passive recon only. No deauth, no injection. Use lawfully and only where you
 > are authorized. OUI-only matches are *possible*, not confirmed; verify by eye.
 
 ## Two ways to use the Flipper app
 
-You do **not** have to flash this firmware. The app has two backends:
+You do not have to flash this firmware. The app has two backends:
 
 1. **Companion (this firmware)** — strict, low-noise line protocol. Recommended.
 2. **Marauder / Generic** — leave your existing firmware (e.g. ESP32 Marauder)
@@ -21,12 +21,12 @@ You do **not** have to flash this firmware. The app has two backends:
    and applies the Flock filter on the Flipper. Set *ESP Backend = Marauder/Gen*
    in the app Settings.
 
-Flash this Companion firmware if you want the cleanest, most reliable results.
+Flash this Companion firmware for the cleanest, most reliable results.
 
 ## Flash with the Flipper ESP Flasher app (no computer / no USB)
 
-Best for boards **without a USB port** (e.g. ReksLab/CaracalDB multi-boards that
-only have a microSD slot) — the Flipper flashes the ESP32 over its own UART pins.
+Best for boards without a USB port (e.g. ReksLab/CaracalDB multi-boards that only
+have a microSD slot): the Flipper flashes the ESP32 over its own UART pins.
 
 1. Install **ESP Flasher** on the Flipper (lab.flipper.net/apps/esp_flasher).
 2. Download the prebuilt binaries from the FlipDeFlock **release** (built by CI):
@@ -36,7 +36,7 @@ only have a microSD slot) — the Flipper flashes the ESP32 over its own UART pi
    - Either flash the **merged** image at offset `0x0`, or
    - set Bootloader = `...bootloader.bin`, Part Table = `...partitions.bin`,
      FirmwareA/app = `...ino.bin` (offsets 0x1000 / 0x8000 / 0x10000), then **Flash**.
-4. Done — the board now runs FlipDeFlock companion. Reflash Marauder anytime the
+4. Done. The board now runs FlipDeFlock companion. Reflash Marauder anytime the
    same way.
 
 > Built for the classic **ESP32 (WROOM)**. For ESP32-S3 boards (e.g. Xiao S3),
@@ -70,7 +70,7 @@ Replace the FQBN/port to match your board.
 | 8/11 (GND)  | GND       |
 
 Most Flipper ESP32 add-on boards (Dev Board, Marauder, Tri board) already route
-these — just seat the board. If your board exposes the ESP UART on different
+these, so just seat the board. If your board exposes the ESP UART on different
 Flipper pins, change **ESP Port** in the app Settings (USART vs LPUART).
 
 Run a GPS module at the same time on **LPUART (pins 15/16)** to geotag finds.

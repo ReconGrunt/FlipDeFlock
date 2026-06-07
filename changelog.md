@@ -2,56 +2,57 @@
 
 ## v0.23
 - **WATCHSCORE coverage honesty.** In Marauder mode (no companion firmware) the
-  "am I being watched?" indicator can only see the WiFi/Flock side — the BLE
+  "am I being watched?" indicator can only see the WiFi/Flock side; the BLE
   tracker, deauth, and evil-twin signals need the companion. It now shows
   **"watch: WiFi only"** and never lets a CLEAR imply Bluetooth/deauth are clear
   too, so a non-flashing user isn't falsely reassured. Flash the companion for
   full coverage.
-- Added a **"What's new"** section to the README.
+- Added a "What's new" section to the README.
 
 ## v0.22
-Think-tank roadmap sprint — three new features:
+Roadmap sprint, three new features:
 - **Flock BLE serial decode.** Parses the `0x09C8` external-battery advertisement
   to extract a Flock unit's device serial from its always-on battery telemetry
   (no probe/association needed) and shows it on the BLE detail screen. Serial
-  logging to reports is **OFF by default** (Settings → privacy). Note: this
+  logging to reports is **off by default** (Settings → privacy). Note: this
   advert's serial is shared across Falcon (ALPR) and Raven (audio) units, so
-  Raven-vs-Falcon isn't split yet — a validated follow-up (the Raven GATT service
-  UUIDs are the path).
+  Raven-vs-Falcon isn't split yet. A validated follow-up via the Raven GATT
+  service UUIDs is the path.
 - **WATCHSCORE.** A single decaying "am I being watched right now?" indicator on
   the start screen that fuses the existing validated signals (confirmed Flock,
   BLE follower, deauth flood, evil-twin AP). **ELEVATED requires ≥2 independent
-  radios coinciding**, with hysteresis, dwell, and a per-signal breakdown — one
-  trustworthy state, not an alert flood.
+  radios coinciding**, with hysteresis, dwell, and a per-signal breakdown: one
+  state, not an alert flood.
 - **Probe IE-fingerprint pipeline (inert until seeded).** The companion firmware
   now hashes each probe-request's Information-Element skeleton and coalesces
   MAC-cycling bursts by 802.11 sequence number, so Flock detection can survive MAC
-  randomization. Ships with an **empty** fingerprint table (zero behaviour change,
-  zero false positives) until seeded from confirmed-unit captures; reports a
-  device-*class* match, never a unique device.
+  randomization. Ships with an empty fingerprint table (no behaviour change, no
+  false positives) until seeded from confirmed-unit captures; reports a device
+  *class* match, never a unique device.
 
 ## v0.21
 Roadmap sprint:
 - **NFC default-key audit:** on a MIFARE Classic, a new "Deep" check captures the
   UID and tries the Flipper's on-SD key dictionary against every sector, then
-  reports how many open with **factory/default keys** (trivially cloneable) — the
-  core "is this badge using default keys?" access-control question. Reads the
-  stock dictionary (no bundled keys); UID + default-keyed count go into the
-  report. (mfkey32 intentionally deferred — it requires active card emulation.)
+  reports how many open with **factory/default keys** (trivially cloneable). This
+  answers the core access-control question, "is this badge using default keys?"
+  Reads the stock dictionary (no bundled keys); UID and default-keyed count go
+  into the report. (mfkey32 deferred: it requires active card emulation.)
 - **On-device Flock map:** a live map that plots detected ALPR cameras by
-  bearing/distance around your GPS position — auto-fit zoom, heading tick,
-  confidence-by-dot-size, scale bar. Pure visualization, no new radio activity.
+  bearing/distance around your GPS position, with auto-fit zoom, heading tick,
+  confidence-by-dot-size, and a scale bar. Visualization only, no new radio
+  activity.
 - **Share to DeFlock (phone handoff):** renders a QR per marked camera that opens
   DeFlock on your phone at that location, so you contribute through the official
-  app's review flow. The Flipper/ESP **never touch a network** — passive-only
-  stays literally true. (Direct OSM submission deferred: it needs OAuth2/TLS on
-  the ESP, which would break the no-network promise.) QR via vendored Nayuki
-  qrcodegen (MIT).
+  app's review flow. The Flipper/ESP never touch a network, so passive-only stays
+  literally true. (Direct OSM submission deferred: it needs OAuth2/TLS on the ESP,
+  which would break the no-network promise.) QR via vendored Nayuki qrcodegen
+  (MIT).
 
 ## v0.20
 - **Anti-stalking precision model** (Tier-2): a BLE tracker is flagged
   "following" only when seen >=4 times over a >=90 s window at >=3 distinct
-  observer waypoints spanning >=150 m — kills urban false positives (a
+  observer waypoints spanning >=150 m. This kills urban false positives (a
   stationary shop tag, a single drive-by) while a real follower still clears it
   easily. Thresholds are tunable `#define`s; the detail view shows the track.
 - **CI:** non-failing API-87.1 drift warning on every build; a `release.yml`
@@ -64,9 +65,9 @@ Roadmap sprint:
   WigleWifi-1.4 header. (Tier-2 "safe" item from the audit sprint.)
 
 ## v0.18
-5-agent audit sprint:
-- **Flasher:** fast-baud (921600) now actually works — it was calling the
-  non-stub rate API after loading the stub, which always failed.
+Audit sprint:
+- **Flasher:** fast-baud (921600) now works. It was calling the non-stub rate API
+  after loading the stub, which always failed.
 - **Reports:** GeoJSON now uses OSM/DeFlock tags (`man_made=surveillance`,
   `surveillance:type=ALPR`) so points import; CSV/WiGLE fields are RFC-4180
   escaped (a comma/quote in an SSID no longer corrupts rows); WiGLE omits
@@ -80,7 +81,7 @@ Roadmap sprint:
   bigger line buffer + bounded SSID extraction.
 
 ## v0.17
-- Clearer support for **not flashing** (keeping Marauder). Renamed the setting to
+- Clearer support for not flashing (keeping Marauder). Renamed the setting to
   "Board Mode" (Marauder / Companion). In Marauder mode the companion-only
   screens (WiFi Audit, BLE/Tracker Scan) now explain they need the companion
   firmware instead of showing a dead screen, and About shows the active mode and
@@ -89,7 +90,7 @@ Roadmap sprint:
 ## v0.16
 - Fix: the ESP board kept scanning after you exited the app. The stop command
   was being cut off because the UART was torn down before it finished
-  transmitting — now drained first. Works on Marauder and the companion (ships
+  transmitting; it's now drained first. Works on Marauder and the companion (ships
   in the .fap, no re-flash). The companion firmware also fully idles on stop
   (leaves dual-band mode, parks channel hopping/status).
 
@@ -114,7 +115,7 @@ Roadmap sprint:
 ## v0.12
 - In-app ESP32 flasher: **back up** the board's current firmware to SD and
   **flash a .bin** (companion / Marauder / a backup) straight from the Flipper -
-  bounce between Marauder and the FlipDeFlock companion, no computer. Built on
+  switching between Marauder and the FlipDeFlock companion, no computer. Built on
   Espressif's esp-serial-flasher. Manual bootloader entry (hold BOOT, tap RESET).
 
 ## v0.11
