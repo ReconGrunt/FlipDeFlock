@@ -371,7 +371,7 @@ bool recon_report_append_nfc(void* _app, const char* line) {
         FuriString* row = furi_string_alloc();
         // Write a column header the first time the daily file is created.
         if(storage_file_size(file) == 0) {
-            const char* header = "time,protocol,grade,lat,lon\n";
+            const char* header = "time,protocol,grade,uid,sectors_default,lat,lon\n";
             storage_file_write(file, header, strlen(header));
         }
         furi_string_printf(

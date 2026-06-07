@@ -17,6 +17,8 @@
 #include "scenes/recon_scene.h"
 #include "helpers/flock_db.h"
 #include "views/flock_view.h"
+#include "views/flock_map_view.h"
+#include "views/deflock_qr_view.h"
 
 #define RECON_TAG "ReconSurvey"
 
@@ -48,6 +50,8 @@ typedef enum {
     ReconViewWidget,
     ReconViewPopup,
     ReconViewFlock,
+    ReconViewFlockMap,
+    ReconViewDeflockQr,
 } ReconView;
 
 /** ESP32 link backend / parsing strategy. */
@@ -147,6 +151,8 @@ typedef struct {
     Widget* widget;
     Popup* popup;
     FlockView* flock_view;
+    FlockMapView* flock_map_view;
+    DeflockQrView* deflock_qr_view;
 
     ReconSettings settings;
 
