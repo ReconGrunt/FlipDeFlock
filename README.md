@@ -33,7 +33,8 @@ counter-surveillance site surveys:
 - 📲 **Share to DeFlock** — renders a QR per camera that opens DeFlock on your
   phone at that location, so you contribute through the official app. The
   Flipper and ESP never touch a network; submission stays an off-device,
-  phone-side action, which keeps the passive-only promise intact.
+  phone-side action, which keeps the passive-only promise intact. No Flipper GPS
+  is needed to contribute — DeFlock lets you place the pin by hand.
 
 > **Passive recon only.** No deauth, no injection, no jamming. For lawful,
 > authorized use: your own security assessments, anti-surveillance awareness,
@@ -205,6 +206,13 @@ QR code. Scan it with your phone to open DeFlock at that location and submit
 through the official app's review flow. **Left/Right** pages between cameras; the
 lat/lon and OSM tags are shown on-screen too. The Flipper and ESP never connect
 to a network, so the submission happens entirely on your phone.
+
+**No GPS module on your Flipper?** You can still contribute. DeFlock does not
+require GPS — its app and web editor let you place and drag the camera's pin on
+the map by hand. Stand at the camera, open
+[deflock.org/report](https://deflock.org/report) (or the DeFlock app), and drop
+the pin on it. The QR handoff only lists cameras the Flipper geotagged, so without
+a fix you add those directly on DeFlock.
 
 ## Build from source
 
