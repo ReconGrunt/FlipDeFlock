@@ -29,16 +29,13 @@ bool recon_scene_firmware_on_event(void* context, SceneManagerEvent event) {
     if(event.event == FwItemBackup) {
         app->fw_op = 0;
         storage_common_mkdir(app->storage, RECON_APP_FOLDER);
-        char dir[96];
-        snprintf(dir, sizeof(dir), "%s/firmware", RECON_APP_FOLDER);
-        storage_common_mkdir(app->storage, dir);
+        storage_common_mkdir(app->storage, RECON_APP_FOLDER "/firmware");
         DateTime dt;
         furi_hal_rtc_get_datetime(&dt);
         snprintf(
             app->fw_path,
             sizeof(app->fw_path),
-            "%s/backup_%04u%02u%02u_%02u%02u%02u.bin",
-            dir,
+            RECON_APP_FOLDER "/firmware/backup_%04u%02u%02u_%02u%02u%02u.bin",
             dt.year,
             dt.month,
             dt.day,
