@@ -1,0 +1,238 @@
+#pragma once
+
+#include <furi.h>
+#include <furi_hal.h>
+
+#include <gui/gui.h>
+#include <gui/view_dispatcher.h>
+#include <gui/scene_manager.h>
+#include <gui/modules/submenu.h>
+#include <gui/modules/variable_item_list.h>
+#include <gui/modules/widget.h>
+#include <gui/modules/popup.h>
+#include <notification/notification.h>
+#include <notification/notification_messages.h>
+#include <storage/storage.h>
+
+#include "scenes/recon_scene.h"
+#include "helpers/flock_db.h"
+#include "views/flock_view.h"
+
+#define RECON_TAG "ReconSurvey"
+
+#define RECON_FLOCK_MAX 96
+#define RECON_WIFI_MAX 64
+#define RECON_DEAUTH_MAX 16
+#define RECON_BLE_MAX 80
+#define RECON_TEXT_STORE 160
+#define RECON_SSID_LEN 33
+
+/** BLE device categories (companion firmware classifies these). */
+typedef enum {
+    BleCatUnknown = 0,
+    BleCatFlock = 1, /**< Flock Safety / Raven (mfg 0x09C8) */
+    BleCatAirTag = 2, /**< Apple Find My / AirTag */
+    BleCatTile = 3,
+    BleCatSmartTag = 4, /**< Samsung SmartTag */
+} BleCat;
+
+#define RECON_APP_FOLDER EXT_PATH("apps_data/flipdeflock")
+#define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
+#define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
+
+/** ViewDispatcher view indexes. */
+typedef enum {
+    ReconViewSubmenu,
+    ReconViewVarItemList,
+    ReconViewWidget,
+    ReconViewPopup,
+    ReconViewFlock,
+} ReconView;
+
+/** ESP32 link backend / parsing strategy. */
+typedef enum {
+    EspBackendCompanion, /**< Our flock_companion firmware, strict line protocol. */
+    EspBackendGeneric, /**< Marauder / any firmware: scrape MAC & SSID tokens from output. */
+    EspBackendCount,
+} EspBackend;
+
+typedef struct {
+    EspBackend backend;
+    uint8_t esp_uart; /**< FuriHalSerialId for the ESP32. */
+    uint8_t gps_uart; /**< FuriHalSerialId for the GPS module. */
+    uint32_t esp_baud;
+    uint32_t gps_baud;
+    uint8_t marauder_cmd; /**< Generic backend: which Marauder sniff command to run. */
+    bool gps_enabled;
+    bool sound;
+} ReconSettings;
+
+/** One deduplicated surveillance-device sighting. */
+typedef struct {
+    uint8_t mac[6];
+    char ssid[RECON_SSID_LEN];
+    int8_t rssi;
+    uint8_t channel;
+    char ftype; /**< P/B/R/O */
+    FlockConfidence confidence;
+    float lat; /**< geotag of best sighting, NAN if none */
+    float lon;
+    float heading; /**< observer course-over-ground at sighting, NAN if none */
+    uint32_t count;
+    uint32_t first_tick;
+    uint32_t last_tick;
+    bool marked; /**< user flagged this for the report */
+} FlockEntry;
+
+/** One access point seen by the WiFi security scan (companion firmware). */
+typedef struct {
+    uint8_t bssid[6];
+    char ssid[RECON_SSID_LEN];
+    int8_t rssi;
+    uint8_t channel;
+    uint8_t authmode; /**< esp wifi_auth_mode_t */
+    uint8_t pairwise; /**< esp wifi_cipher_type_t (pairwise) */
+    bool wps;
+    bool dup; /**< SSID seen on >1 BSSID -> possible evil twin (or mesh) */
+    bool rogue; /**< same SSID with mismatched security -> strong evil-twin signal */
+} WifiAp;
+
+/** A BSSID observed being deauthenticated/disassociated (attack target). */
+typedef struct {
+    uint8_t bssid[6];
+    uint8_t channel;
+    uint32_t count;
+    uint32_t last_tick;
+} DeauthTarget;
+
+/** A BLE device sighting (anti-tracker / BLE-Flock). */
+typedef struct {
+    uint8_t addr[6];
+    char name[RECON_SSID_LEN];
+    int8_t rssi;
+    uint8_t cat; /**< BleCat */
+    uint16_t company; /**< BLE company id, 0xFFFF if none */
+    uint32_t count; /**< times seen across rescans */
+    float first_lat; /**< GPS at first sighting (NAN if none) */
+    float first_lon;
+    float last_lat; /**< GPS at latest sighting */
+    float last_lon;
+    bool following; /**< persisted across >100 m of our movement */
+} BleDevice;
+
+typedef struct EspLink EspLink;
+typedef struct GpsLink GpsLink;
+typedef struct ReconNfc ReconNfc;
+
+typedef struct {
+    Gui* gui;
+    ViewDispatcher* view_dispatcher;
+    SceneManager* scene_manager;
+    Storage* storage;
+    NotificationApp* notifications;
+
+    Submenu* submenu;
+    VariableItemList* var_item_list;
+    Widget* widget;
+    Popup* popup;
+    FlockView* flock_view;
+
+    ReconSettings settings;
+
+    EspLink* esp;
+    GpsLink* gps;
+    ReconNfc* nfc;
+
+    FuriMutex* mutex; /**< protects flock[] and gps_* snapshot */
+    FlockEntry flock[RECON_FLOCK_MAX];
+    size_t flock_count;
+    int selected; /**< selected flock index for the detail scene */
+
+    bool gps_valid;
+    float gps_lat;
+    float gps_lon;
+    float gps_course; /**< course over ground (deg), NAN if unknown */
+    int gps_sats;
+
+    bool esp_connected;
+    uint32_t esp_frames;
+    uint32_t esp_hits;
+    uint8_t esp_channel;
+    uint32_t esp_lines; /**< RX line heartbeat (generic mode liveness) */
+    uint32_t esp_deauths; /**< deauth/disassoc frames seen (attack indicator) */
+
+    WifiAp wifi[RECON_WIFI_MAX]; /**< results of the last WiFi security scan */
+    size_t wifi_count;
+    bool wifi_scanning; /**< true between WBEGIN and WEND */
+    bool wifi_done; /**< a scan has completed at least once */
+    int wifi_selected; /**< selected AP index for the detail scene */
+    uint8_t saved_backend; /**< backend to restore after the WiFi-audit scene */
+
+    DeauthTarget deauth[RECON_DEAUTH_MAX]; /**< BSSIDs seen under deauth attack */
+    size_t deauth_count;
+
+    BleDevice ble[RECON_BLE_MAX]; /**< BLE devices / trackers */
+    size_t ble_count;
+    bool ble_scanning;
+    bool ble_done;
+    int ble_selected;
+
+    char text_store[RECON_TEXT_STORE];
+} ReconApp;
+
+/**
+ * Record/merge a Flock detection. Thread-safe (takes app->mutex internally).
+ * Called from the ESP worker thread; geotags with the latest GPS fix.
+ */
+void recon_app_report_flock(
+    ReconApp* app,
+    const uint8_t mac[6],
+    const char* ssid,
+    int8_t rssi,
+    uint8_t channel,
+    char ftype,
+    FlockConfidence confidence);
+
+/** Update the cached ESP status line (thread-safe). */
+void recon_app_set_esp_status(
+    ReconApp* app,
+    uint32_t frames,
+    uint32_t hits,
+    uint8_t channel,
+    bool connected);
+
+/** Update the RX line heartbeat counter (thread-safe). Marks ESP connected. */
+void recon_app_set_esp_lines(ReconApp* app, uint32_t lines);
+
+/** Update the deauth/disassoc frame counter (thread-safe). */
+void recon_app_set_deauths(ReconApp* app, uint32_t deauths);
+
+/** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
+void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);
+
+/** BLE scan results (thread-safe; called from the ESP worker). */
+void recon_app_ble_begin(ReconApp* app);
+void recon_app_ble_add(
+    ReconApp* app,
+    const uint8_t addr[6],
+    const char* name,
+    int8_t rssi,
+    uint8_t cat,
+    uint16_t company);
+void recon_app_ble_end(ReconApp* app);
+
+/** WiFi security scan results (thread-safe; called from the ESP worker). */
+void recon_app_wifi_begin(ReconApp* app);
+void recon_app_wifi_add(
+    ReconApp* app,
+    const uint8_t bssid[6],
+    const char* ssid,
+    int8_t rssi,
+    uint8_t channel,
+    uint8_t authmode,
+    uint8_t pairwise,
+    bool wps);
+void recon_app_wifi_end(ReconApp* app);
+
+void recon_settings_load(ReconApp* app);
+void recon_settings_save(ReconApp* app);

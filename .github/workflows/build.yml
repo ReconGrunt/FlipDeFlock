@@ -1,0 +1,37 @@
+name: "FAP: Build"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: "Build .fap (ufbt)"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build with ufbt
+        id: build-app
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        with:
+          # Stable official SDK. Switch to "rc" or "dev" if you track those,
+          # or to a Momentum SDK index via the action's `sdk-index-url`.
+          sdk-channel: release
+
+      - name: Upload .fap artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.repository.name }}-${{ steps.build-app.outputs.suffix }}
+          path: ${{ steps.build-app.outputs.fap-artifacts }}
+          if-no-files-found: error
+
+      - name: Lint sources (advisory)
+        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        continue-on-error: true
+        with:
+          skip-setup: true
+          task: lint

@@ -1,0 +1,22 @@
+# Flipper build tooling
+.ufbt/
+build/
+dist/
+*.elf
+*.map
+*.fap
+
+# Binaries are published as release assets, not committed
+
+# Arduino build outputs
+esp32_companion/**/build/
+*.bin
+*.hex
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc

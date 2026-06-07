@@ -1,0 +1,86 @@
+#include "../recon_app_i.h"
+
+#include <math.h>
+
+static const char* ble_cat_label(uint8_t cat) {
+    switch(cat) {
+    case BleCatFlock:
+        return "Flock/Raven (BLE)";
+    case BleCatAirTag:
+        return "Apple Find My/AirTag";
+    case BleCatTile:
+        return "Tile tracker";
+    case BleCatSmartTag:
+        return "Samsung SmartTag";
+    default:
+        return "BLE device";
+    }
+}
+
+void recon_scene_ble_detail_on_enter(void* context) {
+    ReconApp* app = context;
+    Widget* widget = app->widget;
+    widget_reset(widget);
+
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    if(app->ble_selected < 0 || app->ble_selected >= (int)app->ble_count) {
+        furi_mutex_release(app->mutex);
+        widget_add_string_element(
+            widget, 64, 32, AlignCenter, AlignCenter, FontPrimary, "No selection");
+        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+        return;
+    }
+    BleDevice d = app->ble[app->ble_selected];
+    furi_mutex_release(app->mutex);
+
+    float moved = 0.0f;
+    bool has_move = !isnan(d.first_lat) && !isnan(d.last_lat);
+    if(has_move) {
+        float dlat = (d.last_lat - d.first_lat) * 111320.0f;
+        float dlon =
+            (d.last_lon - d.first_lon) * 111320.0f * cosf(d.first_lat * (float)M_PI / 180.0f);
+        moved = sqrtf(dlat * dlat + dlon * dlon);
+    }
+
+    FuriString* s = furi_string_alloc();
+    furi_string_printf(
+        s,
+        "%s\n%s\n"
+        "%02X:%02X:%02X:%02X:%02X:%02X\n"
+        "RSSI %d  seen %lu  co 0x%04X\n",
+        ble_cat_label(d.cat),
+        d.name[0] ? d.name : "(no name)",
+        d.addr[0],
+        d.addr[1],
+        d.addr[2],
+        d.addr[3],
+        d.addr[4],
+        d.addr[5],
+        d.rssi,
+        (unsigned long)d.count,
+        (unsigned)d.company);
+    if(d.following) {
+        furi_string_cat_printf(
+            s, "! FOLLOWING you: seen over\n%dm of your movement\n", (int)moved);
+    } else if(has_move) {
+        furi_string_cat_printf(s, "moved %dm vs first seen\n", (int)moved);
+    }
+    if(d.cat == BleCatAirTag || d.cat == BleCatTile || d.cat == BleCatSmartTag) {
+        furi_string_cat(s, "Tracker - confirm it's yours");
+    }
+
+    widget_add_text_scroll_element(widget, 0, 0, 128, 64, furi_string_get_cstr(s));
+    furi_string_free(s);
+    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+}
+
+bool recon_scene_ble_detail_on_event(void* context, SceneManagerEvent event) {
+    UNUSED(context);
+    UNUSED(event);
+    return false;
+}
+
+void recon_scene_ble_detail_on_exit(void* context) {
+    ReconApp* app = context;
+    widget_reset(app->widget);
+}
