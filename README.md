@@ -47,7 +47,7 @@ Marauder boards, ReksLab Tri-Board, bare WROOM/WROVER, Xiao ESP32-S3, …):
    a clean, low-noise line protocol. Recommended.
 2. **Marauder / Generic**: keep your existing firmware (e.g. ESP32 Marauder) —
    the app scrapes MAC/SSID tokens from whatever it prints and applies the Flock
-   filter on the Flipper. Set *ESP Backend = Marauder/Gen* in Settings.
+   filter on the Flipper. Set *Board Mode = Marauder* in Settings.
 
 ## Wiring
 
