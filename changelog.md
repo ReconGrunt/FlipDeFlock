@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.24
+- DeFlock moved from deflock.me to deflock.org (the old domain redirects).
+  Updated all links, the in-app About text, and the Share-to-DeFlock QR handoff
+  URL to the canonical domain.
+- Added a README "Support" section pointing at the repo Sponsor button.
+
 ## v0.23
 - **WATCHSCORE coverage honesty.** In Marauder mode (no companion firmware) the
   "am I being watched?" indicator can only see the WiFi/Flock side; the BLE

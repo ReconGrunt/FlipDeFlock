@@ -130,7 +130,7 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
                 "      \"type\": \"Feature\",\n"
                 "      \"geometry\": { \"type\": \"Point\", \"coordinates\": [%s, %s] },\n"
                 // OSM/DeFlock tagging so the points are importable to OSM (which
-                // deflock.me sources). Our extras are namespaced flipdeflock:*.
+                // deflock.org sources). Our extras are namespaced flipdeflock:*.
                 "      \"properties\": {\n"
                 "        \"man_made\": \"surveillance\",\n"
                 "        \"surveillance:type\": \"ALPR\",\n"

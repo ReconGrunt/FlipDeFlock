@@ -36,7 +36,7 @@
     "flipdeflock/reports.\n \n"                                                     \
     "Companion FW + OUI data:\n"                                                    \
     "see esp32_companion/ and\n"                                                    \
-    "deflock.me. Passive recon,\n"                                                  \
+    "deflock.org. Passive recon,\n"                                                  \
     "lawful authorized use only."
 
 void recon_scene_about_on_enter(void* context) {
