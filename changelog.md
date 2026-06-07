@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.15
+- Flasher correctness pass (code audit). Backup now reads the final flash chunk
+  (off-by-one in the library's read/verify bounds); flashing pads images to
+  4-byte alignment so arbitrary .bin sizes work; the write is MD5-**verified**
+  and failures are reported (no more "done" on a bad flash); UART is drained
+  before the fast-baud switch (prevents desync); robust partial-read handling;
+  a partial backup is deleted on abort. Plus minor UI/throughput tweaks.
+
 ## v0.14
 - Fix "not enough RAM to run app": the flasher bundled flash stubs for ~10 ESP
   chips (a FAP loads fully into RAM). Trimmed to ESP32 only, cutting the .fap

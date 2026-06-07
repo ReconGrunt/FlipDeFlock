@@ -12,7 +12,7 @@
 #define FLASH_BAUD 115200
 #define FLASH_RX_BUF 4096
 #define FLASH_BLOCK 1024 /* flash_write payload */
-#define BACKUP_CHUNK 2048 /* flash_read chunk */
+#define BACKUP_CHUNK 4096 /* flash_read chunk (fewer SLIP round-trips = faster) */
 
 struct EspFlasher {
     FuriHalSerialHandle* serial;
@@ -45,8 +45,15 @@ static void esp_flasher_logf(EspFlasher* f, const char* fmt, ...) {
 
 esp_loader_error_t loader_port_read(uint8_t* data, uint16_t size, uint32_t timeout) {
     if(!s_active) return ESP_LOADER_ERROR_FAIL;
-    size_t got = furi_stream_buffer_receive(s_active->rx, data, size, timeout);
-    return (got < size) ? ESP_LOADER_ERROR_TIMEOUT : ESP_LOADER_SUCCESS;
+    // Stream buffers can return early with a partial count; keep reading until we
+    // have the whole frame (or a receive times out), else SLIP desyncs.
+    size_t got = 0;
+    while(got < size) {
+        size_t r = furi_stream_buffer_receive(s_active->rx, data + got, size - got, timeout);
+        if(r == 0) return ESP_LOADER_ERROR_TIMEOUT;
+        got += r;
+    }
+    return ESP_LOADER_SUCCESS;
 }
 
 esp_loader_error_t loader_port_write(const uint8_t* data, uint16_t size, uint32_t timeout) {
@@ -77,7 +84,12 @@ void loader_port_enter_bootloader(void) {
 }
 
 esp_loader_error_t loader_port_change_transmission_rate(uint32_t rate) {
-    if(s_active) furi_hal_serial_set_br(s_active->serial, rate);
+    if(s_active) {
+        // Drain the TX FIFO/shift register before switching the divisor, or the
+        // in-flight CHANGE_BAUDRATE ack gets mangled mid-byte and desyncs.
+        furi_hal_serial_tx_wait_complete(s_active->serial);
+        furi_hal_serial_set_br(s_active->serial, rate);
+    }
     return ESP_LOADER_SUCCESS;
 }
 
@@ -129,6 +141,7 @@ EspFlasher* esp_flasher_alloc(FuriHalSerialId ch, EspFlasherLog log_cb, void* ct
 void esp_flasher_free(EspFlasher* f) {
     if(!f) return;
     s_active = NULL;
+    // Order matters: stop RX (no more IRQs touching f->rx) BEFORE freeing f->rx.
     furi_hal_serial_async_rx_stop(f->serial);
     furi_hal_serial_deinit(f->serial);
     furi_hal_serial_control_release(f->serial);
@@ -173,9 +186,12 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
         return false;
     }
     uint32_t size = (uint32_t)storage_file_size(file);
-    esp_flasher_logf(f, "Erasing + writing %luKB...", (unsigned long)(size / 1024));
+    // flash_start requires a 4-byte-aligned image size; the final short block is
+    // padded with 0xFF (erased-flash value) so the device and MD5 agree.
+    uint32_t img = (size + 3u) & ~3u;
+    esp_flasher_logf(f, "Erasing + writing %luKB...", (unsigned long)(img / 1024));
 
-    esp_loader_error_t err = esp_loader_flash_start(addr, size, FLASH_BLOCK);
+    esp_loader_error_t err = esp_loader_flash_start(addr, img, FLASH_BLOCK);
     if(err != ESP_LOADER_SUCCESS) {
         esp_flasher_logf(f, "flash_start failed (%d).", (int)err);
         storage_file_close(file);
@@ -187,22 +203,23 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
     uint32_t done = 0;
     int last_pct = -1;
     bool ok = true;
-    while(done < size) {
+    while(done < img) {
         if(s_abort) {
             esp_flasher_logf(f, "Aborted.");
             ok = false;
             break;
         }
-        uint16_t n = storage_file_read(file, buf, FLASH_BLOCK);
-        if(n == 0) break;
-        err = esp_loader_flash_write(buf, n);
+        uint32_t want = (img - done < FLASH_BLOCK) ? (img - done) : FLASH_BLOCK;
+        uint16_t n = storage_file_read(file, buf, (uint16_t)want);
+        if(n < want) memset(buf + n, 0xFF, want - n); // pad the final block
+        err = esp_loader_flash_write(buf, want);
         if(err != ESP_LOADER_SUCCESS) {
             esp_flasher_logf(f, "write failed @%lu (%d).", (unsigned long)done, (int)err);
             ok = false;
             break;
         }
-        done += n;
-        int pct = (int)((uint64_t)done * 100 / size);
+        done += want;
+        int pct = (int)((uint64_t)done * 100 / img);
         if(pct != last_pct && pct % 10 == 0) {
             esp_flasher_logf(f, "  %d%%", pct);
             last_pct = pct;
@@ -213,9 +230,22 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
     storage_file_free(file);
 
     if(ok) {
-        esp_loader_flash_finish(false);
-        esp_flasher_logf(f, "Flash complete.");
+        err = esp_loader_flash_finish(false);
+        if(err != ESP_LOADER_SUCCESS) {
+            esp_flasher_logf(f, "Finalize failed (%d).", (int)err);
+            ok = false;
+        }
     }
+    if(ok) {
+        err = esp_loader_flash_verify(); // MD5 check of what we wrote
+        if(err == ESP_LOADER_SUCCESS) {
+            esp_flasher_logf(f, "Verified OK.");
+        } else {
+            esp_flasher_logf(f, "VERIFY FAILED (%d)!", (int)err);
+            ok = false;
+        }
+    }
+    if(ok) esp_flasher_logf(f, "Done. Reset ESP to run.");
     return ok;
 }
 
@@ -268,6 +298,12 @@ bool esp_flasher_backup(EspFlasher* f, Storage* storage, const char* out_path) {
     storage_file_close(file);
     storage_file_free(file);
 
-    if(ok) esp_flasher_logf(f, "Backup saved.");
+    if(ok) {
+        esp_flasher_logf(f, "Backup saved.");
+    } else {
+        // Don't leave a truncated image around that could be flashed later.
+        storage_simply_remove(storage, out_path);
+        esp_flasher_logf(f, "Partial backup deleted.");
+    }
     return ok;
 }

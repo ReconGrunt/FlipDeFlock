@@ -7,6 +7,7 @@ static void fw_log_cb(void* ctx, const char* line) {
     ReconApp* app = ctx;
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     furi_string_cat_printf(app->fw_log, "%s\n", line);
+    app->fw_log_dirty = true;
     furi_mutex_release(app->mutex);
 }
 
@@ -66,6 +67,7 @@ void recon_scene_firmware_run_on_enter(void* context) {
 
     app->fw_running = true;
     app->fw_ok = false;
+    app->fw_log_dirty = false;
     app->fw_thread = furi_thread_alloc_ex("FlipDeFlockFlash", 4096, fw_worker, app);
     furi_thread_start(app->fw_thread);
 
@@ -76,7 +78,12 @@ void recon_scene_firmware_run_on_enter(void* context) {
 bool recon_scene_firmware_run_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     if(event.type == SceneManagerEventTypeTick) {
-        fw_render(app);
+        // Only rebuild the widget when the log actually changed.
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        bool dirty = app->fw_log_dirty;
+        app->fw_log_dirty = false;
+        furi_mutex_release(app->mutex);
+        if(dirty) fw_render(app);
         return true;
     }
     return false;
