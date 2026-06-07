@@ -1,6 +1,6 @@
 #include "../recon_app_i.h"
 
-static const char* const backend_text[] = {"Companion", "Marauder/Gen"};
+static const char* const backend_text[] = {"Companion", "Marauder"};
 static const char* const port_text[] = {"USART 13/14", "LPUART 15/16"};
 static const char* const onoff_text[] = {"OFF", "ON"};
 
@@ -102,7 +102,7 @@ void recon_scene_settings_on_enter(void* context) {
     uint8_t idx;
 
     idx = (app->settings.backend == EspBackendGeneric) ? 1 : 0;
-    item = variable_item_list_add(list, "ESP Backend", 2, backend_changed, app);
+    item = variable_item_list_add(list, "Board Mode", 2, backend_changed, app);
     variable_item_set_current_value_index(item, idx);
     variable_item_set_current_value_text(item, backend_text[idx]);
 

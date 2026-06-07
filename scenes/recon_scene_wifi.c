@@ -13,6 +13,18 @@
 // GUI-thread-only scene state (one WiFi-audit scene at a time).
 static int s_state; // 0 = scanning, 1 = results, 2 = timeout
 static uint32_t s_start;
+static bool s_blocked; // companion-only feature opened in Marauder mode
+
+static void recon_scene_wifi_show_guard(ReconApp* app) {
+    widget_reset(app->widget);
+    widget_add_text_scroll_element(
+        app->widget,
+        0,
+        0,
+        128,
+        64,
+        "WiFi Audit needs the\nFlipDeFlock companion FW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
+}
 
 static void recon_scene_wifi_submenu_cb(void* context, uint32_t index) {
     ReconApp* app = context;
@@ -138,9 +150,16 @@ void recon_scene_wifi_on_enter(void* context) {
     ReconApp* app = context;
 
     // The WiFi audit relies on the companion firmware protocol (the only way to
-    // get auth/cipher/WPS). Force companion parsing for this scene, restore on exit.
+    // get auth/cipher/WPS). In Marauder mode it can't work -> explain instead of
+    // showing a dead screen.
     app->saved_backend = app->settings.backend;
-    app->settings.backend = EspBackendCompanion;
+    if(app->settings.backend != EspBackendCompanion) {
+        s_blocked = true;
+        recon_scene_wifi_show_guard(app);
+        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+        return;
+    }
+    s_blocked = false;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_connected = false;
@@ -156,6 +175,8 @@ void recon_scene_wifi_on_enter(void* context) {
 bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     bool consumed = false;
+
+    if(s_blocked) return false; // Marauder mode guard screen; let Back exit
 
     if(event.type == SceneManagerEventTypeTick) {
         if(s_state == 0) {

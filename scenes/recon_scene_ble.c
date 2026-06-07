@@ -111,11 +111,30 @@ static void ble_show_results(ReconApp* app) {
     }
 }
 
+static bool s_ble_blocked; // companion-only feature opened in Marauder mode
+
+static void ble_show_guard(ReconApp* app) {
+    widget_reset(app->widget);
+    widget_add_text_scroll_element(
+        app->widget,
+        0,
+        0,
+        128,
+        64,
+        "BLE / Tracker Scan needs\nthe FlipDeFlock companion\nFW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
+}
+
 void recon_scene_ble_on_enter(void* context) {
     ReconApp* app = context;
-    // BLE scan needs the companion firmware protocol.
+    // BLE scan needs the companion firmware protocol; explain in Marauder mode.
     app->saved_backend = app->settings.backend;
-    app->settings.backend = EspBackendCompanion;
+    if(app->settings.backend != EspBackendCompanion) {
+        s_ble_blocked = true;
+        ble_show_guard(app);
+        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+        return;
+    }
+    s_ble_blocked = false;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->ble_count = 0;
@@ -134,6 +153,8 @@ void recon_scene_ble_on_enter(void* context) {
 bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     bool consumed = false;
+
+    if(s_ble_blocked) return false; // Marauder mode guard screen; let Back exit
 
     if(event.type == SceneManagerEventTypeTick) {
         furi_mutex_acquire(app->mutex, FuriWaitForever);

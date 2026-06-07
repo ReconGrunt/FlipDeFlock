@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.17
+- Clearer support for **not flashing** (keeping Marauder). Renamed the setting to
+  "Board Mode" (Marauder / Companion). In Marauder mode the companion-only
+  screens (WiFi Audit, BLE/Tracker Scan) now explain they need the companion
+  firmware instead of showing a dead screen, and About shows the active mode and
+  what each one does.
+
 ## v0.16
 - Fix: the ESP board kept scanning after you exited the app. The stop command
   was being cut off because the UART was torn down before it finished
