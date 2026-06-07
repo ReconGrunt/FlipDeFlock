@@ -74,8 +74,8 @@ static bool g_ble_inited = false;
 static BLEScan* g_ble = nullptr;
 static bool g_combo = false;
 static uint32_t g_phase_start = 0;
-#define COMBO_WIFI_MS 6500 // ~2 channel sweeps before a BLE scan
-#define COMBO_BLE_SEC 4 // BLE scan seconds (catches fast Flock adverts)
+#define COMBO_WIFI_MS 9000 // ~3 channel sweeps before a BLE scan (WiFi-biased)
+#define COMBO_BLE_SEC 3 // BLE scan seconds (BLE adverts repeat fast)
 
 static bool oui_match(const uint8_t* mac) {
     for(size_t i = 0; i < FLOCK_OUI_COUNT; i++) {

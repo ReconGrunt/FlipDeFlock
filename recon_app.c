@@ -246,7 +246,7 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.esp_baud = 115200;
     app->settings.gps_baud = 9600;
     app->settings.marauder_cmd = 0; // sniffprobe
-    app->settings.gps_enabled = true;
+    app->settings.gps_enabled = false; // off by default
     app->settings.sound = true;
 }
 

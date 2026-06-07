@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.10
+- Dual-band cadence tuned WiFi-biased (9 s WiFi / 3 s BLE).
+- GPS is now OFF by default (existing installs keep their saved choice).
+- Settings persist across reboots (saved on every change).
+
 ## v0.9
 - Dual-band Flock detection: the companion firmware now interleaves WiFi (2.4GHz
   promiscuous) with periodic BLE scans, so Flock/Raven is detected over both
