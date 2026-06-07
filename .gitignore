@@ -25,3 +25,7 @@ __pycache__/
 AGENT_SWARM.md
 SPRINT_SUMMARY.md
 TESTING.md
+
+# Think-tank / feature-design notes (kept local, not part of the project)
+THINKTANK.md
+FEATURE_BRIEF.md
