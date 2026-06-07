@@ -339,6 +339,7 @@ static ReconApp* recon_app_alloc(void) {
     memset(app, 0, sizeof(ReconApp));
 
     app->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
+    app->fw_log = furi_string_alloc();
     app->gps_lat = NAN;
     app->gps_lon = NAN;
     app->gps_course = NAN;
@@ -400,6 +401,7 @@ static void recon_app_free(ReconApp* app) {
     furi_record_close(RECORD_STORAGE);
     furi_record_close(RECORD_GUI);
 
+    furi_string_free(app->fw_log);
     furi_mutex_free(app->mutex);
     free(app);
 }

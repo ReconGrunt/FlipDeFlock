@@ -179,6 +179,14 @@ typedef struct {
     bool ble_done;
     int ble_selected;
 
+    // ESP32 firmware flasher
+    uint8_t fw_op; /**< 0 = backup, 1 = flash */
+    char fw_path[128]; /**< bin to flash, or backup output path */
+    FuriString* fw_log; /**< streaming flasher log (shown in the run scene) */
+    FuriThread* fw_thread;
+    volatile bool fw_running;
+    volatile bool fw_ok;
+
     char text_store[RECON_TEXT_STORE];
 } ReconApp;
 

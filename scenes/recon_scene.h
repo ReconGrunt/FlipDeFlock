@@ -14,6 +14,8 @@ typedef enum {
     ReconSceneWifiDetail,
     ReconSceneBle,
     ReconSceneBleDetail,
+    ReconSceneFirmware,
+    ReconSceneFirmwareRun,
     ReconSceneNum,
 } ReconScene;
 
@@ -62,3 +64,11 @@ void recon_scene_ble_on_exit(void* context);
 void recon_scene_ble_detail_on_enter(void* context);
 bool recon_scene_ble_detail_on_event(void* context, SceneManagerEvent event);
 void recon_scene_ble_detail_on_exit(void* context);
+
+void recon_scene_firmware_on_enter(void* context);
+bool recon_scene_firmware_on_event(void* context, SceneManagerEvent event);
+void recon_scene_firmware_on_exit(void* context);
+
+void recon_scene_firmware_run_on_enter(void* context);
+bool recon_scene_firmware_run_on_event(void* context, SceneManagerEvent event);
+void recon_scene_firmware_run_on_exit(void* context);

@@ -5,6 +5,7 @@ typedef enum {
     StartItemWifi,
     StartItemBle,
     StartItemNfc,
+    StartItemFirmware,
     StartItemReports,
     StartItemSettings,
     StartItemAbout,
@@ -28,6 +29,8 @@ void recon_scene_start_on_enter(void* context) {
         submenu, "BLE / Tracker Scan", StartItemBle, recon_scene_start_submenu_cb, app);
     submenu_add_item(
         submenu, "NFC / RFID Audit", StartItemNfc, recon_scene_start_submenu_cb, app);
+    submenu_add_item(
+        submenu, "ESP32 Firmware", StartItemFirmware, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Reports", StartItemReports, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Settings", StartItemSettings, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "About", StartItemAbout, recon_scene_start_submenu_cb, app);
@@ -54,6 +57,9 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
             break;
         case StartItemNfc:
             scene_manager_next_scene(app->scene_manager, ReconSceneNfc);
+            break;
+        case StartItemFirmware:
+            scene_manager_next_scene(app->scene_manager, ReconSceneFirmware);
             break;
         case StartItemReports:
             scene_manager_next_scene(app->scene_manager, ReconSceneReports);
