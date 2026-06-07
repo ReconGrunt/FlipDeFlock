@@ -1,7 +1,7 @@
 # Changelog
 
 ## v0.21
-Roadmap sprint (3-agent design + implement, see AGENT_SWARM.md):
+Roadmap sprint:
 - **NFC default-key audit:** on a MIFARE Classic, a new "Deep" check captures the
   UID and tries the Flipper's on-SD key dictionary against every sector, then
   reports how many open with **factory/default keys** (trivially cloneable) — the
@@ -34,7 +34,7 @@ Roadmap sprint (3-agent design + implement, see AGENT_SWARM.md):
   WigleWifi-1.4 header. (Tier-2 "safe" item from the audit sprint.)
 
 ## v0.18
-5-agent audit sprint (see AGENT_SWARM.md / SPRINT_SUMMARY.md):
+5-agent audit sprint:
 - **Flasher:** fast-baud (921600) now actually works — it was calling the
   non-stub rate API after loading the stub, which always failed.
 - **Reports:** GeoJSON now uses OSM/DeFlock tags (`man_made=surveillance`,

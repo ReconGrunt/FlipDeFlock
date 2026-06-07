@@ -20,3 +20,7 @@ esp32_companion/**/build/
 Thumbs.db
 __pycache__/
 *.pyc
+
+# Internal multi-agent process notes (kept local, not part of the project)
+AGENT_SWARM.md
+SPRINT_SUMMARY.md
