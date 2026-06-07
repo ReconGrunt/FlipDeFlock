@@ -1,10 +1,10 @@
 # Publishing FlipDeFlock to the Flipper App Catalog
 
-The official catalog (lab.flipper.net) is a PR-based, **open-source-only** store.
-Your source stays in this repo; you add a small `manifest.yml` pointer to the
-catalog repo. ESP32-companion apps and passive security tools are allowed
-(WiFi Marauder / GhostESP are precedents) — just keep the copy "detection /
-audit / anti-stalking", never "attack X".
+The official catalog (lab.flipper.net) is a PR-based, open-source-only store. Your
+source stays in this repo; you add a small `manifest.yml` pointer to the catalog
+repo. ESP32-companion apps and passive security tools are allowed (WiFi Marauder
+and GhostESP are precedents). Keep the copy framed as "detection / audit /
+anti-stalking" rather than "attack X".
 
 ## One-time prep (this repo)
 - `application.fam` has the required fields: `appid`, `name`, `apptype`,
