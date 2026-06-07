@@ -18,6 +18,10 @@ counter-surveillance **site-survey** tool:
   waypoints** (anti-stalking). Companion FW.
 - 💳 **NFC / RFID Audit** — identify a presented card's protocol and grade its
   security posture for access-control reviews.
+- ⚡ **ESP32 Firmware** — **back up** the board's current firmware to SD and
+  **flash a `.bin`** (companion / Marauder / a backup) straight from the Flipper,
+  no computer. Bounce between Marauder and the FlipDeFlock companion. (Built on
+  Espressif's esp-serial-flasher; put the ESP in bootloader mode first.)
 - 🗺️ **Reports** — export to Markdown, **DeFlock-compatible GeoJSON** (ready to
   contribute to [deflock.me](https://deflock.me)), CSV, and **WiGLE CSV**
   (wardriving standard) on the SD card.

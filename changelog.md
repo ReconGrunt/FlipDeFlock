@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12
+- In-app ESP32 flasher: **back up** the board's current firmware to SD and
+  **flash a .bin** (companion / Marauder / a backup) straight from the Flipper -
+  bounce between Marauder and the FlipDeFlock companion, no computer. Built on
+  Espressif's esp-serial-flasher. Manual bootloader entry (hold BOOT, tap RESET).
+
 ## v0.11
 - Device tagging: mark/untag any WiFi AP or BLE device (Tag button in detail);
   tagged items show `*` in the list and are flagged in the saved reports.
