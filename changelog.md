@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.16
+- Fix: the ESP board kept scanning after you exited the app. The stop command
+  was being cut off because the UART was torn down before it finished
+  transmitting — now drained first. Works on Marauder and the companion (ships
+  in the .fap, no re-flash). The companion firmware also fully idles on stop
+  (leaves dual-band mode, parks channel hopping/status).
+
 ## v0.15
 - Flasher correctness pass (code audit). Backup now reads the final flash chunk
   (off-by-one in the library's read/verify bounds); flashing pads images to

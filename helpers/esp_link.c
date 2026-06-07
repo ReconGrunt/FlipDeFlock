@@ -412,6 +412,9 @@ void esp_link_stop(EspLink* esp) {
         } else {
             esp_link_send(esp, "stopscan");
         }
+        // Let the stop command fully drain before tearing down the UART, or the
+        // last bytes get cut off and the board keeps scanning after we exit.
+        furi_hal_serial_tx_wait_complete(esp->serial);
     }
     if(esp->serial) {
         furi_hal_serial_async_rx_stop(esp->serial);

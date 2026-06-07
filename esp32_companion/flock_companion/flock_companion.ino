@@ -396,6 +396,7 @@ static void handle_command(String cmd) {
         g_combo = false; // pure WiFi Flock
     } else if(cmd == "stop") {
         g_scanning = false;
+        g_combo = false; // also leave dual-band mode so the board goes idle
     } else if(cmd == "ver") {
         banner();
     } else if(cmd == "wifiscan") {
@@ -433,6 +434,10 @@ void loop() {
         g_phase_start = millis();
         return;
     }
+
+    // When not scanning, stay idle (no channel hopping, no status TX) so the
+    // board isn't "in use" after the app stops/exits.
+    if(!g_scanning) return;
 
     // Channel hop every 300 ms unless locked.
     if(g_lock_channel == 0 && now - g_last_hop >= 300) {
