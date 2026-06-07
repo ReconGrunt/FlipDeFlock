@@ -248,6 +248,7 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.marauder_cmd = 0; // sniffprobe
     app->settings.gps_enabled = false; // off by default
     app->settings.sound = true;
+    app->settings.flash_fast = false; // safe 115200 by default
 }
 
 void recon_settings_save(ReconApp* app) {
@@ -257,7 +258,7 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\n",
+            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\n",
             app->settings.backend,
             app->settings.esp_uart,
             app->settings.gps_uart,
@@ -265,7 +266,8 @@ void recon_settings_save(ReconApp* app) {
             (unsigned long)app->settings.gps_baud,
             app->settings.marauder_cmd,
             app->settings.gps_enabled ? 1 : 0,
-            app->settings.sound ? 1 : 0);
+            app->settings.sound ? 1 : 0,
+            app->settings.flash_fast ? 1 : 0);
         storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
         furi_string_free(s);
     }
@@ -290,6 +292,8 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.gps_enabled = (val != 0);
     else if(strcmp(key, "sound") == 0)
         app->settings.sound = (val != 0);
+    else if(strcmp(key, "flash_fast") == 0)
+        app->settings.flash_fast = (val != 0);
 }
 
 void recon_settings_load(ReconApp* app) {

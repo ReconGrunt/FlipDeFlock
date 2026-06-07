@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.13
+- Flasher "Flash Speed" setting: Safe (115200) or Fast (921600). Fast raises the
+  link after connect for much quicker backup/flash; falls back to Safe on failure.
+
 ## v0.12
 - In-app ESP32 flasher: **back up** the board's current firmware to SD and
   **flash a .bin** (companion / Marauder / a backup) straight from the Flipper -

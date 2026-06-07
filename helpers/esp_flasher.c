@@ -140,7 +140,7 @@ void esp_flasher_free(EspFlasher* f) {
     furi_record_close(RECORD_EXPANSION);
 }
 
-bool esp_flasher_connect(EspFlasher* f) {
+bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
     esp_loader_connect_args_t args = ESP_LOADER_CONNECT_DEFAULT();
     esp_flasher_logf(f, "Connecting (download mode)...");
     esp_loader_error_t err = esp_loader_connect_with_stub(&args);
@@ -151,6 +151,17 @@ bool esp_flasher_connect(EspFlasher* f) {
         return false;
     }
     esp_flasher_logf(f, "Connected. Stub loaded.");
+
+    if(fast_baud) {
+        err = esp_loader_change_transmission_rate(fast_baud);
+        if(err == ESP_LOADER_SUCCESS) {
+            esp_flasher_logf(f, "Speed -> %lu baud", (unsigned long)fast_baud);
+        } else {
+            esp_flasher_logf(f, "Fast baud failed (%d).", (int)err);
+            esp_flasher_logf(f, "Use Safe in Settings.");
+            return false; // link may be desynced; bail rather than risk a bad flash
+        }
+    }
     return true;
 }
 

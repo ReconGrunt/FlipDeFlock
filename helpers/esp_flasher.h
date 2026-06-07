@@ -24,8 +24,12 @@ typedef void (*EspFlasherLog)(void* ctx, const char* line);
 EspFlasher* esp_flasher_alloc(FuriHalSerialId ch, EspFlasherLog log_cb, void* ctx);
 void esp_flasher_free(EspFlasher* f);
 
-/** Sync with the target in download mode and load the flasher stub. */
-bool esp_flasher_connect(EspFlasher* f);
+/**
+ * Sync with the target in download mode and load the flasher stub. If
+ * `fast_baud` is non-zero, raise the link to that rate after connecting (faster
+ * flash/backup); on failure the connection is aborted so use Safe (0) instead.
+ */
+bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud);
 
 /** Flash `path` to the target at `addr` (use 0 for a merged full image). */
 bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, uint32_t addr);

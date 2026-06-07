@@ -65,6 +65,7 @@ typedef struct {
     uint8_t marauder_cmd; /**< Generic backend: which Marauder sniff command to run. */
     bool gps_enabled;
     bool sound;
+    bool flash_fast; /**< raise the flasher baud to 921600 after connect */
 } ReconSettings;
 
 /** One deduplicated surveillance-device sighting. */
