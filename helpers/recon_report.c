@@ -212,7 +212,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
     FuriString* geo = furi_string_alloc();
     furi_string_set(
         csv,
-        "addr,name,category,company,rssi,count,following,first_lat,first_lon,last_lat,last_lon\n");
+        "addr,name,category,company,rssi,count,following,tagged,first_lat,first_lon,last_lat,last_lon\n");
     furi_string_set(geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -229,7 +229,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
 
         furi_string_cat_printf(
             csv,
-            "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,0x%04X,%d,%lu,%s,%s,%s,%s,%s\n",
+            "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,0x%04X,%d,%lu,%s,%s,%s,%s,%s,%s\n",
             d->addr[0],
             d->addr[1],
             d->addr[2],
@@ -242,6 +242,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
             d->rssi,
             (unsigned long)d->count,
             d->following ? "yes" : "no",
+            d->marked ? "yes" : "no",
             fl,
             fo,
             ll,
@@ -414,6 +415,7 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
     for(size_t i = 0; i < n; i++) {
         WifiAp* a = &app->wifi[i];
         furi_string_reset(reasons);
+        if(a->marked) furi_string_cat(reasons, "[TAGGED]\n");
         WifiGrade g = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, reasons);
         if(a->rogue)
             furi_string_cat(reasons, "EVIL-TWIN: dup SSID mismatched security\n");

@@ -96,7 +96,13 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
     for(size_t i = 0; i < n; i++) {
         WifiAp* a = &app->wifi[i];
         WifiGrade g = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, NULL);
-        const char* tw = a->rogue ? "!" : (a->dup ? "~" : "");
+        char tw[4];
+        snprintf(
+            tw,
+            sizeof(tw),
+            "%s%s",
+            a->marked ? "*" : "",
+            a->rogue ? "!" : (a->dup ? "~" : ""));
         char label[48];
         if(a->ssid[0]) {
             snprintf(label, sizeof(label), "%s%s %s", wifi_grade_str(g), tw, a->ssid);

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.11
+- Device tagging: mark/untag any WiFi AP or BLE device (Tag button in detail);
+  tagged items show `*` in the list and are flagged in the saved reports.
+
 ## v0.10
 - Dual-band cadence tuned WiFi-biased (9 s WiFi / 3 s BLE).
 - GPS is now OFF by default (existing installs keep their saved choice).

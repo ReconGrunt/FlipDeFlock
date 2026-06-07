@@ -2,6 +2,10 @@
 
 #include <math.h>
 
+typedef enum {
+    BleDetailToggleTag = 410,
+} BleDetailEvent;
+
 static const char* ble_cat_label(uint8_t cat) {
     switch(cat) {
     case BleCatFlock:
@@ -17,8 +21,14 @@ static const char* ble_cat_label(uint8_t cat) {
     }
 }
 
-void recon_scene_ble_detail_on_enter(void* context) {
+static void recon_scene_ble_detail_button_cb(GuiButtonType type, InputType input, void* context) {
     ReconApp* app = context;
+    if(input == InputTypeShort && type == GuiButtonTypeCenter) {
+        view_dispatcher_send_custom_event(app->view_dispatcher, BleDetailToggleTag);
+    }
+}
+
+static void recon_scene_ble_detail_render(ReconApp* app) {
     Widget* widget = app->widget;
     widget_reset(widget);
 
@@ -27,7 +37,6 @@ void recon_scene_ble_detail_on_enter(void* context) {
         furi_mutex_release(app->mutex);
         widget_add_string_element(
             widget, 64, 32, AlignCenter, AlignCenter, FontPrimary, "No selection");
-        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
         return;
     }
     BleDevice d = app->ble[app->ble_selected];
@@ -45,10 +54,11 @@ void recon_scene_ble_detail_on_enter(void* context) {
     FuriString* s = furi_string_alloc();
     furi_string_printf(
         s,
-        "%s\n%s\n"
+        "%s%s\n%s\n"
         "%02X:%02X:%02X:%02X:%02X:%02X\n"
         "RSSI %d  seen %lu  co 0x%04X\n",
         ble_cat_label(d.cat),
+        d.marked ? " *TAG" : "",
         d.name[0] ? d.name : "(no name)",
         d.addr[0],
         d.addr[1],
@@ -69,14 +79,33 @@ void recon_scene_ble_detail_on_enter(void* context) {
         furi_string_cat(s, "Tracker - confirm it's yours");
     }
 
-    widget_add_text_scroll_element(widget, 0, 0, 128, 64, furi_string_get_cstr(s));
+    widget_add_text_scroll_element(widget, 0, 0, 128, 52, furi_string_get_cstr(s));
+    widget_add_button_element(
+        widget,
+        GuiButtonTypeCenter,
+        d.marked ? "Untag" : "Tag",
+        recon_scene_ble_detail_button_cb,
+        app);
     furi_string_free(s);
+}
+
+void recon_scene_ble_detail_on_enter(void* context) {
+    ReconApp* app = context;
+    recon_scene_ble_detail_render(app);
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
 }
 
 bool recon_scene_ble_detail_on_event(void* context, SceneManagerEvent event) {
-    UNUSED(context);
-    UNUSED(event);
+    ReconApp* app = context;
+    if(event.type == SceneManagerEventTypeCustom && event.event == BleDetailToggleTag) {
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        if(app->ble_selected >= 0 && app->ble_selected < (int)app->ble_count) {
+            app->ble[app->ble_selected].marked = !app->ble[app->ble_selected].marked;
+        }
+        furi_mutex_release(app->mutex);
+        recon_scene_ble_detail_render(app);
+        return true;
+    }
     return false;
 }
 

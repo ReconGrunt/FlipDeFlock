@@ -95,6 +95,7 @@ typedef struct {
     bool wps;
     bool dup; /**< SSID seen on >1 BSSID -> possible evil twin (or mesh) */
     bool rogue; /**< same SSID with mismatched security -> strong evil-twin signal */
+    bool marked; /**< user-tagged for the report */
 } WifiAp;
 
 /** A BSSID observed being deauthenticated/disassociated (attack target). */
@@ -118,6 +119,7 @@ typedef struct {
     float last_lat; /**< GPS at latest sighting */
     float last_lon;
     bool following; /**< persisted across >100 m of our movement */
+    bool marked; /**< user-tagged for the report */
 } BleDevice;
 
 typedef struct EspLink EspLink;

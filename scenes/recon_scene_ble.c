@@ -83,13 +83,15 @@ static void ble_show_results(ReconApp* app) {
 
     for(size_t i = 0; i < n; i++) {
         BleDevice* d = &app->ble[i];
+        char pfx[4];
+        snprintf(pfx, sizeof(pfx), "%s%s", d->marked ? "*" : "", d->following ? "!" : "");
         char label[48];
         if(d->name[0]) {
             snprintf(
                 label,
                 sizeof(label),
                 "%s%s %s %ddB",
-                d->following ? "!" : "",
+                pfx,
                 ble_cat_str(d->cat),
                 d->name,
                 d->rssi);
@@ -98,7 +100,7 @@ static void ble_show_results(ReconApp* app) {
                 label,
                 sizeof(label),
                 "%s%s %02X%02X%02X %ddB",
-                d->following ? "!" : "",
+                pfx,
                 ble_cat_str(d->cat),
                 d->addr[3],
                 d->addr[4],
