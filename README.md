@@ -53,6 +53,33 @@ relying on it for anything that matters, read the code and confirm the behavior
 yourself. Feedback and field data are what move it forward — see
 [Contributing](#contributing).
 
+## What's new
+
+**v0.22**
+- **"Am I being watched right now?" indicator.** A single home-screen status —
+  **CLEAR / WATCHFUL / ELEVATED** — that fuses *all* the app's alerts (a Flock
+  camera nearby, a Bluetooth tracker following you, a deauth attack, an evil-twin
+  WiFi) into one trustworthy light instead of four separate beeps. It only goes
+  **ELEVATED when two different radios agree**, so it doesn't cry wolf.
+  *Coverage note:* the Bluetooth and deauth signals only exist with the
+  **companion firmware**. In **Marauder mode** it can only watch the WiFi/Flock
+  side, so it shows **"watch: WiFi only"** — a "clear" there never means "no one's
+  watching," just "nothing on WiFi." Flash the companion for full coverage.
+- **Flock unit serial readout.** Reads a Flock camera's serial from its always-on
+  Bluetooth battery beacon (shown on the BLE detail screen; logging to reports is
+  off by default for privacy).
+- **MAC-randomization defense (groundwork).** The companion now fingerprints the
+  *shape* of a camera's WiFi probe, not just its hardware address, so detection
+  can survive Flock scrambling MACs. Ships dormant until validated against a
+  confirmed unit — so it can't raise false alarms before it's proven.
+
+**v0.21** — On-device **map** of detected cameras, **NFC default-key audit**, and
+**Share-to-DeFlock** QR phone-handoff.
+**v0.20** — Sharper **anti-stalking**: a tracker is only flagged as "following"
+after a real multi-waypoint track, not a single drive-by.
+
+Full history in [changelog.md](changelog.md).
+
 ## Why an ESP32?
 
 The Flipper's onboard radio is BLE-only and can't do Wi-Fi monitor mode. Flock

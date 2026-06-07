@@ -21,23 +21,37 @@ static void recon_scene_start_submenu_cb(void* context, uint32_t index) {
 // Surface the fused WATCHSCORE as the start-screen header, with an explainable
 // per-signal breakdown when anything is contributing. CLEAR shows the plain
 // app name so the idle screen stays calm.
+//
+// Coverage honesty: the BLE-follower, deauth and evil-twin signals only reach us
+// through our companion firmware. In Marauder/Generic mode WATCHSCORE can only
+// watch the WiFi/Flock side -- it can never reach ELEVATED, and a bare "clear"
+// would falsely imply "you are not being watched." So in that mode we tag the
+// header "(WiFi only)" and never let CLEAR read as all-clear.
 static void recon_scene_start_update_header(ReconApp* app) {
+    bool wifi_only = (app->settings.backend != EspBackendCompanion);
     WatchState st = (WatchState)app->watch.state;
     if(st == WatchStateClear) {
-        submenu_set_header(app->submenu, "FlipDeFlock");
+        submenu_set_header(
+            app->submenu, wifi_only ? "FlipDeFlock - watch: WiFi only" : "FlipDeFlock");
         return;
     }
     const char* bd = app->watch.breakdown;
+    const char* cov = wifi_only ? " (WiFi only)" : "";
     if(bd[0]) {
         snprintf(
             app->text_store,
             sizeof(app->text_store),
-            "WATCH: %s - %s",
+            "WATCH: %s%s - %s",
             watchscore_state_str(st),
+            cov,
             bd);
     } else {
         snprintf(
-            app->text_store, sizeof(app->text_store), "WATCH: %s", watchscore_state_str(st));
+            app->text_store,
+            sizeof(app->text_store),
+            "WATCH: %s%s",
+            watchscore_state_str(st),
+            cov);
     }
     submenu_set_header(app->submenu, app->text_store);
 }

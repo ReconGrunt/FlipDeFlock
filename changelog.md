@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.23
+- **WATCHSCORE coverage honesty.** In Marauder mode (no companion firmware) the
+  "am I being watched?" indicator can only see the WiFi/Flock side — the BLE
+  tracker, deauth, and evil-twin signals need the companion. It now shows
+  **"watch: WiFi only"** and never lets a CLEAR imply Bluetooth/deauth are clear
+  too, so a non-flashing user isn't falsely reassured. Flash the companion for
+  full coverage.
+- Added a **"What's new"** section to the README.
+
 ## v0.22
 Think-tank roadmap sprint — three new features:
 - **Flock BLE serial decode.** Parses the `0x09C8` external-battery advertisement
