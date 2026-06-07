@@ -73,7 +73,11 @@ static void recon_scene_ble_detail_render(ReconApp* app) {
         (unsigned)d.company);
     if(d.following) {
         furi_string_cat_printf(
-            s, "! FOLLOWING you: seen over\n%dm of your movement\n", (int)moved);
+            s,
+            "! FOLLOWING you: %dm track\nover %d waypoints, %lus\n",
+            (int)d.max_span_m,
+            (int)d.inrange_wp_count,
+            (unsigned long)((d.last_tick - d.first_tick) / 1000));
     } else if(has_move) {
         furi_string_cat_printf(s, "moved %dm vs first seen\n", (int)moved);
     }

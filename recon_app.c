@@ -8,6 +8,16 @@
 
 #define RECON_TICK_MS 250
 
+// Anti-stalking "following" gate. A real tracker following you clears all four
+// of these easily; stationary shop Tiles and a single drive-by past a fixed
+// beacon do not. All tunable; this only TIGHTENS precision (never flags more
+// loosely than the old single >100 m gate).
+#define FOLLOW_MIN_COUNT 4 /**< seen at least this many scans */
+#define FOLLOW_MIN_MS 90000 /**< over at least this long a window (90 s) */
+#define FOLLOW_MIN_WAYPOINTS 3 /**< at this many distinct observer waypoints */
+#define WAYPOINT_GAP_M 50.0f /**< min separation to count a new waypoint */
+#define FOLLOW_MIN_SPAN_M 150.0f /**< max span between counted waypoints */
+
 // ---- shared data updates (called from worker threads) --------------------
 
 void recon_app_report_flock(
@@ -121,6 +131,7 @@ void recon_app_ble_add(
     uint16_t company) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
 
+    uint32_t now = furi_get_tick();
     BleDevice* e = NULL;
     for(size_t i = 0; i < app->ble_count; i++) {
         if(memcmp(app->ble[i].addr, addr, 6) == 0) {
@@ -134,6 +145,13 @@ void recon_app_ble_add(
         memcpy(e->addr, addr, 6);
         e->first_lat = app->gps_valid ? app->gps_lat : NAN;
         e->first_lon = app->gps_valid ? app->gps_lon : NAN;
+        e->first_tick = now;
+        e->last_tick = now;
+        // First counted waypoint is wherever we are now (NAN until we get a fix).
+        e->last_wp_lat = app->gps_valid ? app->gps_lat : NAN;
+        e->last_wp_lon = app->gps_valid ? app->gps_lon : NAN;
+        e->inrange_wp_count = app->gps_valid ? 1 : 0;
+        e->max_span_m = 0.0f;
     }
     if(e) {
         e->count++;
@@ -147,10 +165,32 @@ void recon_app_ble_add(
         if(app->gps_valid) {
             e->last_lat = app->gps_lat;
             e->last_lon = app->gps_lon;
-            // "Following": a tracker seen across multiple scans while WE moved
-            // a meaningful distance is the anti-stalking signal.
-            if(e->count >= 2 && !isnan(e->first_lat) &&
-               recon_dist_m(e->first_lat, e->first_lon, app->gps_lat, app->gps_lon) > 100.0f) {
+            e->last_tick = now;
+            // First fix may arrive after creation (created with no GPS): seed the
+            // first counted waypoint here so the span/waypoint logic can start.
+            if(isnan(e->last_wp_lat)) {
+                e->last_wp_lat = app->gps_lat;
+                e->last_wp_lon = app->gps_lon;
+                if(e->inrange_wp_count == 0) e->inrange_wp_count = 1;
+            } else if(
+                recon_dist_m(e->last_wp_lat, e->last_wp_lon, app->gps_lat, app->gps_lon) >=
+                WAYPOINT_GAP_M) {
+                // We've moved a fresh waypoint's distance and the device is still
+                // in range: count it, advance the marker, grow the track span.
+                e->inrange_wp_count++;
+                e->last_wp_lat = app->gps_lat;
+                e->last_wp_lon = app->gps_lon;
+                if(!isnan(e->first_lat)) {
+                    float span =
+                        recon_dist_m(e->first_lat, e->first_lon, app->gps_lat, app->gps_lon);
+                    if(span > e->max_span_m) e->max_span_m = span;
+                }
+            }
+            // "Following": a tracker seen across many scans, over a real time
+            // window, at several distinct observer waypoints, spanning real
+            // ground is the anti-stalking signal. AND of all four (latched).
+            if(e->count >= FOLLOW_MIN_COUNT && (now - e->first_tick) >= FOLLOW_MIN_MS &&
+               e->inrange_wp_count >= FOLLOW_MIN_WAYPOINTS && e->max_span_m >= FOLLOW_MIN_SPAN_M) {
                 e->following = true;
             }
         }

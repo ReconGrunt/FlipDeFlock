@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.20
+- **Anti-stalking precision model** (Tier-2): a BLE tracker is flagged
+  "following" only when seen >=4 times over a >=90 s window at >=3 distinct
+  observer waypoints spanning >=150 m — kills urban false positives (a
+  stationary shop tag, a single drive-by) while a real follower still clears it
+  easily. Thresholds are tunable `#define`s; the detail view shows the track.
+- **CI:** non-failing API-87.1 drift warning on every build; a `release.yml`
+  attaches the `.fap` to `v*` tag releases automatically.
+- **Docs:** refreshed the GitHub description/topics and README roadmap.
+
 ## v0.19
 - BLE WiGLE CSV export (Type=BLE): the BLE/Tracker scan now also writes a
   `ble_*.wigle.csv` (geotagged devices only) next to the WiFi one, sharing one

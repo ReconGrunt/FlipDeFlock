@@ -121,7 +121,13 @@ typedef struct {
     float first_lon;
     float last_lat; /**< GPS at latest sighting */
     float last_lon;
-    bool following; /**< persisted across >100 m of our movement */
+    uint32_t first_tick; /**< tick at first sighting */
+    uint32_t last_tick; /**< tick at latest sighting */
+    uint8_t inrange_wp_count; /**< distinct observer waypoints (>=50 m apart) seen at */
+    float last_wp_lat; /**< last counted waypoint (NAN if none) */
+    float last_wp_lon;
+    float max_span_m; /**< running max distance between counted waypoints */
+    bool following; /**< multi-condition anti-stalking signal (latched) */
     bool marked; /**< user-tagged for the report */
 } BleDevice;
 

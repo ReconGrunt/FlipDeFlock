@@ -130,4 +130,10 @@ MIT — see [LICENSE](LICENSE).
 ## Roadmap
 
 - NFC: capture UID + run default-key / mfkey32 dictionary checks (poller framework).
-- Flock: on-device map view; optional BLE-side indicators.
+- Flock: on-device map view.
+- Direct DeFlock submission (needs a phone/network bridge).
+
+Shipped since the early roadmap: dual-band Wi-Fi+BLE Flock detection, BLE
+anti-stalking tracker scan, WiFi security audit, deauth attribution, device
+tagging, WiGLE export (WiFi + BLE), and an in-app ESP32 backup/flasher. See
+[changelog.md](changelog.md).
