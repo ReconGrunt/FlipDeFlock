@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.22
+Think-tank roadmap sprint — three new features:
+- **Flock BLE serial decode.** Parses the `0x09C8` external-battery advertisement
+  to extract a Flock unit's device serial from its always-on battery telemetry
+  (no probe/association needed) and shows it on the BLE detail screen. Serial
+  logging to reports is **OFF by default** (Settings → privacy). Note: this
+  advert's serial is shared across Falcon (ALPR) and Raven (audio) units, so
+  Raven-vs-Falcon isn't split yet — a validated follow-up (the Raven GATT service
+  UUIDs are the path).
+- **WATCHSCORE.** A single decaying "am I being watched right now?" indicator on
+  the start screen that fuses the existing validated signals (confirmed Flock,
+  BLE follower, deauth flood, evil-twin AP). **ELEVATED requires ≥2 independent
+  radios coinciding**, with hysteresis, dwell, and a per-signal breakdown — one
+  trustworthy state, not an alert flood.
+- **Probe IE-fingerprint pipeline (inert until seeded).** The companion firmware
+  now hashes each probe-request's Information-Element skeleton and coalesces
+  MAC-cycling bursts by 802.11 sequence number, so Flock detection can survive MAC
+  randomization. Ships with an **empty** fingerprint table (zero behaviour change,
+  zero false positives) until seeded from confirmed-unit captures; reports a
+  device-*class* match, never a unique device.
+
 ## v0.21
 Roadmap sprint:
 - **NFC default-key audit:** on a MIFARE Classic, a new "Deep" check captures the

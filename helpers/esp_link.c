@@ -121,12 +121,12 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         return;
     }
     if(strncmp(line, "BLE,", 4) == 0) {
-        // BLE,<addr>,<rssi>,<cat>,<company>,<name>
-        char* f[6];
+        // BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>]
+        char* f[7];
         int n = 0;
         char* p = line;
         f[n++] = p;
-        while(*p && n < 6) {
+        while(*p && n < 7) {
             if(*p == ',') {
                 *p = '\0';
                 f[n++] = p + 1;
@@ -136,13 +136,29 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         if(n < 5) return;
         uint8_t addr[6];
         if(strlen(f[1]) < 12 || !parse_mac_compact(f[1], addr)) return;
+        // Trailing field: raw mfg-data hex (Flock 0x09C8). Decode to bytes for
+        // the serial extractor. Older firmware omits it -> mfg NULL, len 0.
+        uint8_t mfg[32];
+        size_t mfg_len = 0;
+        if(n >= 7) {
+            const char* h = f[6];
+            for(size_t i = 0; mfg_len < sizeof(mfg); i += 2) {
+                int hi = hexval(h[i]);
+                if(hi < 0) break;
+                int lo = hexval(h[i + 1]);
+                if(lo < 0) break;
+                mfg[mfg_len++] = (uint8_t)((hi << 4) | lo);
+            }
+        }
         recon_app_ble_add(
             esp->app,
             addr,
             (n >= 6) ? f[5] : "",
             (int8_t)atoi(f[2]),
             (uint8_t)atoi(f[3]),
-            (uint16_t)atoi(f[4]));
+            (uint16_t)atoi(f[4]),
+            mfg_len ? mfg : NULL,
+            mfg_len);
         return;
     }
     if(line[0] == 'W' && line[1] == ',') {
@@ -199,12 +215,12 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         return;
     }
     if(line[0] == 'D' && line[1] == ',') {
-        // D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>
-        char* f[7];
+        // D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>]
+        char* f[8];
         int n = 0;
         char* p = line;
         f[n++] = p;
-        while(*p && n < 7) {
+        while(*p && n < 8) {
             if(*p == ',') {
                 *p = '\0';
                 f[n++] = p + 1;
@@ -219,6 +235,29 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         char ftype = f[4][0] ? f[4][0] : 'O';
         FlockConfidence conf = conf_from_int(atoi(f[5]));
         const char* ssid = (n >= 7) ? f[6] : "";
+
+        // B1: trailing IE-fingerprint field "fp=<hex32>" (probe requests only).
+        // Older firmware omits it; backward-compatible. The fp is a
+        // MAC-independent device-CLASS signature -- if it matches the curated
+        // (currently empty) Flock table we can rescue a detection whose MAC was
+        // randomized, and label its source "probe-fp" (ftype 'F').
+        uint32_t fp = 0;
+        for(int i = 6; i < n; i++) {
+            if(strncmp(f[i], "fp=", 3) == 0) {
+                fp = (uint32_t)strtoul(f[i] + 3, NULL, 16);
+                break;
+            }
+        }
+        if(flock_ie_fp_match(fp)) {
+            // Curated IE-fp match. + Flock OUI -> CONFIRMED; otherwise (e.g. a
+            // wildcard probe from a randomized/unknown MAC) -> a candidate
+            // device-CLASS match. Never weaker than the ESP's own score.
+            FlockConfidence fp_conf =
+                flock_oui_match(mac) ? FlockConfidenceConfirmed : FlockConfidenceProbeFp;
+            if(fp_conf > conf) conf = fp_conf;
+            ftype = 'F'; // source label "probe-fp" in the detail scene
+        }
+
         recon_app_report_flock(esp->app, mac, ssid, rssi, ch, ftype, conf);
     }
 }

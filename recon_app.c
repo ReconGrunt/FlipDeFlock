@@ -128,7 +128,19 @@ void recon_app_ble_add(
     const char* name,
     int8_t rssi,
     uint8_t cat,
-    uint16_t company) {
+    uint16_t company,
+    const uint8_t* mfg,
+    size_t mfg_len) {
+    // Decode the Flock 0x09C8 external-battery advert: extract the device serial
+    // and a CONSERVATIVE model guess (defaults to generic -- see flock_ble.c).
+    // Done outside the lock (pure string work, no app state).
+    char serial[RECON_BLE_SERIAL_LEN] = "";
+    uint8_t model = FlockBleModelUnknown;
+    if(cat == BleCatFlock) {
+        flock_ble_extract_serial(mfg, mfg_len, name, serial, sizeof(serial));
+        model = (uint8_t)flock_ble_model(serial, name);
+    }
+
     furi_mutex_acquire(app->mutex, FuriWaitForever);
 
     uint32_t now = furi_get_tick();
@@ -162,6 +174,11 @@ void recon_app_ble_add(
             strncpy(e->name, name, RECON_SSID_LEN - 1);
             e->name[RECON_SSID_LEN - 1] = '\0';
         }
+        if(serial[0] && e->serial[0] == '\0') {
+            strncpy(e->serial, serial, RECON_BLE_SERIAL_LEN - 1);
+            e->serial[RECON_BLE_SERIAL_LEN - 1] = '\0';
+        }
+        if(model && model != FlockBleModelUnknown) e->model = model;
         if(app->gps_valid) {
             e->last_lat = app->gps_lat;
             e->last_lon = app->gps_lon;
@@ -279,6 +296,87 @@ void recon_app_wifi_end(ReconApp* app) {
     furi_mutex_release(app->mutex);
 }
 
+// ---- WATCHSCORE: fuse the already-validated signals (C1) ------------------
+
+// Fresh-signal windows used while snapshotting (kept here next to the call
+// site; the scoring model's own tunables live in helpers/watchscore.c).
+#define WATCH_FLOCK_FRESH_MS 60000
+#define WATCH_DEAUTH_FRESH_MS 30000
+#define WATCH_FLOCK_NEAR_M 120.0f
+
+void recon_app_watchscore_tick(ReconApp* app) {
+    WatchInputs in;
+    memset(&in, 0, sizeof(in));
+    in.flock_dist_m = NAN;
+
+    // --- snapshot the shared arrays under the lock; decide AFTER release -----
+    // (same discipline as the map/report code: the ESP worker writes these.)
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    uint32_t now = furi_get_tick();
+    bool gps_valid = app->gps_valid;
+    float gps_lat = app->gps_lat;
+    float gps_lon = app->gps_lon;
+
+    // (1) A CONFIRMED Flock seen recently. If we have a fix and it's geotagged,
+    // also test co-location. ftype 'L' marks a BLE-sourced Flock = a genuinely
+    // independent radio for the coincidence gate.
+    float best_dist = NAN;
+    for(size_t i = 0; i < app->flock_count; i++) {
+        const FlockEntry* e = &app->flock[i];
+        if(e->confidence < FlockConfidenceConfirmed) continue;
+        if((now - e->last_tick) > WATCH_FLOCK_FRESH_MS) continue;
+        in.flock_confirmed = true;
+        if(e->ftype == 'L') in.flock_via_ble = true;
+        if(gps_valid && !isnan(e->lat)) {
+            float d = recon_dist_m(e->lat, e->lon, gps_lat, gps_lon);
+            if(isnan(best_dist) || d < best_dist) best_dist = d;
+        }
+    }
+    if(!isnan(best_dist) && best_dist <= WATCH_FLOCK_NEAR_M) {
+        in.flock_near = true;
+        in.flock_dist_m = best_dist;
+    }
+
+    // (2) A BLE tracker that latched the multi-condition anti-stalking gate.
+    for(size_t i = 0; i < app->ble_count; i++) {
+        const BleDevice* e = &app->ble[i];
+        if(!e->following) continue;
+        in.ble_following = true;
+        uint32_t mins = (now - e->first_tick) / 60000;
+        if(mins > in.ble_follow_min) in.ble_follow_min = mins;
+    }
+
+    // (3) An attributed deauth/disassoc flood active right now.
+    for(size_t i = 0; i < app->deauth_count; i++) {
+        if((now - app->deauth[i].last_tick) <= WATCH_DEAUTH_FRESH_MS) {
+            in.deauth_active = true;
+            break;
+        }
+    }
+
+    // (4) An evil-twin / rogue AP (same SSID, mismatched security) of a network.
+    for(size_t i = 0; i < app->wifi_count; i++) {
+        if(app->wifi[i].rogue) {
+            in.rogue_ap = true;
+            break;
+        }
+    }
+    furi_mutex_release(app->mutex);
+
+    // --- evaluate the scorer outside the lock (pure logic) ------------------
+    watchscore_eval(&app->watch, &in);
+
+    // Fire EXACTLY ONE haptic alert on the transition INTO ELEVATED, carrying
+    // the per-signal breakdown for the next screen to show. Haptic-only keeps
+    // it discreet (personal-safety) and respects the app's sound setting.
+    if(app->watch.just_elevated && app->notifications) {
+        notification_message(app->notifications, &sequence_double_vibro);
+        if(app->settings.sound) {
+            notification_message(app->notifications, &sequence_error);
+        }
+    }
+}
+
 // ---- settings ------------------------------------------------------------
 
 static void recon_settings_defaults(ReconApp* app) {
@@ -291,6 +389,7 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.gps_enabled = false; // off by default
     app->settings.sound = true;
     app->settings.flash_fast = false; // safe 115200 by default
+    app->settings.log_serials = false; // privacy: don't catalogue police asset serials by default
 }
 
 void recon_settings_save(ReconApp* app) {
@@ -300,7 +399,7 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\n",
+            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\n",
             app->settings.backend,
             app->settings.esp_uart,
             app->settings.gps_uart,
@@ -309,7 +408,8 @@ void recon_settings_save(ReconApp* app) {
             app->settings.marauder_cmd,
             app->settings.gps_enabled ? 1 : 0,
             app->settings.sound ? 1 : 0,
-            app->settings.flash_fast ? 1 : 0);
+            app->settings.flash_fast ? 1 : 0,
+            app->settings.log_serials ? 1 : 0);
         storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
         furi_string_free(s);
     }
@@ -336,6 +436,8 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.sound = (val != 0);
     else if(strcmp(key, "flash_fast") == 0)
         app->settings.flash_fast = (val != 0);
+    else if(strcmp(key, "log_serials") == 0)
+        app->settings.log_serials = (val != 0);
 }
 
 void recon_settings_load(ReconApp* app) {
@@ -386,6 +488,7 @@ static ReconApp* recon_app_alloc(void) {
 
     app->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
     app->fw_log = furi_string_alloc();
+    watchscore_init(&app->watch);
     app->gps_lat = NAN;
     app->gps_lon = NAN;
     app->gps_course = NAN;

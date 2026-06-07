@@ -19,13 +19,16 @@
  * Line protocol (newline-terminated, ASCII), TX to Flipper:
  *   FLOCKCO,1                              banner / version on boot and on "ver"
  *   S,<frames>,<hits>,<ch>                 status, ~1 Hz
- *   D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>   detection
+ *   D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>]   detection
  *       mac : aabbccddeeff (lower hex, no separators)
  *       rssi: signed dBm
  *       ch  : 1-11
  *       type: P=probe-req  B=beacon  R=probe-resp  O=other
  *       conf: 1=possible 2=likely 3=confirmed (ESP-side score)
  *       ssid: raw SSID with ',' and control chars stripped (may be empty)
+ *       fp  : FNV-1a uint32 (8 lower-hex) of the probe's IE skeleton (B1) --
+ *             a MAC-independent device-CLASS fingerprint; trailing field,
+ *             older parsers ignore it. Only emitted for probe requests.
  *
  * RX from Flipper (commands, newline-terminated):
  *   scan   start reporting        stop   pause reporting
@@ -112,6 +115,88 @@ static void emit_ssid(const char* s, int len) {
     }
 }
 
+// ---- B1: probe IE-fingerprint + sequence-number coalescer ----------------
+//
+// The whole OUI/SSID ladder collapses the day Flock randomizes the probe MAC.
+// The probe *body* is MAC-independent: the ordered set of tagged Information
+// Elements (supported rates, HT/VHT/HE caps, vendor-specific 0xDD OUI+type) is
+// baked into the WiFi SoC driver and can't be scrambled without breaking
+// 802.11. We hash that skeleton into a uint32 the Flipper compares against a
+// curated table. This is a device-CLASS / firmware-stack match, NOT a unique
+// device ID -- the Flipper reports it as a candidate class match only.
+//
+// We hash only the *skeleton* (tag id + length, plus the first OUI+type bytes
+// of vendor-specific IEs), never per-frame variable contents, so the same probe
+// template hashes identically regardless of the (possibly randomized) MAC.
+
+#define FNV1A_OFFSET 0x811c9dc5u
+#define FNV1A_PRIME 0x01000193u
+
+static inline uint32_t fnv1a_u8(uint32_t h, uint8_t b) {
+    return (h ^ b) * FNV1A_PRIME;
+}
+
+// FNV-1a over the IE skeleton of a probe request. `p` points at the frame body,
+// `len` is the body length (FCS already removed). Tagged params start at byte
+// 24 (probe request has no fixed params). For each IE we fold in (tag_id,
+// length); for vendor-specific (0xDD) we also fold in up to the first 5 bytes
+// (3-byte OUI + 1-2 type/subtype) -- enough to distinguish vendor IEs without
+// shipping their variable payloads. Returns 0 if there are no parseable IEs.
+static uint32_t ie_skeleton_hash(const uint8_t* p, int len) {
+    uint32_t h = FNV1A_OFFSET;
+    int off = 24; // tagged parameters begin here for a probe request
+    bool any = false;
+    while(off + 2 <= len) {
+        uint8_t tag = p[off];
+        uint8_t tlen = p[off + 1];
+        if(off + 2 + tlen > len) break; // truncated IE -> stop
+        h = fnv1a_u8(h, tag);
+        h = fnv1a_u8(h, tlen);
+        if(tag == 0xDD) { // vendor-specific: fold OUI + type (first 5 bytes)
+            int n = tlen < 5 ? tlen : 5;
+            for(int i = 0; i < n; i++) h = fnv1a_u8(h, p[off + 2 + i]);
+        }
+        any = true;
+        off += 2 + tlen;
+    }
+    return any ? h : 0;
+}
+
+// Sequence-number-run coalescer. A MAC-cycling Flock burst sprays many probes
+// from different (randomized) MACs but with a *contiguous* 802.11 sequence
+// number run -- the SoC's seq counter increments across the burst regardless of
+// the source address. We treat such a run as ONE logical sighting and suppress
+// the duplicates on the ESP side so they never flood the Flipper's 96-entry
+// table. Keyed on the IE-skeleton hash so unrelated traffic with nearby seq
+// numbers isn't merged.
+#define SEQ_RUN_GAP 4 // max seq-num step to still count as the same burst
+#define SEQ_RUN_MS 1500 // a run older than this is stale; start fresh
+static uint32_t g_seq_fp = 0; // IE hash of the current run (0 = none)
+static uint16_t g_seq_last = 0; // last 802.11 sequence number in the run
+static uint32_t g_seq_t = 0; // millis() of the last frame in the run
+
+// Returns true if this frame should be SUPPRESSED as a duplicate within an
+// in-progress MAC-cycling burst (same IE fingerprint, monotonic seq-num run).
+static bool seq_run_duplicate(uint32_t fp, uint16_t seq) {
+    if(fp == 0) return false; // no fingerprint -> can't coalesce
+    uint32_t now = millis();
+    bool fresh = (now - g_seq_t) <= SEQ_RUN_MS;
+    if(fresh && fp == g_seq_fp) {
+        uint16_t step = (uint16_t)(seq - g_seq_last); // wraps mod 4096 naturally
+        if(step != 0 && step <= SEQ_RUN_GAP) {
+            g_seq_last = seq; // extend the run, suppress this frame
+            g_seq_t = now;
+            return true;
+        }
+    }
+    // New run (or a gap too large / stale): this frame is the run's first
+    // sighting -> report it and start tracking from here.
+    g_seq_fp = fp;
+    g_seq_last = seq;
+    g_seq_t = now;
+    return false;
+}
+
 static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     if(type != WIFI_PKT_MGMT) return;
     const wifi_promiscuous_pkt_t* pkt = (const wifi_promiscuous_pkt_t*)buf;
@@ -189,6 +274,21 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
         conf = 1; // OUI prefix only
 
     if(conf == 0) return; // not a candidate; drop to keep UART quiet
+
+    // B1: fingerprint the probe body (MAC-independent device-class signature)
+    // and coalesce MAC-cycling bursts via the 802.11 sequence-number run, so a
+    // randomized-MAC spray collapses to one logical sighting before it can flood
+    // the Flipper's 96-entry table. Only probe requests carry a meaningful IE
+    // skeleton. The coalescer runs only on candidate frames so unrelated noise
+    // can't capture the run slot and suppress a real detection.
+    uint32_t ie_fp = 0;
+    if(is_probe) {
+        ie_fp = ie_skeleton_hash(p, len);
+        // 802.11 sequence control: bytes 22-23, seq number is the top 12 bits.
+        uint16_t seq = ((uint16_t)p[23] << 8 | p[22]) >> 4;
+        if(seq_run_duplicate(ie_fp, seq)) return; // duplicate in an active burst
+    }
+
     g_hits++;
     if(!g_scanning) return;
 
@@ -210,6 +310,9 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
 
     Serial.printf("D,%s,%d,%u,%c,%d,", macstr, pkt->rx_ctrl.rssi, frame_channel, ftype, conf);
     if(ssid && ssid_len > 0) emit_ssid(ssid, ssid_len);
+    // B1: trailing IE-fingerprint field (probe requests only). Older parsers
+    // ignore it; the Flipper matches it against a curated Flock IE-fp table.
+    if(ie_fp != 0) Serial.printf(",fp=%08x", ie_fp);
     Serial.print('\n');
 }
 
@@ -289,8 +392,10 @@ static void wifi_security_scan() {
 // One-shot BLE scan for the anti-tracker / BLE-Flock feature. Stops WiFi to free
 // the radio, active-scans a few seconds, classifies each device, then restores
 // WiFi/Flock mode.
-//   BLE,<addr>,<rssi>,<cat>,<company>,<name>
+//   BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>]
 //   cat: 0 unknown  1 Flock/Raven  2 AirTag/FindMy  3 Tile  4 SmartTag
+//   mfghex: raw manufacturer-specific data as hex (Flock 0x09C8 only), so the
+//   Flipper can decode the device serial; trailing field, older parsers ignore.
 static void ble_ensure_init() {
     if(g_ble_inited) return;
     BLEDevice::init("");
@@ -365,6 +470,16 @@ static void ble_do_scan(int seconds) {
                 char c = nm[j];
                 if(c == ',' || c == '\r' || c == '\n' || (uint8_t)c < 0x20) c = '.';
                 Serial.write(c);
+            }
+        }
+        // Trailing field: raw mfg-data hex for Flock (0x09C8) only, so the
+        // Flipper can decode the device serial. Capped so the line stays well
+        // under the Flipper's RX line limit; only Flock units carry it.
+        if(cat == 1 && company == 0x09C8 && d.haveManufacturerData()) {
+            std::string md = d.getManufacturerData();
+            Serial.write(',');
+            for(size_t j = 0; j < md.length() && j < 31; j++) {
+                Serial.printf("%02x", (uint8_t)md[j]);
             }
         }
         Serial.print('\n');

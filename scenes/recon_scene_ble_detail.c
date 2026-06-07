@@ -9,7 +9,7 @@ typedef enum {
 static const char* ble_cat_label(uint8_t cat) {
     switch(cat) {
     case BleCatFlock:
-        return "Flock/Raven (BLE)";
+        return "Flock/Raven (BLE)"; // refined to the decoded model below when known
     case BleCatAirTag:
         return "Apple Find My/AirTag";
     case BleCatTile:
@@ -71,6 +71,14 @@ static void recon_scene_ble_detail_render(ReconApp* app) {
         d.rssi,
         (unsigned long)d.count,
         (unsigned)d.company);
+    if(d.cat == BleCatFlock) {
+        // Conservative model line: the Raven/Falcon split is NEEDS VALIDATION, so
+        // flock_ble_model_str carries a "?" and today resolves to generic.
+        furi_string_cat_printf(s, "%s\n", flock_ble_model_str((FlockBleModel)d.model));
+        // Serial is always shown on-screen (saved-report logging is gated by the
+        // "Log Flock serials" privacy toggle, not this view).
+        if(d.serial[0]) furi_string_cat_printf(s, "SN %s\n", d.serial);
+    }
     if(d.following) {
         furi_string_cat_printf(
             s,

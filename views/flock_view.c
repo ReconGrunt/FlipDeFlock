@@ -27,6 +27,8 @@ static char confidence_char(FlockConfidence c) {
     switch(c) {
     case FlockConfidenceConfirmed:
         return '!';
+    case FlockConfidenceProbeFp:
+        return 'F'; // B1 IE-fingerprint class match
     case FlockConfidenceLikely:
         return 'L';
     case FlockConfidencePossible:

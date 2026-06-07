@@ -78,6 +78,39 @@ FlockConfidence flock_ssid_confidence(const char* ssid) {
     return FlockConfidenceNone;
 }
 
+/**
+ * B1: curated table of known-Flock probe IE-skeleton fingerprints (FNV-1a
+ * uint32 of the tagged-IE skeleton, computed on the ESP companion).
+ *
+ * SHIPS EMPTY / INERT. We do NOT yet have confirmed-Flock IE-fp captures, so
+ * this table is intentionally empty: nothing matches -> zero behaviour change ->
+ * zero false positives, which is exactly right per precision-over-recall. The
+ * full pipeline (hash on ESP -> transmit -> parse -> compare) ships and works;
+ * it simply has no seeds to match until real captures are validated.
+ *
+ * TO SEED: add the FNV-1a hash(es) emitted in the companion's `,fp=` field for
+ * a probe request from a *corroborated* Flock unit. Each entry is a
+ * device-CLASS / firmware-stack signature, NOT a unique device ID -- only add a
+ * hash once it is confirmed against a known deployment.
+ *
+ * Placeholder (compiled out -- NEEDS VALIDATION, do not enable):
+ *   // 0x00000000u,  // <model> probe template -- NEEDS VALIDATION, unverified
+ */
+static const uint32_t flock_ie_fps[] = {
+    0, // sentinel so the array is never zero-length; ignored by the matcher.
+};
+
+#define FLOCK_IE_FP_COUNT (sizeof(flock_ie_fps) / sizeof(flock_ie_fps[0]))
+
+bool flock_ie_fp_match(uint32_t fp) {
+    if(fp == 0) return false; // 0 = "no fingerprint", never a match
+    for(size_t i = 0; i < FLOCK_IE_FP_COUNT; i++) {
+        if(flock_ie_fps[i] == 0) continue; // skip the sentinel / unseeded slots
+        if(flock_ie_fps[i] == fp) return true;
+    }
+    return false;
+}
+
 FlockConfidence flock_score(const uint8_t* mac, const char* ssid, bool is_probe_req) {
     FlockConfidence by_ssid = flock_ssid_confidence(ssid);
     if(by_ssid == FlockConfidenceConfirmed) return FlockConfidenceConfirmed;
@@ -99,6 +132,8 @@ const char* flock_confidence_str(FlockConfidence confidence) {
     switch(confidence) {
     case FlockConfidenceConfirmed:
         return "CONFIRMED";
+    case FlockConfidenceProbeFp:
+        return "Class?"; // candidate device-CLASS match, not a unique device
     case FlockConfidenceLikely:
         return "Likely";
     case FlockConfidencePossible:

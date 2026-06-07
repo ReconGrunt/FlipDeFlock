@@ -152,6 +152,7 @@ static void flock_map_view_draw_callback(Canvas* canvas, void* _model) {
         case FlockConfidenceConfirmed:
             canvas_draw_disc(canvas, x, y, 2);
             break;
+        case FlockConfidenceProbeFp: // B1 IE-fp class match: same weight as Likely
         case FlockConfidenceLikely:
             canvas_draw_disc(canvas, x, y, 1);
             break;

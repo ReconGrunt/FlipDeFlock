@@ -94,6 +94,14 @@ static void flash_fast_changed(VariableItem* item) {
     recon_settings_save(app);
 }
 
+static void log_serials_changed(VariableItem* item) {
+    ReconApp* app = variable_item_get_context(item);
+    uint8_t idx = variable_item_get_current_value_index(item);
+    app->settings.log_serials = (idx == 1);
+    variable_item_set_current_value_text(item, onoff_text[idx]);
+    recon_settings_save(app);
+}
+
 void recon_scene_settings_on_enter(void* context) {
     ReconApp* app = context;
     VariableItemList* list = app->var_item_list;
@@ -146,6 +154,11 @@ void recon_scene_settings_on_enter(void* context) {
     item = variable_item_list_add(list, "Flash Speed", 2, flash_fast_changed, app);
     variable_item_set_current_value_index(item, idx);
     variable_item_set_current_value_text(item, flash_speed_text[idx]);
+
+    idx = app->settings.log_serials ? 1 : 0;
+    item = variable_item_list_add(list, "Log Flock serials", 2, log_serials_changed, app);
+    variable_item_set_current_value_index(item, idx);
+    variable_item_set_current_value_text(item, onoff_text[idx]);
 
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewVarItemList);
 }

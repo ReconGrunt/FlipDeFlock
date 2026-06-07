@@ -16,6 +16,8 @@
 
 #include "scenes/recon_scene.h"
 #include "helpers/flock_db.h"
+#include "helpers/flock_ble.h"
+#include "helpers/watchscore.h"
 #include "views/flock_view.h"
 #include "views/flock_map_view.h"
 #include "views/deflock_qr_view.h"
@@ -71,6 +73,7 @@ typedef struct {
     bool gps_enabled;
     bool sound;
     bool flash_fast; /**< raise the flasher baud to 921600 after connect */
+    bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
 } ReconSettings;
 
 /** One deduplicated surveillance-device sighting. */
@@ -114,12 +117,16 @@ typedef struct {
 } DeauthTarget;
 
 /** A BLE device sighting (anti-tracker / BLE-Flock). */
+#define RECON_BLE_SERIAL_LEN 24 /**< "TN72023022000771" is 16 chars; room to spare */
+
 typedef struct {
     uint8_t addr[6];
     char name[RECON_SSID_LEN];
     int8_t rssi;
     uint8_t cat; /**< BleCat */
     uint16_t company; /**< BLE company id, 0xFFFF if none */
+    char serial[RECON_BLE_SERIAL_LEN]; /**< Flock 0x09C8 device serial, "" if none */
+    uint8_t model; /**< FlockBleModel: conservative Falcon/Raven guess */
     uint32_t count; /**< times seen across rescans */
     float first_lat; /**< GPS at first sighting (NAN if none) */
     float first_lon;
@@ -194,6 +201,8 @@ typedef struct {
     bool ble_done;
     int ble_selected;
 
+    WatchScore watch; /**< fused "am I being watched?" scorer (C1) */
+
     // ESP32 firmware flasher
     uint8_t fw_op; /**< 0 = backup, 1 = flash */
     char fw_path[256]; /**< bin to flash, or backup output path */
@@ -244,7 +253,9 @@ void recon_app_ble_add(
     const char* name,
     int8_t rssi,
     uint8_t cat,
-    uint16_t company);
+    uint16_t company,
+    const uint8_t* mfg, /**< raw mfg-data bytes (Flock 0x09C8), NULL if none */
+    size_t mfg_len);
 void recon_app_ble_end(ReconApp* app);
 
 /** WiFi security scan results (thread-safe; called from the ESP worker). */
@@ -259,6 +270,13 @@ void recon_app_wifi_add(
     uint8_t pairwise,
     bool wps);
 void recon_app_wifi_end(ReconApp* app);
+
+/**
+ * Recompute the fused WATCHSCORE (C1). Snapshots the shared signal arrays under
+ * app->mutex, evaluates the scorer after release, and fires exactly one
+ * notification on the transition INTO ELEVATED. Safe to call from the GUI tick.
+ */
+void recon_app_watchscore_tick(ReconApp* app);
 
 void recon_settings_load(ReconApp* app);
 void recon_settings_save(ReconApp* app);

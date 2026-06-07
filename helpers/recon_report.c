@@ -216,6 +216,21 @@ static const char* ble_cat_name(uint8_t cat) {
     }
 }
 
+// Short, machine-friendly Flock model token for report cells. Conservative: the
+// Raven/Falcon split is unvalidated so this resolves to "FlockExtBattery" today.
+static const char* ble_model_token(uint8_t model) {
+    switch(model) {
+    case FlockBleModelFalcon:
+        return "FlockFalcon?";
+    case FlockBleModelRaven:
+        return "FlockRaven?";
+    case FlockBleModelGeneric:
+        return "FlockExtBattery";
+    default:
+        return "";
+    }
+}
+
 bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
     ReconApp* app = _app;
     recon_report_ensure_dirs(app);
@@ -226,7 +241,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
     FuriString* geo = furi_string_alloc();
     furi_string_set(
         csv,
-        "addr,name,category,company,rssi,count,following,tagged,first_lat,first_lon,last_lat,last_lon\n");
+        "addr,name,category,model,serial,company,rssi,count,following,tagged,first_lat,first_lon,last_lat,last_lon\n");
     furi_string_set(geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
 
     // WiGLE CSV (Type=BLE) for geotagged devices.
@@ -260,9 +275,16 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
 
         char name_esc[72];
         csv_field_escape(d->name[0] ? d->name : "", name_esc, sizeof(name_esc));
+        // Serial is a persistent ID of a police asset -> omit from saved reports
+        // unless the user opts in via the "Log Flock serials" privacy toggle.
+        char serial_esc[40];
+        csv_field_escape(
+            (app->settings.log_serials && d->serial[0]) ? d->serial : "",
+            serial_esc,
+            sizeof(serial_esc));
         furi_string_cat_printf(
             csv,
-            "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,0x%04X,%d,%lu,%s,%s,%s,%s,%s,%s\n",
+            "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,%s,0x%04X,%d,%lu,%s,%s,%s,%s,%s,%s\n",
             d->addr[0],
             d->addr[1],
             d->addr[2],
@@ -271,6 +293,8 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
             d->addr[5],
             name_esc,
             ble_cat_name(d->cat),
+            ble_model_token(d->model),
+            serial_esc,
             (unsigned)d->company,
             d->rssi,
             (unsigned long)d->count,
@@ -284,17 +308,22 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
         if((d->following || d->cat) && !isnan(d->last_lat)) {
             if(!first_feature) furi_string_cat(geo, ",\n");
             first_feature = false;
+            const char* geo_serial =
+                (app->settings.log_serials && d->serial[0]) ? d->serial : "";
             furi_string_cat_printf(
                 geo,
                 "    {\n"
                 "      \"type\": \"Feature\",\n"
                 "      \"geometry\": { \"type\": \"Point\", \"coordinates\": [%s, %s] },\n"
-                "      \"properties\": { \"type\": \"%s\", \"following\": %s, "
+                "      \"properties\": { \"type\": \"%s\", \"model\": \"%s\", \"serial\": \"%s\", "
+                "\"following\": %s, "
                 "\"addr\": \"%02X:%02X:%02X:%02X:%02X:%02X\", \"name\": \"%s\" }\n"
                 "    }",
                 lo,
                 ll,
                 ble_cat_name(d->cat),
+                ble_model_token(d->model),
+                geo_serial,
                 d->following ? "true" : "false",
                 d->addr[0],
                 d->addr[1],

@@ -18,11 +18,35 @@ static void recon_scene_start_submenu_cb(void* context, uint32_t index) {
     view_dispatcher_send_custom_event(app->view_dispatcher, index);
 }
 
+// Surface the fused WATCHSCORE as the start-screen header, with an explainable
+// per-signal breakdown when anything is contributing. CLEAR shows the plain
+// app name so the idle screen stays calm.
+static void recon_scene_start_update_header(ReconApp* app) {
+    WatchState st = (WatchState)app->watch.state;
+    if(st == WatchStateClear) {
+        submenu_set_header(app->submenu, "FlipDeFlock");
+        return;
+    }
+    const char* bd = app->watch.breakdown;
+    if(bd[0]) {
+        snprintf(
+            app->text_store,
+            sizeof(app->text_store),
+            "WATCH: %s - %s",
+            watchscore_state_str(st),
+            bd);
+    } else {
+        snprintf(
+            app->text_store, sizeof(app->text_store), "WATCH: %s", watchscore_state_str(st));
+    }
+    submenu_set_header(app->submenu, app->text_store);
+}
+
 void recon_scene_start_on_enter(void* context) {
     ReconApp* app = context;
     Submenu* submenu = app->submenu;
     submenu_reset(submenu);
-    submenu_set_header(submenu, "FlipDeFlock");
+    recon_scene_start_update_header(app);
     submenu_add_item(
         submenu, "Flock / ALPR Detect", StartItemFlock, recon_scene_start_submenu_cb, app);
     submenu_add_item(
@@ -48,7 +72,16 @@ void recon_scene_start_on_enter(void* context) {
 bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     bool consumed = false;
-    if(event.type == SceneManagerEventTypeCustom) {
+    if(event.type == SceneManagerEventTypeTick) {
+        // Keep the fused score decaying and the header live even while idle on
+        // the menu. Cheap: a snapshot + a little arithmetic on the 250 ms tick.
+        uint8_t prev = app->watch.state;
+        recon_app_watchscore_tick(app);
+        if(app->watch.state != prev || app->watch.state != WatchStateClear) {
+            recon_scene_start_update_header(app);
+        }
+        consumed = true;
+    } else if(event.type == SceneManagerEventTypeCustom) {
         scene_manager_set_scene_state(app->scene_manager, ReconSceneStart, event.event);
         consumed = true;
         switch(event.event) {

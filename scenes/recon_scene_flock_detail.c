@@ -38,6 +38,9 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
     case 'P':
         src = "probe";
         break;
+    case 'F':
+        src = "probe-fp"; // B1 IE-fingerprint device-class match
+        break;
     case 'B':
         src = "beacon";
         break;
