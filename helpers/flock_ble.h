@@ -11,10 +11,13 @@
  * "Penguin-NNNN" / "FS Ext Battery" GAP name) and colonelpanichacks/flock-you.
  *
  * IMPORTANT: the serial belongs to the *shared* external-battery unit that
- * Flock co-deploys on BOTH the Falcon and the Raven, so a Raven-vs-Falcon split
- * is NOT currently derivable from this advert. The model guess therefore stays
- * generic until a serial-prefix mapping is field-validated -- see
- * flock_ble_model() in flock_ble.c.
+ * Flock co-deploys on BOTH the Falcon and the Raven, so the advert ALONE cannot
+ * split them. Raven IS now positively derivable from a DIFFERENT signal: the
+ * Raven exposes acoustic-sensor-specific GATT services (0x3100-0x3500) that the
+ * Falcon does not, surfaced by the companion firmware as a `raven_gatt` flag --
+ * see flock_ble_model_ex() in flock_ble.c. Falcon, by contrast, is still NOT
+ * derivable: there is no Falcon-specific tell, and absence of the Raven GATT is
+ * NOT proof of Falcon (precision rule -- we never assert Falcon by elimination).
  */
 #pragma once
 
@@ -26,12 +29,12 @@
 extern "C" {
 #endif
 
-/** Conservative Flock BLE model guess from the 0x09C8 advert. */
+/** Conservative Flock BLE model identification from the 0x09C8 advert + GATT. */
 typedef enum {
     FlockBleModelUnknown = 0, /**< Nothing decoded as a Flock battery unit. */
     FlockBleModelGeneric, /**< Flock external battery -- model not determinable. */
-    FlockBleModelFalcon, /**< NEEDS VALIDATION: ALPR camera (never emitted yet). */
-    FlockBleModelRaven, /**< NEEDS VALIDATION: acoustic sensor (never emitted yet). */
+    FlockBleModelFalcon, /**< NEEDS VALIDATION: ALPR camera (never emitted -- no tell). */
+    FlockBleModelRaven, /**< CONFIRMED via Raven-specific GATT (acoustic sensor). */
 } FlockBleModel;
 
 /**
@@ -54,13 +57,31 @@ bool flock_ble_extract_serial(
     size_t serial_cap);
 
 /**
- * Conservative model guess. CURRENTLY ALWAYS returns Generic/Unknown -- the
- * Raven-vs-Falcon serial-prefix mapping is unvalidated. See the body for where
- * to add prefix checks once corroborated.
+ * Conservative model identification with the Raven GATT signal folded in.
+ *
+ * @param serial      Decoded 0x09C8 battery serial, or NULL/"" if none.
+ * @param name        GAP device name, or NULL/"" if unknown.
+ * @param raven_gatt  true iff the companion firmware saw a Raven-specific GATT
+ *                    service (0x3100-0x3500) on this device. This is the ONLY
+ *                    positive model tell currently known.
+ * @return FlockBleModelRaven when @p raven_gatt is set (the acoustic-sensor GATT
+ *         is Raven-specific -> a confident identification); otherwise
+ *         Generic for a decoded Flock battery, Unknown for everything else.
+ *         NEVER returns Falcon: absence of the Raven GATT is not proof of Falcon.
+ */
+FlockBleModel flock_ble_model_ex(const char* serial, const char* name, bool raven_gatt);
+
+/**
+ * Back-compat wrapper: identical to flock_ble_model_ex(serial, name, false), so
+ * host tests and older callers that lack the GATT signal still work (they just
+ * never see Raven). Returns Generic/Unknown only.
  */
 FlockBleModel flock_ble_model(const char* serial, const char* name);
 
-/** Human-readable label (Raven/Falcon labels carry a "?" uncertainty marker). */
+/**
+ * Human-readable label. The Raven label is GATT-backed and therefore confident
+ * (no "?"); the Falcon label keeps its "?" since Falcon is never asserted.
+ */
 const char* flock_ble_model_str(FlockBleModel model);
 
 #ifdef __cplusplus

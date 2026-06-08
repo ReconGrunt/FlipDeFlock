@@ -59,6 +59,44 @@ const uint8_t* flock_oui_get(size_t index);
 bool flock_oui_match(const uint8_t* mac);
 
 /**
+ * Register an OPTIONAL, user-supplied set of extra OUI prefixes that
+ * `flock_oui_match` scans IN ADDITION to the compiled-in table. Loaded at
+ * runtime from the SD card (see sig_db.h) and merged OVER the built-ins: the
+ * extras can only ADD matches, never remove a built-in. Pass `ouis == NULL` or
+ * `count == 0` to clear the registration (the fail-safe / default state, in
+ * which only the built-ins are consulted).
+ *
+ * Ownership: the array is CALLER-OWNED and must outlive every call into the
+ * matcher (i.e. for the whole app lifetime, until cleared). This keeps
+ * flock_db.c firmware-free / host-testable -- it merely holds the pointer.
+ *
+ * PRECISION NOTE: user signatures are LOAD-ONLY and UNVERIFIED. A false
+ * positive is worse than a missed detection, so OUI-only hits (built-in OR
+ * extra) stay scored "possible", never "confirmed".
+ */
+void flock_db_set_extra_ouis(const uint8_t (*ouis)[3], size_t count);
+
+/**
+ * Register OPTIONAL, user-supplied SSID substrings that
+ * `flock_ssid_confidence` tests IN ADDITION to the built-in patterns: a
+ * `confirmed` hit yields FlockConfidenceConfirmed, a `likely` hit yields
+ * FlockConfidenceLikely. Merged OVER the built-ins (extras can only ADD
+ * matches). Pass NULL/0 lists to clear (the fail-safe default).
+ *
+ * CONTRACT: the needles MUST already be lower-case -- the matcher lowercases
+ * only the haystack and assumes a lowercase needle (see ci_contains). The
+ * caller (sig_db.c) lowercases before registering.
+ *
+ * Ownership: both arrays and the strings they point at are CALLER-OWNED and
+ * must outlive use. LOAD-ONLY / UNVERIFIED, same precision posture as above.
+ */
+void flock_db_set_extra_ssid_patterns(
+    const char* const* confirmed,
+    size_t confirmed_count,
+    const char* const* likely,
+    size_t likely_count);
+
+/**
  * Confidence contributed by an SSID string alone (may be NULL/empty for hidden
  * networks or probe requests with no SSID).
  */

@@ -18,7 +18,8 @@ counter-surveillance site surveys:
   *Requires the companion firmware* (Marauder doesn't emit encryption over serial).
 - 📡 **BLE / Tracker Scan** — detects Flock/Raven BLE beacons and AirTag / Tile /
   SmartTag trackers, and flags any tracker that follows you across GPS waypoints
-  (anti-stalking). Companion firmware.
+  (anti-stalking). Positively labels a **Raven (audio sensor)** when it sees the
+  Raven's own Bluetooth services. Companion firmware.
 - 💳 **NFC / RFID Audit** — identifies a presented card's protocol and grades its
   security posture for access-control reviews. On a MIFARE Classic, a **Deep**
   check captures the UID and tries the Flipper's on-SD key dictionary to report
@@ -54,6 +55,23 @@ it for anything that matters, read the code and confirm the behavior yourself.
 Feedback and field data are what move it forward; see [Contributing](#contributing).
 
 ## What's new
+
+**v0.25**
+- **Tells a Raven (audio) from a Falcon (camera).** A Flock pole carries either an
+  ALPR camera (Falcon) or an acoustic/gunshot sensor (Raven) — both share the same
+  Bluetooth battery, so the battery alone can't tell them apart. When the companion
+  firmware sees a Raven's own Bluetooth services, the app now labels it
+  **"Flock Raven (audio)"** outright. It only says "Raven" on that positive signal
+  — it never *guesses* "camera" just because the Raven services are missing, so it
+  won't mislabel a pole. (Reflash the companion to pick up the new signal; older
+  firmware just shows "Flock device.")
+- **Update detection signatures without a new release.** Drop a
+  `signatures.json` on the SD card at `apps_data/flipdeflock/` to add your own
+  Flock OUI prefixes and SSID patterns on top of the built-in list. It's
+  **read-only and offline** — the app never writes the file or phones home — and
+  **fail-safe**: a missing or broken file just falls back to the built-ins.
+  Your additions can only *add* detections, never override the precision rules.
+  See [docs/signatures.example.json](docs/signatures.example.json).
 
 **v0.22**
 - **"Am I being watched right now?" indicator.** A single home-screen status
@@ -297,7 +315,10 @@ you can do:
 
 - **Field reports & signatures** — new Flock/ALPR OUIs, SSID/BLE patterns, or
   false positives and misses you hit in the wild. Precision feedback is the most
-  valuable.
+  valuable. You can test a candidate signature on your own device first by adding
+  it to `apps_data/flipdeflock/signatures.json` (see
+  [docs/signatures.example.json](docs/signatures.example.json)), then send the
+  ones that hold up.
 - **Board support** — try it on your ESP32 hardware and report wiring/quirks.
 - **Code** — bug fixes, new report formats, or any of the deferred roadmap items.
 

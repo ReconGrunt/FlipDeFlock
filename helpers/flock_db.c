@@ -21,6 +21,39 @@ static const uint8_t flock_ouis[][3] = {
 
 #define FLOCK_OUI_COUNT (sizeof(flock_ouis) / sizeof(flock_ouis[0]))
 
+/**
+ * OPTIONAL user-supplied extras, registered at runtime from the SD card by
+ * sig_db.c and merged OVER the built-ins (extras can only ADD matches). These
+ * default NULL/0 -- the fail-safe state in which only the built-ins above are
+ * consulted -- and are CALLER-OWNED (flock_db.c just holds the pointers, so it
+ * stays firmware-free / host-testable). User signatures are LOAD-ONLY and
+ * UNVERIFIED; per precision-over-recall they never upgrade an OUI hit past
+ * "possible".
+ */
+static const uint8_t (*extra_ouis)[3] = NULL;
+static size_t extra_oui_count = 0;
+static const char* const* extra_ssid_confirmed = NULL;
+static size_t extra_ssid_confirmed_count = 0;
+static const char* const* extra_ssid_likely = NULL;
+static size_t extra_ssid_likely_count = 0;
+
+void flock_db_set_extra_ouis(const uint8_t (*ouis)[3], size_t count) {
+    // NULL/0 clears the registration; otherwise just hold the caller's pointer.
+    extra_ouis = (ouis && count) ? ouis : NULL;
+    extra_oui_count = (ouis && count) ? count : 0;
+}
+
+void flock_db_set_extra_ssid_patterns(
+    const char* const* confirmed,
+    size_t confirmed_count,
+    const char* const* likely,
+    size_t likely_count) {
+    extra_ssid_confirmed = (confirmed && confirmed_count) ? confirmed : NULL;
+    extra_ssid_confirmed_count = (confirmed && confirmed_count) ? confirmed_count : 0;
+    extra_ssid_likely = (likely && likely_count) ? likely : NULL;
+    extra_ssid_likely_count = (likely && likely_count) ? likely_count : 0;
+}
+
 size_t flock_oui_count(void) {
     return FLOCK_OUI_COUNT;
 }
@@ -35,6 +68,13 @@ bool flock_oui_match(const uint8_t* mac) {
     for(size_t i = 0; i < FLOCK_OUI_COUNT; i++) {
         if(mac[0] == flock_ouis[i][0] && mac[1] == flock_ouis[i][1] &&
            mac[2] == flock_ouis[i][2]) {
+            return true;
+        }
+    }
+    // Also scan the optional user-supplied extras (merged over the built-ins).
+    for(size_t i = 0; i < extra_oui_count; i++) {
+        if(mac[0] == extra_ouis[i][0] && mac[1] == extra_ouis[i][1] &&
+           mac[2] == extra_ouis[i][2]) {
             return true;
         }
     }
@@ -70,9 +110,20 @@ FlockConfidence flock_ssid_confidence(const char* ssid) {
         return FlockConfidenceConfirmed;
     }
 
+    // Optional user-supplied confirmed needles (already lower-case). Merged
+    // over the built-ins: they can only ADD a confirmed match.
+    for(size_t i = 0; i < extra_ssid_confirmed_count; i++) {
+        if(ci_contains(ssid, extra_ssid_confirmed[i])) return FlockConfidenceConfirmed;
+    }
+
     // Weaker substrings -> likely (could be a coincidental network name).
     if(ci_contains(ssid, "flock") || ci_contains(ssid, "flck")) {
         return FlockConfidenceLikely;
+    }
+
+    // Optional user-supplied likely needles (already lower-case).
+    for(size_t i = 0; i < extra_ssid_likely_count; i++) {
+        if(ci_contains(ssid, extra_ssid_likely[i])) return FlockConfidenceLikely;
     }
 
     return FlockConfidenceNone;

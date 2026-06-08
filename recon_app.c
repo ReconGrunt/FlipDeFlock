@@ -2,6 +2,7 @@
 #include "helpers/esp_link.h"
 #include "helpers/gps_link.h"
 #include "helpers/recon_report.h"
+#include "helpers/sig_db.h"
 
 #include <math.h>
 #include <string.h>
@@ -130,15 +131,18 @@ void recon_app_ble_add(
     uint8_t cat,
     uint16_t company,
     const uint8_t* mfg,
-    size_t mfg_len) {
+    size_t mfg_len,
+    bool raven_gatt) {
     // Decode the Flock 0x09C8 external-battery advert: extract the device serial
-    // and a CONSERVATIVE model guess (defaults to generic -- see flock_ble.c).
+    // and a model guess. The serial/battery advert is shared Falcon/Raven and
+    // stays Generic; a Raven is only asserted when the companion saw its
+    // Raven-specific GATT services (raven_gatt) -- see flock_ble_model_ex.
     // Done outside the lock (pure string work, no app state).
     char serial[RECON_BLE_SERIAL_LEN] = "";
     uint8_t model = FlockBleModelUnknown;
     if(cat == BleCatFlock) {
         flock_ble_extract_serial(mfg, mfg_len, name, serial, sizeof(serial));
-        model = (uint8_t)flock_ble_model(serial, name);
+        model = (uint8_t)flock_ble_model_ex(serial, name, raven_gatt);
     }
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -499,6 +503,10 @@ static ReconApp* recon_app_alloc(void) {
 
     recon_settings_load(app);
 
+    // Optional SD-loaded extra signatures, merged over the built-ins. Fail-safe:
+    // a missing/malformed file leaves sig_db NULL and the built-ins intact.
+    app->sig_db = sig_db_load(app->storage);
+
     app->view_dispatcher = view_dispatcher_alloc();
     app->scene_manager = scene_manager_alloc(&recon_scene_handlers, app);
 
@@ -562,6 +570,7 @@ static void recon_app_free(ReconApp* app) {
     furi_record_close(RECORD_STORAGE);
     furi_record_close(RECORD_GUI);
 
+    sig_db_free(app->sig_db); // clears the extra-signature registration first
     furi_string_free(app->fw_log);
     furi_mutex_free(app->mutex);
     free(app);

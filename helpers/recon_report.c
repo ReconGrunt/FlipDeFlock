@@ -216,14 +216,15 @@ static const char* ble_cat_name(uint8_t cat) {
     }
 }
 
-// Short, machine-friendly Flock model token for report cells. Conservative: the
-// Raven/Falcon split is unvalidated so this resolves to "FlockExtBattery" today.
+// Short, machine-friendly Flock model token for report cells. Raven is GATT-
+// backed (0x3100-0x3500) and confident -> no "?". Falcon keeps its "?" because
+// it is never asserted; a plain battery with no Raven GATT stays FlockExtBattery.
 static const char* ble_model_token(uint8_t model) {
     switch(model) {
     case FlockBleModelFalcon:
         return "FlockFalcon?";
     case FlockBleModelRaven:
-        return "FlockRaven?";
+        return "FlockRaven";
     case FlockBleModelGeneric:
         return "FlockExtBattery";
     default:

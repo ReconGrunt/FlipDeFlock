@@ -1,0 +1,14 @@
+{
+  "ouis": [
+    "aa:bb:cc",
+    "de:ad:be"
+  ],
+  "ssid_confirmed": [
+    "flock-",
+    "example-confirmed-"
+  ],
+  "ssid_likely": [
+    "flock",
+    "example"
+  ]
+}
