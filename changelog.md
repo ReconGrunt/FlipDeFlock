@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.30
+- **Fix "Finalize failed (9)" at the end of a flash.** The write reached 100%
+  and every data block was committed to flash, but the final FLASH_END command
+  made the ESP32 *ROM* loader answer `COMMAND_FAILED` — a well-known cosmetic
+  quirk of the stubless ROM path that does **not** mean the image is bad. The app
+  was wrongly treating that as a hard failure and bailing out **before** the MD5
+  verify. Now the FLASH_END error is a soft warning, and the **MD5 verify of the
+  actual on-chip flash is the real pass/fail gate** — so a good flash reports
+  "Verified OK" instead of a scary "Finalize failed".
+  - **If you already saw "Finalize failed (9)":** your firmware almost certainly
+    wrote fine. Reset the ESP and test it; re-flash with this build to get the
+    explicit "Verified OK" confirmation.
+
 ## v0.29
 - **Fully stubless flasher (fixes "INVALID_COMMAND / software loader is
   resident").** That error appears when the tool tries to upload the flasher

@@ -258,14 +258,19 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
     storage_file_free(file);
 
     if(ok) {
+        // Leave flash mode. The ESP32 *ROM* loader (no stub) frequently answers
+        // FLASH_END with status COMMAND_FAILED (-> error 9) even though every
+        // data block was already committed to flash as it was received. So a
+        // finalize error here is a SOFT warning, not a flashing failure -- the
+        // MD5 verify below reads the on-chip flash back and is the real gate.
         err = esp_loader_flash_finish(false);
         if(err != ESP_LOADER_SUCCESS) {
-            esp_flasher_logf(f, "Finalize failed (%d).", (int)err);
-            ok = false;
+            esp_flasher_logf(f, "Finalize quirk (%d);", (int)err);
+            esp_flasher_logf(f, "verifying flash...");
         }
     }
     if(ok) {
-        err = esp_loader_flash_verify(); // MD5 check of what we wrote
+        err = esp_loader_flash_verify(); // MD5 of the actual on-chip flash
         if(err == ESP_LOADER_SUCCESS) {
             esp_flasher_logf(f, "Verified OK.");
         } else {
