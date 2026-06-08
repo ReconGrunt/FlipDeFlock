@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.29
+- **Fully stubless flasher (fixes "INVALID_COMMAND / software loader is
+  resident").** That error appears when the tool tries to upload the flasher
+  stub while a stub is already running on the chip (left over from a previous
+  attempt). Now **neither** flashing nor backup ever uploads a stub — both go
+  through the ESP32 ROM loader, exactly like the 0xchocolate ESP Flasher — so the
+  "resident / overlapping address range" error can't happen at all. Backup reads
+  via the ROM's 64-byte path (slower, but stub-free and reliable).
+  - **If you already hit this:** power-cycle the ESP once (fully remove power) to
+    clear the stuck stub, then re-enter bootloader (hold BOOT, tap RESET).
+
 ## v0.28
 - **Flash over the ROM loader, like the 0xchocolate ESP Flasher (no stub).**
   Flashing a `.bin` now connects straight to the ESP32 ROM bootloader instead of
