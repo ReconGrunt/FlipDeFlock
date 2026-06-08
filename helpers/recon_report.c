@@ -4,6 +4,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <stdarg.h>
 
 static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-4180
 
@@ -13,6 +14,60 @@ static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-
     "device=FlipDeFlock,display=,board=ESP32,brand=Flipper\n"           \
     "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,"         \
     "CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n"
+
+// Reports are *streamed* a row at a time straight to the SD card rather than
+// assembled in RAM. The old approach built the entire report in several growing
+// FuriStrings at once (CSV + GeoJSON + WiGLE/KML), which on a large scan used
+// tens of KB of heap on top of the FAP's already tight share of the ~256 KB the
+// Flipper shares between firmware and app -- enough to exhaust it and crash
+// ("out of memory"). Streaming keeps peak usage to one ~1 KB line buffer per
+// file regardless of how many detections there are.
+#define REPORT_LINE_MAX 1024
+
+typedef struct {
+    File* file;
+    bool ok;
+} RFile;
+
+static void rfile_open(RFile* r, Storage* storage, const char* path) {
+    r->file = storage_file_alloc(storage);
+    r->ok = storage_file_open(r->file, path, FSAM_WRITE, FSOM_CREATE_ALWAYS);
+}
+
+static void rfile_raw(RFile* r, const char* data, size_t len) {
+    if(r->ok && storage_file_write(r->file, data, len) != len) r->ok = false;
+}
+
+static void rfile_puts(RFile* r, const char* s) {
+    rfile_raw(r, s, strlen(s));
+}
+
+// Format one line into the caller's shared scratch buffer (REPORT_LINE_MAX) and
+// stream it to the file. Long lines are truncated rather than overflowed.
+static void rfile_printf(RFile* r, char* scratch, const char* fmt, ...) {
+    if(!r->ok) return;
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(scratch, REPORT_LINE_MAX, fmt, ap);
+    va_end(ap);
+    if(n < 0) {
+        r->ok = false;
+        return;
+    }
+    size_t w = ((size_t)n < REPORT_LINE_MAX) ? (size_t)n : (size_t)(REPORT_LINE_MAX - 1);
+    rfile_raw(r, scratch, w);
+}
+
+// Close + free the file handle; returns whether every write to it succeeded.
+static bool rfile_close(RFile* r) {
+    bool ok = r->ok;
+    if(r->file) {
+        storage_file_close(r->file);
+        storage_file_free(r->file);
+        r->file = NULL;
+    }
+    return ok;
+}
 
 static void recon_report_timestamp(char* buf, size_t len) {
     DateTime dt;
@@ -36,37 +91,41 @@ void recon_report_ensure_dirs(void* _app) {
     storage_common_mkdir(app->storage, RECON_REPORT_FOLDER);
 }
 
-static bool write_string(Storage* storage, const char* path, FuriString* content) {
-    File* file = storage_file_alloc(storage);
-    bool ok = false;
-    if(storage_file_open(file, path, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-        size_t len = furi_string_size(content);
-        ok = storage_file_write(file, furi_string_get_cstr(content), len) == len;
-    }
-    storage_file_close(file);
-    storage_file_free(file);
-    return ok;
-}
-
 bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
     ReconApp* app = _app;
+
+    // Pre-count marked entries: if nothing is marked there's nothing to save,
+    // and we avoid creating empty report files.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    int marked_total = 0;
+    for(size_t i = 0; i < app->flock_count; i++) {
+        if(app->flock[i].marked) marked_total++;
+    }
+    furi_mutex_release(app->mutex);
+    if(marked_total == 0) return false;
+
     recon_report_ensure_dirs(app);
 
     char ts[24];
     recon_report_timestamp(ts, sizeof(ts));
 
-    FuriString* md = furi_string_alloc();
-    FuriString* geo = furi_string_alloc();
-    FuriString* kml = furi_string_alloc();
+    char path_md[128];
+    char path_geo[128];
+    char path_kml[128];
+    snprintf(path_md, sizeof(path_md), "%s/flock_%s.md", RECON_REPORT_FOLDER, ts);
+    snprintf(path_geo, sizeof(path_geo), "%s/flock_%s.geojson", RECON_REPORT_FOLDER, ts);
+    snprintf(path_kml, sizeof(path_kml), "%s/flock_%s.kml", RECON_REPORT_FOLDER, ts);
 
-    furi_string_set(
-        kml,
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>\n"
-        "<name>FlipDeFlock Flock/ALPR</name>\n");
+    char* line = malloc(REPORT_LINE_MAX);
+    if(!line) return false; // heap critically low; fail cleanly rather than crash
+    RFile md, geo, kml;
+    rfile_open(&md, app->storage, path_md);
+    rfile_open(&geo, app->storage, path_geo);
+    rfile_open(&kml, app->storage, path_kml);
 
-    furi_string_printf(
-        md,
+    rfile_printf(
+        &md,
+        line,
         "# FlipDeFlock - Flock/ALPR Report\n\n"
         "Generated: %s (device RTC)\n\n"
         "Detection by OUI + probe behaviour + SSID naming. 'Possible' = OUI only\n"
@@ -75,7 +134,13 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
         "|---|------|-----|------|------|----|------|-----|-----|\n",
         ts);
 
-    furi_string_set(geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
+    rfile_puts(
+        &kml,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<kml xmlns=\"http://www.opengis.net/kml/2.2\"><Document>\n"
+        "<name>FlipDeFlock Flock/ALPR</name>\n");
+
+    rfile_puts(&geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
 
@@ -97,8 +162,9 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
             snprintf(lon_s, sizeof(lon_s), "-");
         }
 
-        furi_string_cat_printf(
-            md,
+        rfile_printf(
+            &md,
+            line,
             "| %d | %s | %02X:%02X:%02X:%02X:%02X:%02X | %s | %d | %u | %lu | %s | %s |\n",
             marked,
             flock_confidence_str(e->confidence),
@@ -122,10 +188,11 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
             } else {
                 snprintf(head_s, sizeof(head_s), "null");
             }
-            if(!first_feature) furi_string_cat(geo, ",\n");
+            if(!first_feature) rfile_puts(&geo, ",\n");
             first_feature = false;
-            furi_string_cat_printf(
-                geo,
+            rfile_printf(
+                &geo,
+                line,
                 "    {\n"
                 "      \"type\": \"Feature\",\n"
                 "      \"geometry\": { \"type\": \"Point\", \"coordinates\": [%s, %s] },\n"
@@ -153,8 +220,9 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
                 e->mac[5],
                 e->ssid[0] ? e->ssid : "");
 
-            furi_string_cat_printf(
-                kml,
+            rfile_printf(
+                &kml,
+                line,
                 "<Placemark><name>Flock %s</name>"
                 "<description>%02X:%02X:%02X:%02X:%02X:%02X %s</description>"
                 "<Point><coordinates>%s,%s,0</coordinates></Point></Placemark>\n",
@@ -173,29 +241,19 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
 
     furi_mutex_release(app->mutex);
 
-    furi_string_cat_printf(md, "\nTotal marked: %d\n", marked);
-    furi_string_cat(geo, "\n  ]\n}\n");
-    furi_string_cat(kml, "</Document></kml>\n");
+    rfile_printf(&md, line, "\nTotal marked: %d\n", marked);
+    rfile_puts(&geo, "\n  ]\n}\n");
+    rfile_puts(&kml, "</Document></kml>\n");
 
-    char path_md[128];
-    char path_geo[128];
-    char path_kml[128];
-    snprintf(path_md, sizeof(path_md), "%s/flock_%s.md", RECON_REPORT_FOLDER, ts);
-    snprintf(path_geo, sizeof(path_geo), "%s/flock_%s.geojson", RECON_REPORT_FOLDER, ts);
-    snprintf(path_kml, sizeof(path_kml), "%s/flock_%s.kml", RECON_REPORT_FOLDER, ts);
+    bool ok_md = rfile_close(&md);
+    bool ok_geo = rfile_close(&geo);
+    bool ok_kml = rfile_close(&kml);
+    free(line);
 
-    bool ok = (marked > 0);
-    if(ok) ok = write_string(app->storage, path_md, md);
-    if(ok) ok = write_string(app->storage, path_geo, geo);
-    if(ok) ok = write_string(app->storage, path_kml, kml);
-
+    bool ok = ok_md && ok_geo && ok_kml;
     if(ok && out_path_md) {
         snprintf(out_path_md, out_len, "%s", path_md);
     }
-
-    furi_string_free(md);
-    furi_string_free(geo);
-    furi_string_free(kml);
     return ok;
 }
 
@@ -234,20 +292,17 @@ static const char* ble_model_token(uint8_t model) {
 
 bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
     ReconApp* app = _app;
+
+    // Nothing scanned -> nothing to save (and don't create empty files).
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    size_t n = app->ble_count;
+    furi_mutex_release(app->mutex);
+    if(n == 0) return false;
+
     recon_report_ensure_dirs(app);
     char ts[24];
     recon_report_timestamp(ts, sizeof(ts));
 
-    FuriString* csv = furi_string_alloc();
-    FuriString* geo = furi_string_alloc();
-    furi_string_set(
-        csv,
-        "addr,name,category,model,serial,company,rssi,count,following,tagged,first_lat,first_lon,last_lat,last_lon\n");
-    furi_string_set(geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
-
-    // WiGLE CSV (Type=BLE) for geotagged devices.
-    FuriString* wigle = furi_string_alloc();
-    furi_string_set(wigle, WIGLE_HEADER);
     DateTime bdt;
     furi_hal_rtc_get_datetime(&bdt);
     char ble_seen[32];
@@ -262,8 +317,28 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
         bdt.minute,
         bdt.second);
 
+    char path_csv[128];
+    char path_geo[128];
+    char path_wigle[128];
+    snprintf(path_csv, sizeof(path_csv), "%s/ble_%s.csv", RECON_REPORT_FOLDER, ts);
+    snprintf(path_geo, sizeof(path_geo), "%s/ble_%s.geojson", RECON_REPORT_FOLDER, ts);
+    snprintf(path_wigle, sizeof(path_wigle), "%s/ble_%s.wigle.csv", RECON_REPORT_FOLDER, ts);
+
+    char* line = malloc(REPORT_LINE_MAX);
+    if(!line) return false; // heap critically low; fail cleanly rather than crash
+    RFile csv, geo, wigle;
+    rfile_open(&csv, app->storage, path_csv);
+    rfile_open(&geo, app->storage, path_geo);
+    rfile_open(&wigle, app->storage, path_wigle);
+
+    rfile_puts(
+        &csv,
+        "addr,name,category,model,serial,company,rssi,count,following,tagged,first_lat,first_lon,last_lat,last_lon\n");
+    rfile_puts(&geo, "{\n  \"type\": \"FeatureCollection\",\n  \"features\": [\n");
+    rfile_puts(&wigle, WIGLE_HEADER);
+
     furi_mutex_acquire(app->mutex, FuriWaitForever);
-    size_t n = app->ble_count;
+    n = app->ble_count;
     bool first_feature = true;
     for(size_t i = 0; i < n; i++) {
         BleDevice* d = &app->ble[i];
@@ -283,8 +358,9 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
             (app->settings.log_serials && d->serial[0]) ? d->serial : "",
             serial_esc,
             sizeof(serial_esc));
-        furi_string_cat_printf(
-            csv,
+        rfile_printf(
+            &csv,
+            line,
             "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,%s,0x%04X,%d,%lu,%s,%s,%s,%s,%s,%s\n",
             d->addr[0],
             d->addr[1],
@@ -307,11 +383,12 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
             lo);
 
         if((d->following || d->cat) && !isnan(d->last_lat)) {
-            if(!first_feature) furi_string_cat(geo, ",\n");
+            if(!first_feature) rfile_puts(&geo, ",\n");
             first_feature = false;
             const char* geo_serial = (app->settings.log_serials && d->serial[0]) ? d->serial : "";
-            furi_string_cat_printf(
-                geo,
+            rfile_printf(
+                &geo,
+                line,
                 "    {\n"
                 "      \"type\": \"Feature\",\n"
                 "      \"geometry\": { \"type\": \"Point\", \"coordinates\": [%s, %s] },\n"
@@ -338,8 +415,9 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
         if(!isnan(d->last_lat) && !isnan(d->last_lon)) {
             char wname[72];
             csv_field_escape(d->name[0] ? d->name : "", wname, sizeof(wname));
-            furi_string_cat_printf(
-                wigle,
+            rfile_printf(
+                &wigle,
+                line,
                 "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,0,%d,%.6f,%.6f,0,0,BLE\n",
                 d->addr[0],
                 d->addr[1],
@@ -357,24 +435,15 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
     }
     furi_mutex_release(app->mutex);
 
-    furi_string_cat(geo, "\n  ]\n}\n");
+    rfile_puts(&geo, "\n  ]\n}\n");
 
-    char path_csv[128];
-    char path_geo[128];
-    char path_wigle[128];
-    snprintf(path_csv, sizeof(path_csv), "%s/ble_%s.csv", RECON_REPORT_FOLDER, ts);
-    snprintf(path_geo, sizeof(path_geo), "%s/ble_%s.geojson", RECON_REPORT_FOLDER, ts);
-    snprintf(path_wigle, sizeof(path_wigle), "%s/ble_%s.wigle.csv", RECON_REPORT_FOLDER, ts);
+    bool ok_csv = rfile_close(&csv);
+    bool ok_geo = rfile_close(&geo);
+    bool ok_wigle = rfile_close(&wigle);
+    free(line);
 
-    bool ok = (n > 0);
-    if(ok) ok = write_string(app->storage, path_csv, csv);
-    if(ok) ok = write_string(app->storage, path_geo, geo);
-    if(ok) ok = write_string(app->storage, path_wigle, wigle);
+    bool ok = ok_csv && ok_geo && ok_wigle;
     if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_csv);
-
-    furi_string_free(csv);
-    furi_string_free(geo);
-    furi_string_free(wigle);
     return ok;
 }
 
@@ -478,27 +547,25 @@ static void csv_field_escape(const char* in, char* out, size_t out_len) {
 
 bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
     ReconApp* app = _app;
+
+    // Nothing scanned -> nothing to save (and don't create empty files).
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    size_t n = app->wifi_count;
+    furi_mutex_release(app->mutex);
+    if(n == 0) return false;
+
     recon_report_ensure_dirs(app);
 
     char ts[24];
     recon_report_timestamp(ts, sizeof(ts));
 
-    FuriString* md = furi_string_alloc();
-    FuriString* csv = furi_string_alloc();
-    FuriString* reasons = furi_string_alloc();
+    char path_md[128];
+    char path_csv[128];
+    char path_wigle[128];
+    snprintf(path_md, sizeof(path_md), "%s/wifi_%s.md", RECON_REPORT_FOLDER, ts);
+    snprintf(path_csv, sizeof(path_csv), "%s/wifi_%s.csv", RECON_REPORT_FOLDER, ts);
+    snprintf(path_wigle, sizeof(path_wigle), "%s/wifi_%s.wigle.csv", RECON_REPORT_FOLDER, ts);
 
-    furi_string_printf(
-        md,
-        "# FlipDeFlock - WiFi Security Audit\n\n"
-        "Generated: %s (device RTC)\n\n"
-        "| # | Grade | SSID | BSSID | Auth | Ch | RSSI | WPS | Issues |\n"
-        "|---|-------|------|-------|------|----|------|-----|--------|\n",
-        ts);
-    furi_string_set(csv, "grade,ssid,bssid,auth,channel,rssi,wps,issues\n");
-
-    // WiGLE CSV (wardriving standard) - one snapshot at the current GPS fix.
-    FuriString* wigle = furi_string_alloc();
-    furi_string_set(wigle, WIGLE_HEADER);
     DateTime wdt;
     furi_hal_rtc_get_datetime(&wdt);
     char first_seen[32];
@@ -513,11 +580,32 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
         wdt.minute,
         wdt.second);
 
+    char* line = malloc(REPORT_LINE_MAX);
+    if(!line) return false; // heap critically low; fail cleanly rather than crash
+    // `reasons` is built per-AP and reset each iteration -- small and reused, so
+    // it doesn't accumulate like the old whole-report strings did.
+    FuriString* reasons = furi_string_alloc();
+    RFile md, csv, wigle;
+    rfile_open(&md, app->storage, path_md);
+    rfile_open(&csv, app->storage, path_csv);
+    rfile_open(&wigle, app->storage, path_wigle);
+
+    rfile_printf(
+        &md,
+        line,
+        "# FlipDeFlock - WiFi Security Audit\n\n"
+        "Generated: %s (device RTC)\n\n"
+        "| # | Grade | SSID | BSSID | Auth | Ch | RSSI | WPS | Issues |\n"
+        "|---|-------|------|-------|------|----|------|-----|--------|\n",
+        ts);
+    rfile_puts(&csv, "grade,ssid,bssid,auth,channel,rssi,wps,issues\n");
+    rfile_puts(&wigle, WIGLE_HEADER);
+
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     bool gfix = app->gps_valid;
     float glat = app->gps_lat;
     float glon = app->gps_lon;
-    size_t n = app->wifi_count;
+    n = app->wifi_count;
     for(size_t i = 0; i < n; i++) {
         WifiAp* a = &app->wifi[i];
         furi_string_reset(reasons);
@@ -530,8 +618,9 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
         // Flatten reasons (newline -> "; ") for a single table/CSV cell.
         furi_string_replace_all(reasons, "\n", "; ");
 
-        furi_string_cat_printf(
-            md,
+        rfile_printf(
+            &md,
+            line,
             "| %u | %s | %s | %02X:%02X:%02X:%02X:%02X:%02X | %s | %u | %d | %s | %s |\n",
             (unsigned)(i + 1),
             wifi_grade_str(g),
@@ -550,8 +639,9 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
 
         char ssid_esc[72];
         csv_field_escape(a->ssid[0] ? a->ssid : "(hidden)", ssid_esc, sizeof(ssid_esc));
-        furi_string_cat_printf(
-            csv,
+        rfile_printf(
+            &csv,
+            line,
             "%s,%s,%02X:%02X:%02X:%02X:%02X:%02X,%s,%u,%d,%s,%s\n",
             wifi_grade_str(g),
             ssid_esc,
@@ -574,8 +664,9 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
             wigle_auth(a->authmode, a->wps, authw, sizeof(authw));
             char wssid[72];
             csv_field_escape(a->ssid, wssid, sizeof(wssid));
-            furi_string_cat_printf(
-                wigle,
+            rfile_printf(
+                &wigle,
+                line,
                 "%02X:%02X:%02X:%02X:%02X:%02X,%s,%s,%s,%u,%d,%.6f,%.6f,0,0,WIFI\n",
                 a->bssid[0],
                 a->bssid[1],
@@ -594,24 +685,15 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
     }
     furi_mutex_release(app->mutex);
 
-    furi_string_cat_printf(md, "\nTotal APs: %u\n", (unsigned)n);
+    rfile_printf(&md, line, "\nTotal APs: %u\n", (unsigned)n);
 
-    char path_md[128];
-    char path_csv[128];
-    char path_wigle[128];
-    snprintf(path_md, sizeof(path_md), "%s/wifi_%s.md", RECON_REPORT_FOLDER, ts);
-    snprintf(path_csv, sizeof(path_csv), "%s/wifi_%s.csv", RECON_REPORT_FOLDER, ts);
-    snprintf(path_wigle, sizeof(path_wigle), "%s/wifi_%s.wigle.csv", RECON_REPORT_FOLDER, ts);
-
-    bool ok = (n > 0);
-    if(ok) ok = write_string(app->storage, path_md, md);
-    if(ok) ok = write_string(app->storage, path_csv, csv);
-    if(ok) ok = write_string(app->storage, path_wigle, wigle);
-    if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_md);
-
-    furi_string_free(md);
-    furi_string_free(csv);
-    furi_string_free(wigle);
+    bool ok_md = rfile_close(&md);
+    bool ok_csv = rfile_close(&csv);
+    bool ok_wigle = rfile_close(&wigle);
     furi_string_free(reasons);
+    free(line);
+
+    bool ok = ok_md && ok_csv && ok_wigle;
+    if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_md);
     return ok;
 }
