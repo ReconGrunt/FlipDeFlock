@@ -49,6 +49,18 @@ counter-surveillance site surveys:
 Built for the [Momentum firmware](https://github.com/Next-Flip/Momentum-Firmware)
 (works on stock OFW too).
 
+## Screenshots
+
+<p align="center">
+  <img src="assets/screenshots/net-guardian.png" width="420" alt="Net Guardian">
+  <br><em>Net Guardian — the always-on "personal net guardian" watch face</em>
+</p>
+
+| | |
+|:--:|:--:|
+| <img src="assets/screenshots/menu.png" width="330" alt="Main menu"><br>**Main menu** | <img src="assets/screenshots/ble-scan.png" width="330" alt="BLE / Tracker scan"><br>**BLE / Tracker scan** |
+| <img src="assets/screenshots/wifi-audit.png" width="330" alt="WiFi Audit"><br>**WiFi Audit** | <img src="assets/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** (backup &amp; flash) |
+
 ## Status — a work in progress
 
 FlipDeFlock is actively developed, not a finished product. It's already useful in
