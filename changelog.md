@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.27
+- **Flasher connect + read reliability.** The connection step now retries **5
+  times** with a longer per-SYNC timeout and a pause between tries, so a fiddly
+  manual bootloader entry (hold BOOT, tap RESET) has many more chances to latch.
+- **Backup is now reliable on noisy links.** A "read failed (4)" is an MD5
+  mismatch — corrupted bytes in transit, common at the **Fast (921600)** baud.
+  Each backup read chunk now **retries** on a transient error, and a backup
+  **forces Safe (115200)** speed regardless of the Fast setting, since reads are
+  integrity-checked end to end. Flashing (write) keeps the Fast setting — it
+  MD5-verifies and retries each block, so a bad fast write is caught and redone.
+
 ## v0.26
 - **Fix the ESP flasher running the Flipper out of memory.** The in-app flasher
   (Backup / Flash a .bin) could exhaust the Flipper's heap and abort the app —

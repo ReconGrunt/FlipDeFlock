@@ -154,13 +154,33 @@ void esp_flasher_free(EspFlasher* f) {
 }
 
 bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
-    esp_loader_connect_args_t args = ESP_LOADER_CONNECT_DEFAULT();
-    esp_flasher_logf(f, "Connecting (download mode)...");
-    esp_loader_error_t err = esp_loader_connect_with_stub(&args);
+    // Entering download mode by hand (hold BOOT, tap RESET) is fiddly and the ROM
+    // can need several SYNC rounds to latch, so retry a few times with a generous
+    // per-SYNC timeout. Each attempt itself sends `trials` SYNC frames, giving
+    // (attempts x trials) chances over ~25 s, with a pause between attempts so the
+    // user can re-tap RESET.
+    const int attempts = 5;
+    esp_loader_error_t err = ESP_LOADER_ERROR_TIMEOUT;
+    for(int i = 1; i <= attempts; i++) {
+        if(s_abort) {
+            esp_flasher_logf(f, "Aborted.");
+            return false;
+        }
+        esp_loader_connect_args_t args = ESP_LOADER_CONNECT_DEFAULT();
+        args.sync_timeout = 500; // ms per SYNC (default 100) -- wait longer
+        args.trials = 10; // SYNC frames per attempt
+        esp_flasher_logf(f, "Connecting %d/%d...", i, attempts);
+        err = esp_loader_connect_with_stub(&args);
+        if(err == ESP_LOADER_SUCCESS) break;
+        esp_flasher_logf(f, "  no sync (%d).", (int)err);
+        if(i < attempts) {
+            esp_flasher_logf(f, "  hold BOOT, tap RESET.");
+            furi_delay_ms(1500); // give the user a moment to re-enter bootloader
+        }
+    }
     if(err != ESP_LOADER_SUCCESS) {
-        esp_flasher_logf(f, "Connect failed (%d).", (int)err);
-        esp_flasher_logf(f, "Put ESP in bootloader mode,");
-        esp_flasher_logf(f, "then retry.");
+        esp_flasher_logf(f, "Connect failed. Check TX/RX");
+        esp_flasher_logf(f, "wiring + bootloader mode.");
         return false;
     }
     esp_flasher_logf(f, "Connected. Stub loaded.");
@@ -279,9 +299,19 @@ bool esp_flasher_backup(EspFlasher* f, Storage* storage, const char* out_path) {
             break;
         }
         uint32_t n = (size - addr < BACKUP_CHUNK) ? (size - addr) : BACKUP_CHUNK;
-        err = esp_loader_flash_read(buf, addr, n);
+        // Retry a chunk on a transient error -- notably INVALID_MD5 (4) from line
+        // noise, common at fast baud. Re-reading the same address usually
+        // succeeds; only give up after several tries.
+        err = ESP_LOADER_ERROR_FAIL;
+        for(int r = 0; r < 5 && !s_abort; r++) {
+            err = esp_loader_flash_read(buf, addr, n);
+            if(err == ESP_LOADER_SUCCESS) break;
+            esp_flasher_logf(f, "  retry @%lu (%d)", (unsigned long)addr, (int)err);
+            furi_delay_ms(50);
+        }
         if(err != ESP_LOADER_SUCCESS) {
             esp_flasher_logf(f, "read failed @%lu (%d).", (unsigned long)addr, (int)err);
+            esp_flasher_logf(f, "Use Safe speed; check wiring.");
             ok = false;
             break;
         }

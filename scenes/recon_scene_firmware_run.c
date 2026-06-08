@@ -18,7 +18,11 @@ static int32_t fw_worker(void* context) {
     if(!fl) {
         fw_log_cb(app, "UART busy.");
     } else {
-        uint32_t fast = app->settings.flash_fast ? 921600 : 0;
+        // Backup reads are MD5-checked end to end and corruption-prone at fast
+        // baud, so force Safe (115200) for a backup regardless of the Fast
+        // setting. Flash (write) keeps the user's setting -- it MD5-verifies and
+        // retries each block, so a bad fast-baud write is caught and redone.
+        uint32_t fast = (app->fw_op == 0 || !app->settings.flash_fast) ? 0 : 921600;
         if(esp_flasher_connect(fl, fast)) {
             if(app->fw_op == 0) {
                 ok = esp_flasher_backup(fl, app->storage, app->fw_path);
