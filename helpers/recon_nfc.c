@@ -325,6 +325,24 @@ static int32_t recon_nfc_probe_worker(void* ctx) {
     MfClassicKey* found_b = malloc(sizeof(MfClassicKey) * MF_CLASSIC_TOTAL_SECTORS_MAX);
     bool* cracked_a = malloc(sizeof(bool) * MF_CLASSIC_TOTAL_SECTORS_MAX);
     bool* cracked_b = malloc(sizeof(bool) * MF_CLASSIC_TOTAL_SECTORS_MAX);
+    if(!found_a || !found_b || !cracked_a || !cracked_b) {
+        // Heap too tight for the deep check -- bail cleanly (free(NULL) is a no-op)
+        // instead of dereferencing a NULL in the memsets below. Publish an aborted
+        // result and resume passive scanning, mirroring the normal worker tail.
+        free(found_a);
+        free(found_b);
+        free(cracked_a);
+        free(cracked_b);
+        res.aborted = true;
+        res.valid = true;
+        furi_mutex_acquire(n->lock, FuriWaitForever);
+        n->mfc = res;
+        n->probe_dirty = true;
+        furi_mutex_release(n->lock);
+        if(n->scanner) nfc_scanner_start(n->scanner, recon_nfc_scanner_cb, n);
+        n->probing = false;
+        return 0;
+    }
     memset(found_a, 0, sizeof(MfClassicKey) * MF_CLASSIC_TOTAL_SECTORS_MAX);
     memset(found_b, 0, sizeof(MfClassicKey) * MF_CLASSIC_TOTAL_SECTORS_MAX);
     memset(cracked_a, 0, sizeof(bool) * MF_CLASSIC_TOTAL_SECTORS_MAX);

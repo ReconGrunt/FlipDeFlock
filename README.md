@@ -56,6 +56,13 @@ Feedback and field data are what move it forward; see [Contributing](#contributi
 
 ## What's new
 
+**v0.33**
+- **Robustness pass.** A multi-agent code audit hardened the report writers and the
+  NFC deep check: exports (CSV / GeoJSON / KML / WiGLE) now stay valid even when a
+  network SSID or a Bluetooth tracker name contains an odd character, the NFC
+  default-key check fails cleanly instead of crashing on a tight heap, and a failed
+  save no longer leaves a half-written report behind. No change to detection logic.
+
 **v0.25**
 - **Tells a Raven (audio) from a Falcon (camera).** A Flock pole carries either an
   ALPR camera (Falcon) or an acoustic/gunshot sensor (Raven) — both share the same

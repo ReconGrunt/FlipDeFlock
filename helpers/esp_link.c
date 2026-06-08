@@ -257,7 +257,9 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         // (currently empty) Flock table we can rescue a detection whose MAC was
         // randomized, and label its source "probe-fp" (ftype 'F').
         uint32_t fp = 0;
-        for(int i = 6; i < n; i++) {
+        // fp= is a trailing field AFTER the ssid (f[6]); start at f[7] so an SSID
+        // that literally begins "fp=" can't be misread as the IE-fingerprint.
+        for(int i = 7; i < n; i++) {
             if(strncmp(f[i], "fp=", 3) == 0) {
                 fp = (uint32_t)strtoul(f[i] + 3, NULL, 16);
                 break;

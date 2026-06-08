@@ -7,6 +7,8 @@
 #include <stdarg.h>
 
 static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-4180
+static void json_escape(const char* in, char* out, size_t out_len); // JSON string content
+static void xml_escape(const char* in, char* out, size_t out_len); // XML/KML text + attrs
 
 // Shared WigleWifi-1.4 pre-header + column header (WiFi and BLE writers).
 #define WIGLE_HEADER                                                    \
@@ -188,6 +190,12 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
             } else {
                 snprintf(head_s, sizeof(head_s), "null");
             }
+            // An SSID is up to 32 bytes of arbitrary data -- escape per output
+            // format so a stray " \ & or < can't produce malformed GeoJSON/KML.
+            char ssid_json[128];
+            char ssid_xml[128];
+            json_escape(e->ssid[0] ? e->ssid : "", ssid_json, sizeof(ssid_json));
+            xml_escape(e->ssid[0] ? e->ssid : "", ssid_xml, sizeof(ssid_xml));
             if(!first_feature) rfile_puts(&geo, ",\n");
             first_feature = false;
             rfile_printf(
@@ -218,7 +226,7 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
                 e->mac[3],
                 e->mac[4],
                 e->mac[5],
-                e->ssid[0] ? e->ssid : "");
+                ssid_json);
 
             rfile_printf(
                 &kml,
@@ -233,7 +241,7 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
                 e->mac[3],
                 e->mac[4],
                 e->mac[5],
-                e->ssid[0] ? e->ssid : "",
+                ssid_xml,
                 lon_s,
                 lat_s);
         }
@@ -251,7 +259,12 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
     free(line);
 
     bool ok = ok_md && ok_geo && ok_kml;
-    if(ok && out_path_md) {
+    if(!ok) {
+        // Don't leave partial/half-written report files behind on a failed save.
+        storage_simply_remove(app->storage, path_md);
+        storage_simply_remove(app->storage, path_geo);
+        storage_simply_remove(app->storage, path_kml);
+    } else if(out_path_md) {
         snprintf(out_path_md, out_len, "%s", path_md);
     }
     return ok;
@@ -386,6 +399,12 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
             if(!first_feature) rfile_puts(&geo, ",\n");
             first_feature = false;
             const char* geo_serial = (app->settings.log_serials && d->serial[0]) ? d->serial : "";
+            // A BLE tracker name is user-settable -- escape it (and the serial) so
+            // a " or \ in the name can't produce invalid GeoJSON.
+            char name_json[128];
+            char serial_json[48];
+            json_escape(d->name[0] ? d->name : "", name_json, sizeof(name_json));
+            json_escape(geo_serial, serial_json, sizeof(serial_json));
             rfile_printf(
                 &geo,
                 line,
@@ -400,7 +419,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
                 ll,
                 ble_cat_name(d->cat),
                 ble_model_token(d->model),
-                geo_serial,
+                serial_json,
                 d->following ? "true" : "false",
                 d->addr[0],
                 d->addr[1],
@@ -408,7 +427,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
                 d->addr[3],
                 d->addr[4],
                 d->addr[5],
-                d->name[0] ? d->name : "");
+                name_json);
         }
 
         // WiGLE row only for geotagged devices (omit no-fix -> no Null Island).
@@ -443,7 +462,13 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
     free(line);
 
     bool ok = ok_csv && ok_geo && ok_wigle;
-    if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_csv);
+    if(!ok) {
+        storage_simply_remove(app->storage, path_csv);
+        storage_simply_remove(app->storage, path_geo);
+        storage_simply_remove(app->storage, path_wigle);
+    } else if(out_path_md) {
+        snprintf(out_path_md, out_len, "%s", path_csv);
+    }
     return ok;
 }
 
@@ -467,14 +492,19 @@ bool recon_report_append_nfc(void* _app, const char* line) {
     bool ok = false;
     if(storage_file_open(file, path, FSAM_WRITE, FSOM_OPEN_APPEND)) {
         FuriString* row = furi_string_alloc();
-        // Write a column header the first time the daily file is created.
+        // Write a column header the first time the daily file is created. If the
+        // header write fails, don't write (or claim success for) a headerless row.
+        bool hdr_ok = true;
         if(storage_file_size(file) == 0) {
             const char* header = "time,protocol,grade,uid,sectors_default,lat,lon\n";
-            storage_file_write(file, header, strlen(header));
+            size_t hlen = strlen(header);
+            hdr_ok = storage_file_write(file, header, hlen) == hlen;
         }
-        furi_string_printf(row, "%02u:%02u:%02u,%s\n", dt.hour, dt.minute, dt.second, line);
-        size_t len = furi_string_size(row);
-        ok = storage_file_write(file, furi_string_get_cstr(row), len) == len;
+        if(hdr_ok) {
+            furi_string_printf(row, "%02u:%02u:%02u,%s\n", dt.hour, dt.minute, dt.second, line);
+            size_t len = furi_string_size(row);
+            ok = storage_file_write(file, furi_string_get_cstr(row), len) == len;
+        }
         furi_string_free(row);
     }
     storage_file_close(file);
@@ -535,13 +565,107 @@ static void csv_field_escape(const char* in, char* out, size_t out_len) {
         snprintf(out, out_len, "%s", in);
         return;
     }
+    // Quoted field. Reserve room for the opening quote, closing quote and NUL, and
+    // never split a doubled "" across the truncation boundary -- so even a field
+    // truncated to fit the buffer stays well-formed (properly closed) CSV.
+    if(out_len < 3) {
+        out[0] = '\0';
+        return;
+    }
     size_t j = 0;
-    if(j < out_len - 1) out[j++] = '"';
-    for(const char* p = in; *p && j < out_len - 2; p++) {
-        if(*p == '"' && j < out_len - 2) out[j++] = '"';
+    out[j++] = '"';
+    for(const char* p = in; *p; p++) {
+        size_t need = (*p == '"') ? 2 : 1; // a literal quote is written doubled
+        if(j + need > out_len - 2) break; // leave room for the closing quote + NUL
+        if(*p == '"') out[j++] = '"';
         out[j++] = *p;
     }
-    if(j < out_len - 1) out[j++] = '"';
+    out[j++] = '"';
+    out[j] = '\0';
+}
+
+// JSON string-content escape (the surrounding quotes live in the format string).
+// Escapes \ " and control chars so an odd SSID or a user-set BLE tracker name
+// can't produce invalid JSON that downstream tools (geojson.io, QGIS) reject.
+// Truncation-safe: never emits a partial escape sequence.
+static void json_escape(const char* in, char* out, size_t out_len) {
+    if(out_len == 0) return;
+    size_t j = 0;
+    for(const char* p = in; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        char seq[8];
+        size_t need;
+        switch(c) {
+        case '"':
+            seq[0] = '\\', seq[1] = '"', need = 2;
+            break;
+        case '\\':
+            seq[0] = '\\', seq[1] = '\\', need = 2;
+            break;
+        case '\n':
+            seq[0] = '\\', seq[1] = 'n', need = 2;
+            break;
+        case '\r':
+            seq[0] = '\\', seq[1] = 'r', need = 2;
+            break;
+        case '\t':
+            seq[0] = '\\', seq[1] = 't', need = 2;
+            break;
+        default:
+            if(c < 0x20) {
+                snprintf(seq, sizeof(seq), "\\u%04x", c);
+                need = 6;
+            } else {
+                seq[0] = (char)c, need = 1;
+            }
+            break;
+        }
+        if(j + need > out_len - 1) break; // leave room for NUL; don't split a seq
+        memcpy(out + j, seq, need);
+        j += need;
+    }
+    out[j] = '\0';
+}
+
+// XML/KML escape for element text and attribute values. Same goal as json_escape
+// but for the KML reports (which are XML). Truncation-safe.
+static void xml_escape(const char* in, char* out, size_t out_len) {
+    if(out_len == 0) return;
+    size_t j = 0;
+    for(const char* p = in; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        const char* rep = NULL;
+        switch(c) {
+        case '&':
+            rep = "&amp;";
+            break;
+        case '<':
+            rep = "&lt;";
+            break;
+        case '>':
+            rep = "&gt;";
+            break;
+        case '"':
+            rep = "&quot;";
+            break;
+        case '\'':
+            rep = "&apos;";
+            break;
+        default:
+            break;
+        }
+        if(rep) {
+            size_t need = strlen(rep);
+            if(j + need > out_len - 1) break;
+            memcpy(out + j, rep, need);
+            j += need;
+        } else if(c < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+            continue; // drop other control chars
+        } else {
+            if(j + 1 > out_len - 1) break;
+            out[j++] = (char)c;
+        }
+    }
     out[j] = '\0';
 }
 
@@ -639,6 +763,10 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
 
         char ssid_esc[72];
         csv_field_escape(a->ssid[0] ? a->ssid : "(hidden)", ssid_esc, sizeof(ssid_esc));
+        // The flattened reasons string contains literal commas (e.g. "WPA1:
+        // deprecated, weak") -- escape it too or it splits the `issues` column.
+        char reasons_esc[320];
+        csv_field_escape(furi_string_get_cstr(reasons), reasons_esc, sizeof(reasons_esc));
         rfile_printf(
             &csv,
             line,
@@ -655,7 +783,7 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
             a->channel,
             a->rssi,
             a->wps ? "yes" : "no",
-            furi_string_get_cstr(reasons));
+            reasons_esc);
 
         // WiGLE: omit rows with no GPS fix (0,0 would plant the AP at Null
         // Island); escape the SSID so a comma/quote can't break the columns.
@@ -694,6 +822,12 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
     free(line);
 
     bool ok = ok_md && ok_csv && ok_wigle;
-    if(ok && out_path_md) snprintf(out_path_md, out_len, "%s", path_md);
+    if(!ok) {
+        storage_simply_remove(app->storage, path_md);
+        storage_simply_remove(app->storage, path_csv);
+        storage_simply_remove(app->storage, path_wigle);
+    } else if(out_path_md) {
+        snprintf(out_path_md, out_len, "%s", path_md);
+    }
     return ok;
 }

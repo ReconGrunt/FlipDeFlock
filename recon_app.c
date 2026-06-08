@@ -451,7 +451,10 @@ void recon_settings_load(ReconApp* app) {
     recon_settings_defaults(app);
     File* file = storage_file_alloc(app->storage);
     if(storage_file_open(file, RECON_SETTINGS_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
-        char buf[256];
+        // One read covers the whole file. The settings file is ~10 short key=value
+        // lines (~160 B today); keep generous headroom so adding keys later can't
+        // silently truncate the load (anything past the buffer is dropped).
+        char buf[512];
         size_t n = storage_file_read(file, buf, sizeof(buf) - 1);
         buf[n] = '\0';
         char* line = buf;

@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.33
+- **Hardening pass (multi-agent code audit).** A correctness/robustness sweep over
+  the report writers, the NFC deep check, and the companion line parser. No change
+  to normal behaviour or detection logic — these close edge cases that could corrupt
+  an export or crash on a low heap.
+  - **Reports never emit malformed CSV / JSON / XML.** The WiFi-audit CSV could
+    split a column when an issue note contained a comma (e.g. WPA1's "deprecated,
+    weak"); the GeoJSON and KML could break if a network SSID or a Bluetooth
+    tracker's (user-set) name contained a `"`, `\`, or `< & >`. Every device-derived
+    field is now escaped per output format, so exports stay valid for downstream
+    tools (deflock.org / OSM, geojson.io, QGIS, WiGLE). Normal SSIDs/names are
+    unaffected — the output is byte-identical unless a field actually needs escaping.
+  - **NFC deep check fails cleanly when memory is tight.** The MIFARE default-key
+    audit allocated four scratch tables without checking the result; on a low heap a
+    failed allocation could crash the app. It now aborts the check gracefully and
+    keeps scanning.
+  - **No partial report files left behind on a failed save.** If a report write
+    fails part-way (e.g. the SD card fills), the half-written files are now removed
+    rather than left as a corrupt export that looks complete — matching the v0.32
+    "fail cleanly" behaviour.
+  - **Smaller fixes:** the daily NFC-audit CSV header write is verified before a row
+    is appended (no headerless file reported as "saved"); the probe IE-fingerprint
+    parser no longer scans the SSID field by mistake; and the settings loader has
+    extra buffer headroom so adding keys later can't silently truncate the load.
+
 ## v0.32
 - **Fix out-of-memory crash when saving a report (BLE/WiFi/Flock).** The report
   writers built the *entire* report in RAM first — three growing strings at once
