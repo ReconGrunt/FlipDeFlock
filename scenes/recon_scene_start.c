@@ -2,6 +2,7 @@
 
 typedef enum {
     StartItemFlock,
+    StartItemGuardian,
     StartItemWifi,
     StartItemBle,
     StartItemNfc,
@@ -59,6 +60,8 @@ void recon_scene_start_on_enter(void* context) {
     recon_scene_start_update_header(app);
     submenu_add_item(
         submenu, "Flock / ALPR Detect", StartItemFlock, recon_scene_start_submenu_cb, app);
+    submenu_add_item(
+        submenu, "Net Guardian", StartItemGuardian, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Flock Map", StartItemFlockMap, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "WiFi Audit", StartItemWifi, recon_scene_start_submenu_cb, app);
     submenu_add_item(
@@ -94,6 +97,9 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
         switch(event.event) {
         case StartItemFlock:
             scene_manager_next_scene(app->scene_manager, ReconSceneFlock);
+            break;
+        case StartItemGuardian:
+            scene_manager_next_scene(app->scene_manager, ReconSceneGuardian);
             break;
         case StartItemFlockMap:
             scene_manager_next_scene(app->scene_manager, ReconSceneFlockMap);

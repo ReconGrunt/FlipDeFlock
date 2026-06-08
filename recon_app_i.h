@@ -21,6 +21,7 @@
 #include "views/flock_view.h"
 #include "views/flock_map_view.h"
 #include "views/deflock_qr_view.h"
+#include "views/guardian_view.h"
 
 #define RECON_TAG "ReconSurvey"
 
@@ -55,6 +56,7 @@ typedef enum {
     ReconViewFlock,
     ReconViewFlockMap,
     ReconViewDeflockQr,
+    ReconViewGuardian,
 } ReconView;
 
 /** ESP32 link backend / parsing strategy. */
@@ -162,6 +164,7 @@ typedef struct {
     FlockView* flock_view;
     FlockMapView* flock_map_view;
     DeflockQrView* deflock_qr_view;
+    GuardianView* guardian_view;
 
     ReconSettings settings;
 
@@ -205,6 +208,8 @@ typedef struct {
     int ble_selected;
 
     WatchScore watch; /**< fused "am I being watched?" scorer (C1) */
+    uint32_t guardian_since; /**< tick the Net Guardian session started (uptime) */
+    uint8_t guardian_phase; /**< current rotating-sweep phase (0=flockcombo,1=ble,2=wifi) */
 
     // ESP32 firmware flasher
     uint8_t fw_op; /**< 0 = backup, 1 = flash */

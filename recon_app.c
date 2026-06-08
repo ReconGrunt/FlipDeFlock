@@ -367,13 +367,18 @@ void recon_app_watchscore_tick(ReconApp* app) {
     }
     furi_mutex_release(app->mutex);
 
-    // --- evaluate the scorer outside the lock (pure logic) ------------------
+    // --- evaluate the scorer (pure logic on the snapshot) -------------------
+    // Re-take the lock only to publish the result: the Net Guardian view reads
+    // app->watch (state + breakdown) from the GUI thread.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
     watchscore_eval(&app->watch, &in);
+    bool just_elevated = app->watch.just_elevated;
+    furi_mutex_release(app->mutex);
 
     // Fire EXACTLY ONE haptic alert on the transition INTO ELEVATED, carrying
     // the per-signal breakdown for the next screen to show. Haptic-only keeps
     // it discreet (personal-safety) and respects the app's sound setting.
-    if(app->watch.just_elevated && app->notifications) {
+    if(just_elevated && app->notifications) {
         notification_message(app->notifications, &sequence_double_vibro);
         if(app->settings.sound) {
             notification_message(app->notifications, &sequence_error);
@@ -532,6 +537,8 @@ static ReconApp* recon_app_alloc(void) {
     flock_map_view_set_app(app->flock_map_view, app);
     app->deflock_qr_view = deflock_qr_view_alloc();
     deflock_qr_view_set_app(app->deflock_qr_view, app);
+    app->guardian_view = guardian_view_alloc();
+    guardian_view_set_app(app->guardian_view, app);
 
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewSubmenu, submenu_get_view(app->submenu));
@@ -547,6 +554,8 @@ static ReconApp* recon_app_alloc(void) {
         app->view_dispatcher, ReconViewFlockMap, flock_map_view_get_view(app->flock_map_view));
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewDeflockQr, deflock_qr_view_get_view(app->deflock_qr_view));
+    view_dispatcher_add_view(
+        app->view_dispatcher, ReconViewGuardian, guardian_view_get_view(app->guardian_view));
 
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
 
@@ -561,6 +570,7 @@ static void recon_app_free(ReconApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlock);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlockMap);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewDeflockQr);
+    view_dispatcher_remove_view(app->view_dispatcher, ReconViewGuardian);
 
     submenu_free(app->submenu);
     variable_item_list_free(app->var_item_list);
@@ -569,6 +579,7 @@ static void recon_app_free(ReconApp* app) {
     flock_view_free(app->flock_view);
     flock_map_view_free(app->flock_map_view);
     deflock_qr_view_free(app->deflock_qr_view);
+    guardian_view_free(app->guardian_view);
 
     scene_manager_free(app->scene_manager);
     view_dispatcher_free(app->view_dispatcher);
