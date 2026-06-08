@@ -18,12 +18,15 @@ static int32_t fw_worker(void* context) {
     if(!fl) {
         fw_log_cb(app, "UART busy.");
     } else {
-        // Backup reads are MD5-checked end to end and corruption-prone at fast
-        // baud, so force Safe (115200) for a backup regardless of the Fast
-        // setting. Flash (write) keeps the user's setting -- it MD5-verifies and
-        // retries each block, so a bad fast-baud write is caught and redone.
-        uint32_t fast = (app->fw_op == 0 || !app->settings.flash_fast) ? 0 : 921600;
-        if(esp_flasher_connect(fl, fast)) {
+        // FLASH (write) talks to the raw ROM loader, like the 0xchocolate ESP
+        // Flasher -- proven and stub-free. BACKUP (read) must use the stub (the
+        // ROM can't read flash). Backup also forces Safe baud (its transfer is
+        // MD5-checked and corruption-prone fast); flash keeps the user's Fast
+        // choice, capped at a reliable 230400 (not 921600), and verifies the
+        // write afterwards.
+        bool use_stub = (app->fw_op == 0); // 0 = backup/read, 1 = flash/write
+        uint32_t fast = (app->fw_op == 0 || !app->settings.flash_fast) ? 0 : 230400;
+        if(esp_flasher_connect(fl, fast, use_stub)) {
             if(app->fw_op == 0) {
                 ok = esp_flasher_backup(fl, app->storage, app->fw_path);
             } else {

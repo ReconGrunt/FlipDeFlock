@@ -153,12 +153,17 @@ void esp_flasher_free(EspFlasher* f) {
     furi_record_close(RECORD_EXPANSION);
 }
 
-bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
+bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud, bool use_stub) {
     // Entering download mode by hand (hold BOOT, tap RESET) is fiddly and the ROM
     // can need several SYNC rounds to latch, so retry a few times with a generous
     // per-SYNC timeout. Each attempt itself sends `trials` SYNC frames, giving
     // (attempts x trials) chances over ~25 s, with a pause between attempts so the
     // user can re-tap RESET.
+    //
+    // use_stub: FLASHING (write) talks to the raw ROM loader -- the same path the
+    // widely used 0xchocolate ESP Flasher uses -- which skips uploading the
+    // 12.9 KB stub and its MD5-checked transfer. BACKUP (read) must use the stub
+    // because the ESP32 ROM cannot read flash back out.
     const int attempts = 5;
     esp_loader_error_t err = ESP_LOADER_ERROR_TIMEOUT;
     for(int i = 1; i <= attempts; i++) {
@@ -170,7 +175,7 @@ bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
         args.sync_timeout = 500; // ms per SYNC (default 100) -- wait longer
         args.trials = 10; // SYNC frames per attempt
         esp_flasher_logf(f, "Connecting %d/%d...", i, attempts);
-        err = esp_loader_connect_with_stub(&args);
+        err = use_stub ? esp_loader_connect_with_stub(&args) : esp_loader_connect(&args);
         if(err == ESP_LOADER_SUCCESS) break;
         esp_flasher_logf(f, "  no sync (%d).", (int)err);
         if(i < attempts) {
@@ -183,13 +188,15 @@ bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
         esp_flasher_logf(f, "wiring + bootloader mode.");
         return false;
     }
-    esp_flasher_logf(f, "Connected. Stub loaded.");
+    esp_flasher_logf(f, use_stub ? "Connected. Stub loaded." : "Connected (ROM loader).");
 
     if(fast_baud) {
-        // Must use the STUB variant after connect_with_stub — the plain
-        // esp_loader_change_transmission_rate returns UNSUPPORTED_FUNC while the
-        // stub is running. It takes the current rate so the stub can resync.
-        err = esp_loader_change_transmission_rate_stub(FLASH_BAUD, fast_baud);
+        // After the stub, the plain rate change returns UNSUPPORTED_FUNC, so use
+        // the stub variant (it takes the current rate to resync). On the raw ROM,
+        // use the plain change. Either way our loader_port hook re-rates the
+        // Flipper UART to match.
+        err = use_stub ? esp_loader_change_transmission_rate_stub(FLASH_BAUD, fast_baud) :
+                         esp_loader_change_transmission_rate(fast_baud);
         if(err == ESP_LOADER_SUCCESS) {
             esp_flasher_logf(f, "Speed -> %lu baud", (unsigned long)fast_baud);
         } else {

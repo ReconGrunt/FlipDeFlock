@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.28
+- **Flash over the ROM loader, like the 0xchocolate ESP Flasher (no stub).**
+  Flashing a `.bin` now connects straight to the ESP32 ROM bootloader instead of
+  uploading the 12.9 KB esp-serial-flasher stub. This matches the widely used,
+  proven 0xchocolate flasher, makes the connect lighter/faster, and sidesteps the
+  stub's MD5-checked transfer entirely. The write is still verified afterwards.
+- **More reliable "Fast" speed.** Lowered the optional fast flash baud from an
+  aggressive 921600 to **230400**, which holds up far better over Flipper↔ESP
+  wiring (921600 was a likely source of corruption).
+- Backup still uses the stub (the ROM can't read flash back) at Safe speed with
+  per-chunk retries, and keeps the 5x connect retries from v0.27.
+
 ## v0.27
 - **Flasher connect + read reliability.** The connection step now retries **5
   times** with a longer per-SYNC timeout and a pause between tries, so a fiddly

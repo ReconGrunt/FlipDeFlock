@@ -73,7 +73,7 @@ typedef struct {
     uint8_t marauder_cmd; /**< Generic backend: which Marauder sniff command to run. */
     bool gps_enabled;
     bool sound;
-    bool flash_fast; /**< raise the flasher baud to 921600 after connect */
+    bool flash_fast; /**< raise the flash (write) baud to 230400 after connect */
     bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
 } ReconSettings;
 

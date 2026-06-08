@@ -25,11 +25,16 @@ EspFlasher* esp_flasher_alloc(FuriHalSerialId ch, EspFlasherLog log_cb, void* ct
 void esp_flasher_free(EspFlasher* f);
 
 /**
- * Sync with the target in download mode and load the flasher stub. If
- * `fast_baud` is non-zero, raise the link to that rate after connecting (faster
- * flash/backup); on failure the connection is aborted so use Safe (0) instead.
+ * Sync with the target in download mode. Retries the SYNC several times.
+ *
+ * @param use_stub  true: upload the flasher stub (needed for BACKUP/read).
+ *                  false: talk to the raw ROM loader (FLASHING/write), like the
+ *                  0xchocolate ESP Flasher -- lighter and avoids the stub's
+ *                  MD5-checked transfer.
+ * @param fast_baud non-zero: raise the link to that rate after connecting; on
+ *                  failure the connection is aborted, so use Safe (0) instead.
  */
-bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud);
+bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud, bool use_stub);
 
 /** Flash `path` to the target at `addr` (use 0 for a merged full image). */
 bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, uint32_t addr);
