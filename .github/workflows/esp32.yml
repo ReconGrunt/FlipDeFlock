@@ -6,6 +6,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write # attach the firmware image to the tag's Release
+
 jobs:
   build-bin:
     runs-on: ubuntu-latest
@@ -36,7 +39,9 @@ jobs:
         run: |
           python -m pip install --quiet esptool
           BOOT0=$(find "$HOME/.arduino15" -name boot_app0.bin | head -n1)
-          python -m esptool --chip esp32 merge_bin -o build_esp/flock_companion-merged.bin \
+          # Full image starting at 0x0 -- this is what FlipDeFlock's in-app
+          # flasher writes (it always flashes a single file at offset 0x0).
+          python -m esptool --chip esp32 merge_bin -o build_esp/flipdeflock_companion_esp32wroom.bin \
             0x1000  build_esp/flock_companion.ino.bootloader.bin \
             0x8000  build_esp/flock_companion.ino.partitions.bin \
             0xe000  "$BOOT0" \
@@ -50,5 +55,18 @@ jobs:
             build_esp/flock_companion.ino.bin
             build_esp/flock_companion.ino.bootloader.bin
             build_esp/flock_companion.ino.partitions.bin
-            build_esp/flock_companion-merged.bin
+            build_esp/flipdeflock_companion_esp32wroom.bin
           if-no-files-found: error
+
+      # On a tag, attach the full 0x0-flashable image to that tag's Release so
+      # users can download the companion firmware directly (not just from CI
+      # artifacts). Mirrors release.yml's resilient softprops attach: it updates
+      # an existing release for the tag and won't fail the run on a miss.
+      - name: Attach companion firmware to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build_esp/flipdeflock_companion_esp32wroom.bin
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
