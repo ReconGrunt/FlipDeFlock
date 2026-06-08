@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.34
+- **New: Net Guardian — a leave-it-on-the-desk "personal net guardian."** A
+  dedicated always-on monitor (top-menu "Net Guardian"). Before this, the fused
+  "am I being watched?" score (WATCHSCORE) and the ESP radio never ran at the
+  same time: the radio only ran inside a scan screen, and the scorer only ticked
+  on the idle menu (where the radio is off), so it just decayed off the tail of a
+  scan. Net Guardian unifies them:
+  - **Rotating sweep keeps every signal live.** It cycles the companion through
+    `flockcombo` (dual-band WiFi+BLE Flock + deauth) → `blescan` (BLE trackers) →
+    `wifiscan` (evil-twin APs), so all WATCHSCORE inputs stay fresh — and the
+    two-independent-radio coincidence gate can actually reach **ELEVATED**.
+  - **Live fused scoring + alerting.** The scorer is evaluated every frame; on the
+    rising edge into ELEVATED it fires the discreet haptic (and sound, if enabled)
+    and wakes the backlight so it's noticeable across a room.
+  - **Pwnagotchi-style display.** A calm face that shifts CLEAR `(-_-)` →
+    WATCHFUL `(o_o)` → ELEVATED `(>_<)`, with the per-signal breakdown, the live
+    sweep mode + frame/hit counters, channel, and an uptime clock.
+  - Needs the FlipDeFlock companion FW (it rotates WiFi+BLE); in Marauder mode it
+    explains and points you to Flock/ALPR Detect.
+
 ## v0.33
 - **Hardening pass (multi-agent code audit).** A correctness/robustness sweep over
   the report writers, the NFC deep check, and the companion line parser. No change
