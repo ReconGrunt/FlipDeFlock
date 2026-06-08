@@ -153,17 +153,16 @@ void esp_flasher_free(EspFlasher* f) {
     furi_record_close(RECORD_EXPANSION);
 }
 
-bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud, bool use_stub) {
-    // Entering download mode by hand (hold BOOT, tap RESET) is fiddly and the ROM
-    // can need several SYNC rounds to latch, so retry a few times with a generous
-    // per-SYNC timeout. Each attempt itself sends `trials` SYNC frames, giving
-    // (attempts x trials) chances over ~25 s, with a pause between attempts so the
-    // user can re-tap RESET.
+bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
+    // Talk to the raw ESP32 ROM loader (esp_loader_connect, NO stub) -- the same
+    // approach as the proven 0xchocolate ESP Flasher. We never upload the stub,
+    // so the ROM's "software loader is resident / overlapping address range"
+    // error cannot happen, and there is no stub MD5 transfer to corrupt. Writes
+    // use the ROM flash commands; reads (backup) use the ROM's 64-byte read path.
     //
-    // use_stub: FLASHING (write) talks to the raw ROM loader -- the same path the
-    // widely used 0xchocolate ESP Flasher uses -- which skips uploading the
-    // 12.9 KB stub and its MD5-checked transfer. BACKUP (read) must use the stub
-    // because the ESP32 ROM cannot read flash back out.
+    // Manual bootloader entry (hold BOOT, tap RESET) is fiddly, so retry the SYNC
+    // several times with a generous per-SYNC timeout and a pause between tries so
+    // the user can re-tap RESET.
     const int attempts = 5;
     esp_loader_error_t err = ESP_LOADER_ERROR_TIMEOUT;
     for(int i = 1; i <= attempts; i++) {
@@ -175,7 +174,7 @@ bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud, bool use_stub) {
         args.sync_timeout = 500; // ms per SYNC (default 100) -- wait longer
         args.trials = 10; // SYNC frames per attempt
         esp_flasher_logf(f, "Connecting %d/%d...", i, attempts);
-        err = use_stub ? esp_loader_connect_with_stub(&args) : esp_loader_connect(&args);
+        err = esp_loader_connect(&args);
         if(err == ESP_LOADER_SUCCESS) break;
         esp_flasher_logf(f, "  no sync (%d).", (int)err);
         if(i < attempts) {
@@ -184,20 +183,19 @@ bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud, bool use_stub) {
         }
     }
     if(err != ESP_LOADER_SUCCESS) {
-        esp_flasher_logf(f, "Connect failed. Check TX/RX");
-        esp_flasher_logf(f, "wiring + bootloader mode.");
+        esp_flasher_logf(f, "Connect failed. Power-cycle the");
+        esp_flasher_logf(f, "ESP, re-enter bootloader, retry.");
         return false;
     }
-    esp_flasher_logf(f, use_stub ? "Connected. Stub loaded." : "Connected (ROM loader).");
+    esp_flasher_logf(f, "Connected (ROM loader).");
 
     if(fast_baud) {
-        // After the stub, the plain rate change returns UNSUPPORTED_FUNC, so use
-        // the stub variant (it takes the current rate to resync). On the raw ROM,
-        // use the plain change. Either way our loader_port hook re-rates the
-        // Flipper UART to match.
-        err = use_stub ? esp_loader_change_transmission_rate_stub(FLASH_BAUD, fast_baud) :
-                         esp_loader_change_transmission_rate(fast_baud);
+        // The plain rate change only tells the ESP; the library does NOT re-rate
+        // the host here, so we switch the Flipper UART ourselves to match (same
+        // as the 0xchocolate flasher).
+        err = esp_loader_change_transmission_rate(fast_baud);
         if(err == ESP_LOADER_SUCCESS) {
+            furi_hal_serial_set_br(f->serial, fast_baud);
             esp_flasher_logf(f, "Speed -> %lu baud", (unsigned long)fast_baud);
         } else {
             esp_flasher_logf(f, "Fast baud failed (%d).", (int)err);
