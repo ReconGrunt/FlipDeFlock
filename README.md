@@ -20,6 +20,11 @@ counter-surveillance site surveys:
   SmartTag trackers, and flags any tracker that follows you across GPS waypoints
   (anti-stalking). Positively labels a **Raven (audio sensor)** when it sees the
   Raven's own Bluetooth services. Companion firmware.
+- 🛡️ **Net Guardian** — a leave-it-on-the-desk "personal net guardian." Keeps the
+  ESP running and **rotates** it across Wi-Fi + BLE so the fused
+  **CLEAR / WATCHFUL / ELEVATED** "am I being watched?" score stays live, with a
+  pwnagotchi-style face and a discreet haptic the moment two independent radios
+  agree something's watching. Companion firmware.
 - 💳 **NFC / RFID Audit** — identifies a presented card's protocol and grades its
   security posture for access-control reviews. On a MIFARE Classic, a **Deep**
   check captures the UID and tries the Flipper's on-SD key dictionary to report
@@ -56,12 +61,27 @@ Feedback and field data are what move it forward; see [Contributing](#contributi
 
 ## What's new
 
-**v0.33**
-- **Robustness pass.** A multi-agent code audit hardened the report writers and the
-  NFC deep check: exports (CSV / GeoJSON / KML / WiGLE) now stay valid even when a
-  network SSID or a Bluetooth tracker name contains an odd character, the NFC
-  default-key check fails cleanly instead of crashing on a tight heap, and a failed
-  save no longer leaves a half-written report behind. No change to detection logic.
+**v0.34**
+- **Net Guardian — an always-on "personal net guardian."** A dedicated
+  leave-it-on-the-desk mode (top menu). It keeps the ESP running and **rotates** it
+  through the detection modes — dual-band Flock + deauth, BLE trackers, evil-twin
+  Wi-Fi — so every input to the fused "am I being watched?" score stays live (and
+  can actually reach **ELEVATED**, which needs two independent radios to agree).
+  Shows a pwnagotchi-style face (**CLEAR `(-_-)` → WATCHFUL `(o_o)` →
+  ELEVATED `(>_<)`**) with the per-signal breakdown, live sweep mode, frame/hit
+  counters and an uptime clock, and fires a discreet haptic (+ wakes the screen) on
+  the edge into ELEVATED. Companion firmware; Marauder mode points you to
+  Flock/ALPR Detect.
+
+**v0.30–v0.33**
+- **Reliability pass.** The in-app ESP32 flasher now flashes/verifies cleanly over
+  the bare ROM loader (fixes "Finalize failed", "VERIFY FAILED", and the stuck-stub
+  "software loader is resident" errors); the lower **Fast = 230400** baud is far
+  more reliable over Flipper↔ESP wiring. Saving a report after a large scan no
+  longer runs the Flipper out of memory — reports stream row-by-row to the SD card.
+  A multi-agent code audit also hardened report escaping (CSV/GeoJSON/KML/WiGLE stay
+  valid for any SSID/name) and the NFC deep check on a tight heap. No change to
+  detection logic.
 
 **v0.25**
 - **Tells a Raven (audio) from a Falcon (camera).** A Flock pole carries either an
@@ -154,7 +174,8 @@ Open **Settings** and set **Board Mode** to match your ESP32:
 - **Marauder** — keep your board's existing firmware, no flashing. You get
   **Flock/ALPR Detect + NFC + GPS + Reports**.
 - **Companion** — the project firmware (flash it with **ESP32 Firmware**, below).
-  Adds **WiFi Audit, BLE/Tracker Scan, deauth detection, and dual-band Flock**.
+  Adds **WiFi Audit, BLE/Tracker Scan, Net Guardian, deauth detection, and
+  dual-band Flock**.
 
 While here, check **ESP Port/Baud** and **GPS** if your wiring differs from the
 defaults, and turn **GPS** on if you want detections geotagged. Settings persist.
@@ -172,14 +193,26 @@ The main camera hunt. It shows a live list as the ESP32 sniffs:
   button) to flag it for the report. Press **Back** to return; the ESP goes idle
   when you leave.
 
-### 3. Flock Map
+### 3. Net Guardian *(Companion only)*
+
+Leave it running on a desk like a pwnagotchi. It keeps the ESP alive and
+**rotates** it across the detection modes — dual-band Flock + deauth, BLE
+trackers, then evil-twin Wi-Fi — so every input to the fused score stays fresh.
+The screen shows a calm face that shifts **CLEAR `(-_-)` → WATCHFUL `(o_o)` →
+ELEVATED `(>_<)`** with the live breakdown, the current sweep mode, frame/hit
+counters and an uptime clock. It only reaches **ELEVATED** when two independent
+radios agree (e.g. a BLE Flock beacon *and* a Wi-Fi signal), and fires a discreet
+haptic — and wakes the backlight — on that edge. **Back** exits and idles the ESP.
+*(In Marauder mode this screen explains it needs the companion firmware.)*
+
+### 4. Flock Map
 
 A live map around your GPS position: you're at center, detected cameras are
 plotted by bearing and distance (dot size = confidence), with a heading tick and
 a scale bar. **Left/Right** zoom, **OK** re-fits. Needs a GPS fix; cameras without
 a geotag aren't plotted.
 
-### 4. WiFi Audit *(Companion only)*
+### 5. WiFi Audit *(Companion only)*
 
 Scans nearby networks and grades each one's security worst-first. Markers:
 `!` = rogue/evil-twin (same SSID, mismatched security), `~` = duplicate SSID,
@@ -187,14 +220,14 @@ Scans nearby networks and grades each one's security worst-first. Markers:
 exactly what's weak). Use **Save Report** to write it out. *(In Marauder mode
 this screen explains it needs the companion firmware.)*
 
-### 5. BLE / Tracker Scan *(Companion only)*
+### 6. BLE / Tracker Scan *(Companion only)*
 
 Continuously scans for **AirTag / Tile / SmartTag / Google Find My** trackers and
 Flock/Raven BLE. With **GPS on**, a tracker that stays with you across several
 waypoints is flagged **`!FOLLOWING`** (anti-stalking); open it to see the track
 (distance / waypoints / time). **Tag** suspicious devices for the report.
 
-### 6. NFC / RFID Audit
+### 7. NFC / RFID Audit
 
 Present a card to the Flipper; the app identifies its protocol and grades the
 security posture (e.g. UID-only / cloneable vs. authenticated) for access-control
@@ -203,7 +236,7 @@ the UID and tries the Flipper's on-SD key dictionary against every sector, then
 reports how many open with **default keys** (`N/total` = trivially cloneable).
 Audit only cards you own or are authorized to test.
 
-### 7. ESP32 Firmware — backup & flash
+### 8. ESP32 Firmware — backup & flash
 
 Manage your board's firmware from the Flipper, no computer:
 
@@ -214,17 +247,18 @@ Manage your board's firmware from the Flipper, no computer:
    release, copied to SD), a backup, or any merged image; it writes at `0x0`.
 
 When prompted, put the ESP32 into **bootloader/download mode** (hold **BOOT**, tap
-**RESET**), then it connects. Flash speed is **Safe (115200)** or **Fast (921600)**
-in Settings. You can't brick it: the ROM bootloader always allows a re-flash.
+**RESET**), then it connects. Flash speed is **Safe (115200)** or **Fast (230400)**
+in Settings; the flasher talks to the bare ROM loader and MD5-verifies the write.
+You can't brick it: the ROM bootloader always allows a re-flash.
 
-### 8. Reports
+### 9. Reports
 
 Saved reports land on the SD under **`apps_data/flipdeflock/reports/`**:
 Markdown (human-readable), DeFlock-compatible GeoJSON (ready for
 [deflock.org](https://deflock.org)), KML, plain CSV, and WiGLE CSV (WiFi and BLE)
 for wardriving uploads. Pull them with qFlipper or a card reader.
 
-### 9. Share to DeFlock (phone handoff)
+### 10. Share to DeFlock (phone handoff)
 
 For each camera you **marked** (and that has a GPS geotag), this screen shows a
 QR code. Scan it with your phone to open DeFlock at that location and submit
@@ -271,12 +305,13 @@ evidence. Confidence is scored accordingly:
 ```
 application.fam          manifest
 recon_app.c / _i.h       lifecycle, shared state, settings
-scenes/                  start, flock, map, wifi, ble, nfc, firmware, reports,
-                         deflock_handoff, settings, about
+scenes/                  start, flock, guardian, map, wifi, ble, nfc, firmware,
+                         reports, deflock_handoff, settings, about
 views/
   flock_view.*           custom live-detection list view
   flock_map_view.*       on-device map (operator-centered camera plot)
   deflock_qr_view.*      QR render for the DeFlock phone-handoff
+  guardian_view.*        pwnagotchi-style Net Guardian status face
 helpers/
   flock_db.*             Flock OUIs + SSID patterns + confidence scoring
   esp_link.*             ESP32 UART link (companion + generic backends)
