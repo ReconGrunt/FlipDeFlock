@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.31
+- **Fix "VERIFY FAILED (2)" after a flash.** Error 2 is a *timeout*, not a hash
+  mismatch (that's error 4) — the data wasn't proven wrong, the ROM just went
+  silent on the MD5 query. Two fixes:
+  - **Verify before finalize.** The MD5 verify now runs *before* the FLASH_END
+    "leave flash mode" command (matching the esp-serial-flasher examples). The
+    ESP32 ROM's FLASH_END quirk (COMMAND_FAILED) was desyncing the link and
+    making the later MD5 query time out; verifying first avoids that, so a good
+    flash now reports a clean **"Verified OK"**.
+  - **A verify timeout is no longer a hard failure.** Some ESP32 ROMs don't
+    answer the SPI_FLASH_MD5 query over UART at all. Since every data block was
+    already written and acked, the app now reports **"Wrote OK; MD5 n/a — reset
+    ESP + test it"** instead of "FAILED". Only a genuine MD5 **mismatch** (error
+    4) is treated as a bad flash (with a "turn off Fast, reflash" hint).
+- FLASH_END's cosmetic ROM status is now fully ignored (it never gated success).
+
 ## v0.30
 - **Fix "Finalize failed (9)" at the end of a flash.** The write reached 100%
   and every data block was committed to flash, but the final FLASH_END command
