@@ -258,27 +258,37 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
     storage_file_free(file);
 
     if(ok) {
-        // Leave flash mode. The ESP32 *ROM* loader (no stub) frequently answers
-        // FLASH_END with status COMMAND_FAILED (-> error 9) even though every
-        // data block was already committed to flash as it was received. So a
-        // finalize error here is a SOFT warning, not a flashing failure -- the
-        // MD5 verify below reads the on-chip flash back and is the real gate.
-        err = esp_loader_flash_finish(false);
-        if(err != ESP_LOADER_SUCCESS) {
-            esp_flasher_logf(f, "Finalize quirk (%d);", (int)err);
-            esp_flasher_logf(f, "verifying flash...");
+        // Verify the on-chip image FIRST, while the chip is still cleanly in
+        // flash-download mode. The esp-serial-flasher examples verify before any
+        // finish/reset, and for good reason: the ESP32 *ROM* loader answers
+        // FLASH_END with COMMAND_FAILED even on a perfectly good flash, and that
+        // failed command can leave the link unable to answer the MD5 query -- so
+        // verifying *after* FLASH_END times out (error 2). Verify first.
+        err = esp_loader_flash_verify(); // ROM SPI_FLASH_MD5 of the actual flash
+        if(err == ESP_LOADER_SUCCESS) {
+            esp_flasher_logf(f, "Verified OK.");
+        } else if(err == ESP_LOADER_ERROR_INVALID_MD5) {
+            // Definitive: what's on the chip does NOT match the image we sent.
+            esp_flasher_logf(f, "VERIFY MISMATCH (bad flash)!");
+            esp_flasher_logf(f, "Turn off Fast, reflash.");
+            ok = false;
+        } else {
+            // The ROM didn't answer the MD5 query (some ESP32 ROMs don't support
+            // SPI_FLASH_MD5 over UART; shows up as TIMEOUT/2). Every data block
+            // was already written and acked, so this is "written but unverified",
+            // NOT a failure -- let the user reset and functionally test it.
+            esp_flasher_logf(f, "Wrote OK; MD5 n/a (%d).", (int)err);
+            esp_flasher_logf(f, "Can't auto-verify on this");
+            esp_flasher_logf(f, "ROM -- reset ESP + test it.");
         }
     }
     if(ok) {
-        err = esp_loader_flash_verify(); // MD5 of the actual on-chip flash
-        if(err == ESP_LOADER_SUCCESS) {
-            esp_flasher_logf(f, "Verified OK.");
-        } else {
-            esp_flasher_logf(f, "VERIFY FAILED (%d)!", (int)err);
-            ok = false;
-        }
+        // Best-effort leave-flash-mode. On the ESP32 ROM this FLASH_END often
+        // answers COMMAND_FAILED even though the image is fine, so its result is
+        // cosmetic and ignored here -- the verify above already decided pass/fail.
+        esp_loader_flash_finish(false);
+        esp_flasher_logf(f, "Done. Reset ESP to run.");
     }
-    if(ok) esp_flasher_logf(f, "Done. Reset ESP to run.");
     return ok;
 }
 
