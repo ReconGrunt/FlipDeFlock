@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ESP_RX_BUF 512
+#define ESP_RX_BUF   512
 // Marauder AP-scan / sniffraw lines can be long; an overlong line is dropped
 // whole, so keep this generous to avoid losing MACs on a long generic-backend line.
 #define ESP_LINE_MAX 384
@@ -267,8 +267,8 @@ static void esp_parse_companion(EspLink* esp, char* line) {
             // Curated IE-fp match. + Flock OUI -> CONFIRMED; otherwise (e.g. a
             // wildcard probe from a randomized/unknown MAC) -> a candidate
             // device-CLASS match. Never weaker than the ESP's own score.
-            FlockConfidence fp_conf =
-                flock_oui_match(mac) ? FlockConfidenceConfirmed : FlockConfidenceProbeFp;
+            FlockConfidence fp_conf = flock_oui_match(mac) ? FlockConfidenceConfirmed :
+                                                             FlockConfidenceProbeFp;
             if(fp_conf > conf) conf = fp_conf;
             ftype = 'F'; // source label "probe-fp" in the detail scene
         }
@@ -306,7 +306,8 @@ static const char* marauder_extract_ssid(const char* line) {
         // fields on the line aren't absorbed and a far-away "flock" token can't
         // spuriously raise confidence. Single-threaded ESP worker -> static ok.
         size_t i = 0;
-        for(; i < RECON_SSID_LEN - 1 && p[i] && p[i] != '\r' && p[i] != '\n'; i++) buf[i] = p[i];
+        for(; i < RECON_SSID_LEN - 1 && p[i] && p[i] != '\r' && p[i] != '\n'; i++)
+            buf[i] = p[i];
         buf[i] = '\0';
         return buf;
     }

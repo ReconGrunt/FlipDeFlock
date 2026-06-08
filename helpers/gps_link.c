@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define GPS_RX_BUF 256
+#define GPS_RX_BUF   256
 #define GPS_LINE_MAX 128
 
 typedef enum {

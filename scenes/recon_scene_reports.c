@@ -61,8 +61,7 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
             char path[128] = {0};
             bool ok = recon_report_save_flock(app, path, sizeof(path));
             if(app->settings.sound) {
-                notification_message(
-                    app->notifications, ok ? &sequence_success : &sequence_error);
+                notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
             recon_scene_reports_show_popup(
                 app,

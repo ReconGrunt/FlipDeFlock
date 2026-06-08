@@ -34,7 +34,12 @@ static void recon_scene_nfc_button_cb(GuiButtonType type, InputType input, void*
     }
 }
 
-static void recon_scene_nfc_render(ReconApp* app, bool detected, FuriString* title, FuriString* grade, FuriString* detail) {
+static void recon_scene_nfc_render(
+    ReconApp* app,
+    bool detected,
+    FuriString* title,
+    FuriString* grade,
+    FuriString* detail) {
     Widget* widget = app->widget;
     widget_reset(widget);
 
@@ -57,13 +62,7 @@ static void recon_scene_nfc_render(ReconApp* app, bool detected, FuriString* tit
         widget_add_string_element(
             widget, 0, 2, AlignLeft, AlignTop, FontPrimary, furi_string_get_cstr(title));
         widget_add_string_multiline_element(
-            widget,
-            64,
-            34,
-            AlignCenter,
-            AlignCenter,
-            FontSecondary,
-            "Checking default keys...");
+            widget, 64, 34, AlignCenter, AlignCenter, FontSecondary, "Checking default keys...");
         return;
     }
 
@@ -87,15 +86,13 @@ static void recon_scene_nfc_render(ReconApp* app, bool detected, FuriString* tit
             "UID %s%s",
             uid_hex[0] ? uid_hex : "?",
             mfc.aborted ? " (partial)" : "");
-        widget_add_string_element(
-            widget, 0, 14, AlignLeft, AlignTop, FontSecondary, line);
+        widget_add_string_element(widget, 0, 14, AlignLeft, AlignTop, FontSecondary, line);
         widget_add_text_scroll_element(widget, 0, 26, 128, 20, furi_string_get_cstr(detail));
     } else {
         widget_add_text_scroll_element(widget, 0, 16, 128, 30, furi_string_get_cstr(detail));
     }
 
-    widget_add_button_element(
-        widget, GuiButtonTypeCenter, "Log", recon_scene_nfc_button_cb, app);
+    widget_add_button_element(widget, GuiButtonTypeCenter, "Log", recon_scene_nfc_button_cb, app);
     if(is_mfc && !have_mfc) {
         widget_add_button_element(
             widget, GuiButtonTypeRight, "Deep", recon_scene_nfc_button_cb, app);
@@ -197,8 +194,7 @@ bool recon_scene_nfc_on_event(void* context, SceneManagerEvent event) {
             furi_string_free(line);
 
             if(app->settings.sound) {
-                notification_message(
-                    app->notifications, ok ? &sequence_success : &sequence_error);
+                notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
         }
         furi_string_free(title);

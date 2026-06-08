@@ -5,9 +5,9 @@
 
 #include <string.h>
 
-#define WIFI_ITEM_RESCAN 0
-#define WIFI_ITEM_SAVE 1
-#define WIFI_ITEM_AP_BASE 10
+#define WIFI_ITEM_RESCAN     0
+#define WIFI_ITEM_SAVE       1
+#define WIFI_ITEM_AP_BASE    10
 #define WIFI_SCAN_TIMEOUT_MS 9000
 
 // GUI-thread-only scene state (one WiFi-audit scene at a time).
@@ -35,7 +35,8 @@ static void recon_scene_wifi_show_scanning(ReconApp* app) {
     Submenu* submenu = app->submenu;
     submenu_reset(submenu);
     submenu_set_header(submenu, "WiFi Audit");
-    submenu_add_item(submenu, "Scanning... please wait", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
+    submenu_add_item(
+        submenu, "Scanning... please wait", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
 }
 
 static void recon_scene_wifi_show_timeout(ReconApp* app) {
@@ -91,8 +92,10 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
     for(size_t i = 0; i < n; i++) {
         WifiAp* a = &app->wifi[i];
         WifiGrade g = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, NULL);
-        if(g == WifiGradeCritical) crit++;
-        else if(g == WifiGradeWeak) weak++;
+        if(g == WifiGradeCritical)
+            crit++;
+        else if(g == WifiGradeWeak)
+            weak++;
         if(a->dup || a->rogue) twin++;
     }
     furi_mutex_release(app->mutex);
@@ -110,11 +113,7 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
         WifiGrade g = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, NULL);
         char tw[4];
         snprintf(
-            tw,
-            sizeof(tw),
-            "%s%s",
-            a->marked ? "*" : "",
-            a->rogue ? "!" : (a->dup ? "~" : ""));
+            tw, sizeof(tw), "%s%s", a->marked ? "*" : "", a->rogue ? "!" : (a->dup ? "~" : ""));
         char label[48];
         if(a->ssid[0]) {
             snprintf(label, sizeof(label), "%s%s %s", wifi_grade_str(g), tw, a->ssid);
@@ -129,8 +128,7 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
                 a->bssid[4],
                 a->bssid[5]);
         }
-        submenu_add_item(
-            submenu, label, WIFI_ITEM_AP_BASE + i, recon_scene_wifi_submenu_cb, app);
+        submenu_add_item(submenu, label, WIFI_ITEM_AP_BASE + i, recon_scene_wifi_submenu_cb, app);
     }
 }
 
@@ -201,8 +199,7 @@ bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
             char path[128] = {0};
             bool ok = recon_report_save_wifi(app, path, sizeof(path));
             if(app->settings.sound) {
-                notification_message(
-                    app->notifications, ok ? &sequence_success : &sequence_error);
+                notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
             consumed = true;
         } else if(id >= WIFI_ITEM_AP_BASE) {

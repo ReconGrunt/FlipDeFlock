@@ -64,11 +64,13 @@ static void recon_nfc_grade(NfcProtocol p, const char** grade, const char** deta
     switch(p) {
     case NfcProtocolMfClassic:
         *grade = "WEAK";
-        *detail = "MIFARE Classic\nCrypto1 is broken.\nKeys recoverable via\nnested/darkside/mfkey.\nAvoid for access control.";
+        *detail =
+            "MIFARE Classic\nCrypto1 is broken.\nKeys recoverable via\nnested/darkside/mfkey.\nAvoid for access control.";
         break;
     case NfcProtocolMfUltralight:
         *grade = "WEAK";
-        *detail = "MIFARE Ultralight\nLittle/no auth on most\nvariants; easily cloned.\nUL-C/EV1 better if PWD set.";
+        *detail =
+            "MIFARE Ultralight\nLittle/no auth on most\nvariants; easily cloned.\nUL-C/EV1 better if PWD set.";
         break;
     case NfcProtocolSt25tb:
         *grade = "WEAK";
@@ -80,11 +82,13 @@ static void recon_nfc_grade(NfcProtocol p, const char** grade, const char** deta
         break;
     case NfcProtocolMfPlus:
         *grade = "MEDIUM";
-        *detail = "MIFARE Plus\nStrong in SL3 (AES),\nweak if left in SL1.\nVerify security level.";
+        *detail =
+            "MIFARE Plus\nStrong in SL3 (AES),\nweak if left in SL1.\nVerify security level.";
         break;
     case NfcProtocolMfDesfire:
         *grade = "STRONG";
-        *detail = "MIFARE DESFire\nAES/3DES if configured.\nStrong when keys are\nnot left at default.";
+        *detail =
+            "MIFARE DESFire\nAES/3DES if configured.\nStrong when keys are\nnot left at default.";
         break;
     case NfcProtocolIso14443_4a:
     case NfcProtocolIso14443_4b:
@@ -92,7 +96,8 @@ static void recon_nfc_grade(NfcProtocol p, const char** grade, const char** deta
         // dedicated enum values are firmware-specific (Momentum) and absent in
         // stock OFW. Grading them here keeps the app portable across both.
         *grade = "INFO";
-        *detail = "ISO14443-4 smartcard\nEMV/DESFire/Type4 etc.\nSecurity depends on applet.\nInspect further.";
+        *detail =
+            "ISO14443-4 smartcard\nEMV/DESFire/Type4 etc.\nSecurity depends on applet.\nInspect further.";
         break;
     case NfcProtocolFelica:
         *grade = "INFO";
@@ -104,7 +109,8 @@ static void recon_nfc_grade(NfcProtocol p, const char** grade, const char** deta
         break;
     case NfcProtocolIso14443_3a:
         *grade = "WEAK";
-        *detail = "ISO14443-3A (UID only)\nNo app-layer auth detected.\nUID is cloneable; weak if\nused alone for access.";
+        *detail =
+            "ISO14443-3A (UID only)\nNo app-layer auth detected.\nUID is cloneable; weak if\nused alone for access.";
         break;
     case NfcProtocolIso14443_3b:
         *grade = "INFO";
@@ -120,7 +126,11 @@ static void recon_nfc_grade(NfcProtocol p, const char** grade, const char** deta
 /* Dynamic grade for a MIFARE Classic card after a deep check has run: the
  * default-keyed sector count makes the "trivially cloneable" verdict concrete.
  * Writes into the caller's buffer (detail text is built per-call). */
-static void recon_nfc_grade_mfc(const ReconMfcResult* r, const char** grade, char* detail, size_t detail_len) {
+static void recon_nfc_grade_mfc(
+    const ReconMfcResult* r,
+    const char** grade,
+    char* detail,
+    size_t detail_len) {
     *grade = "WEAK";
     if(r->default_keyed == 0) {
         snprintf(
@@ -252,8 +262,8 @@ static bool recon_nfc_try_key(
             if(kt == 1 && cracked_b[s]) continue;
 
             MfClassicAuthContext ctx;
-            MfClassicError err = mf_classic_poller_sync_auth(
-                nfc, block, (MfClassicKey*)key, key_type, &ctx);
+            MfClassicError err =
+                mf_classic_poller_sync_auth(nfc, block, (MfClassicKey*)key, key_type, &ctx);
             if(err == MfClassicErrorNotPresent) {
                 *removed = true;
                 return false;

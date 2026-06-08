@@ -1,19 +1,19 @@
 #include "wifi_audit.h"
 
 // esp wifi_auth_mode_t values (stable low range across IDF versions).
-#define AUTH_OPEN 0
-#define AUTH_WEP 1
-#define AUTH_WPA_PSK 2
-#define AUTH_WPA2_PSK 3
-#define AUTH_WPA_WPA2_PSK 4
-#define AUTH_ENTERPRISE 5
-#define AUTH_WPA3_PSK 6
+#define AUTH_OPEN          0
+#define AUTH_WEP           1
+#define AUTH_WPA_PSK       2
+#define AUTH_WPA2_PSK      3
+#define AUTH_WPA_WPA2_PSK  4
+#define AUTH_ENTERPRISE    5
+#define AUTH_WPA3_PSK      6
 #define AUTH_WPA2_WPA3_PSK 7
-#define AUTH_WAPI_PSK 8
-#define AUTH_OWE 9
+#define AUTH_WAPI_PSK      8
+#define AUTH_OWE           9
 
 // esp wifi_cipher_type_t values that include TKIP.
-#define CIPHER_TKIP 3
+#define CIPHER_TKIP      3
 #define CIPHER_TKIP_CCMP 5
 
 const char* wifi_auth_str(uint8_t authmode) {
@@ -90,7 +90,8 @@ WifiGrade wifi_audit_grade(
         break;
     case AUTH_WPA2_PSK:
         grade = WifiGradeOk;
-        if(reasons) furi_string_cat(reasons, "WPA2-PSK: capture handshake/\nPMKID -> offline crack\n");
+        if(reasons)
+            furi_string_cat(reasons, "WPA2-PSK: capture handshake/\nPMKID -> offline crack\n");
         break;
     case AUTH_ENTERPRISE:
         grade = WifiGradeStrong;

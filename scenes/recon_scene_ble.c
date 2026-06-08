@@ -4,9 +4,9 @@
 
 #include <string.h>
 
-#define BLE_ITEM_SAVE 0
-#define BLE_ITEM_BASE 10
-#define BLE_RESCAN_GAP_MS 4000
+#define BLE_ITEM_SAVE       0
+#define BLE_ITEM_BASE       10
+#define BLE_RESCAN_GAP_MS   4000
 #define BLE_SCAN_TIMEOUT_MS 12000
 
 static bool s_pending; // a blescan is in flight (awaiting BEND)
@@ -90,13 +90,7 @@ static void ble_show_results(ReconApp* app) {
         char label[48];
         if(d->name[0]) {
             snprintf(
-                label,
-                sizeof(label),
-                "%s%s %s %ddB",
-                pfx,
-                ble_cat_str(d->cat),
-                d->name,
-                d->rssi);
+                label, sizeof(label), "%s%s %s %ddB", pfx, ble_cat_str(d->cat), d->name, d->rssi);
         } else {
             snprintf(
                 label,
@@ -180,8 +174,7 @@ bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
             char path[128] = {0};
             bool ok = recon_report_save_ble(app, path, sizeof(path));
             if(app->settings.sound) {
-                notification_message(
-                    app->notifications, ok ? &sequence_success : &sequence_error);
+                notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
             consumed = true;
         } else if(id >= BLE_ITEM_BASE) {

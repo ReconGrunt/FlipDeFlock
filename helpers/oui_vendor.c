@@ -78,8 +78,7 @@ static const OuiVendor VENDORS[] = {
 const char* oui_vendor(const uint8_t* mac) {
     if(!mac) return NULL;
     for(unsigned i = 0; i < VENDOR_COUNT; i++) {
-        if(mac[0] == VENDORS[i].b[0] && mac[1] == VENDORS[i].b[1] &&
-           mac[2] == VENDORS[i].b[2]) {
+        if(mac[0] == VENDORS[i].b[0] && mac[1] == VENDORS[i].b[1] && mac[2] == VENDORS[i].b[2]) {
             return VENDORS[i].name;
         }
     }

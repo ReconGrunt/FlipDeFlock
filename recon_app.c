@@ -13,11 +13,11 @@
 // of these easily; stationary shop Tiles and a single drive-by past a fixed
 // beacon do not. All tunable; this only TIGHTENS precision (never flags more
 // loosely than the old single >100 m gate).
-#define FOLLOW_MIN_COUNT 4 /**< seen at least this many scans */
-#define FOLLOW_MIN_MS 90000 /**< over at least this long a window (90 s) */
+#define FOLLOW_MIN_COUNT     4 /**< seen at least this many scans */
+#define FOLLOW_MIN_MS        90000 /**< over at least this long a window (90 s) */
 #define FOLLOW_MIN_WAYPOINTS 3 /**< at this many distinct observer waypoints */
-#define WAYPOINT_GAP_M 50.0f /**< min separation to count a new waypoint */
-#define FOLLOW_MIN_SPAN_M 150.0f /**< max span between counted waypoints */
+#define WAYPOINT_GAP_M       50.0f /**< min separation to count a new waypoint */
+#define FOLLOW_MIN_SPAN_M    150.0f /**< max span between counted waypoints */
 
 // ---- shared data updates (called from worker threads) --------------------
 
@@ -304,9 +304,9 @@ void recon_app_wifi_end(ReconApp* app) {
 
 // Fresh-signal windows used while snapshotting (kept here next to the call
 // site; the scoring model's own tunables live in helpers/watchscore.c).
-#define WATCH_FLOCK_FRESH_MS 60000
+#define WATCH_FLOCK_FRESH_MS  60000
 #define WATCH_DEAUTH_FRESH_MS 30000
-#define WATCH_FLOCK_NEAR_M 120.0f
+#define WATCH_FLOCK_NEAR_M    120.0f
 
 void recon_app_watchscore_tick(ReconApp* app) {
     WatchInputs in;
@@ -423,11 +423,14 @@ void recon_settings_save(ReconApp* app) {
 
 static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
     if(strcmp(key, "backend") == 0)
-        app->settings.backend = (val == EspBackendGeneric) ? EspBackendGeneric : EspBackendCompanion;
+        app->settings.backend = (val == EspBackendGeneric) ? EspBackendGeneric :
+                                                             EspBackendCompanion;
     else if(strcmp(key, "esp_uart") == 0)
-        app->settings.esp_uart = (val == FuriHalSerialIdLpuart) ? FuriHalSerialIdLpuart : FuriHalSerialIdUsart;
+        app->settings.esp_uart = (val == FuriHalSerialIdLpuart) ? FuriHalSerialIdLpuart :
+                                                                  FuriHalSerialIdUsart;
     else if(strcmp(key, "gps_uart") == 0)
-        app->settings.gps_uart = (val == FuriHalSerialIdUsart) ? FuriHalSerialIdUsart : FuriHalSerialIdLpuart;
+        app->settings.gps_uart = (val == FuriHalSerialIdUsart) ? FuriHalSerialIdUsart :
+                                                                 FuriHalSerialIdLpuart;
     else if(strcmp(key, "esp_baud") == 0 && (val == 115200 || val == 921600))
         app->settings.esp_baud = (uint32_t)val; // clamp to known-valid; corrupt -> keep default
     else if(strcmp(key, "gps_baud") == 0 && (val == 9600 || val == 57600 || val == 115200))
@@ -530,7 +533,9 @@ static ReconApp* recon_app_alloc(void) {
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewSubmenu, submenu_get_view(app->submenu));
     view_dispatcher_add_view(
-        app->view_dispatcher, ReconViewVarItemList, variable_item_list_get_view(app->var_item_list));
+        app->view_dispatcher,
+        ReconViewVarItemList,
+        variable_item_list_get_view(app->var_item_list));
     view_dispatcher_add_view(app->view_dispatcher, ReconViewWidget, widget_get_view(app->widget));
     view_dispatcher_add_view(app->view_dispatcher, ReconViewPopup, popup_get_view(app->popup));
     view_dispatcher_add_view(
@@ -540,8 +545,7 @@ static ReconApp* recon_app_alloc(void) {
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewDeflockQr, deflock_qr_view_get_view(app->deflock_qr_view));
 
-    view_dispatcher_attach_to_gui(
-        app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
+    view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
 
     return app;
 }

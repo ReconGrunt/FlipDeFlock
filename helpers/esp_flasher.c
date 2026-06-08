@@ -9,9 +9,9 @@
 #include <esp_loader.h>
 #include <esp_loader_io.h>
 
-#define FLASH_BAUD 115200
+#define FLASH_BAUD   115200
 #define FLASH_RX_BUF 4096
-#define FLASH_BLOCK 1024 /* flash_write payload */
+#define FLASH_BLOCK  1024 /* flash_write payload */
 #define BACKUP_CHUNK 4096 /* flash_read chunk (fewer SLIP round-trips = faster) */
 
 struct EspFlasher {

@@ -12,11 +12,11 @@
 // independent-radio failures.
 
 // Per-signal weights (points added each evaluation while the signal is live).
-#define WS_W_FLOCK_NEAR 35 /**< CONFIRMED Flock co-located with you (recent + near) */
+#define WS_W_FLOCK_NEAR   35 /**< CONFIRMED Flock co-located with you (recent + near) */
 #define WS_W_FLOCK_RECENT 20 /**< CONFIRMED Flock seen recently, distance unknown */
-#define WS_W_BLE_FOLLOW 35 /**< BLE tracker that cleared the anti-stalking gate */
-#define WS_W_DEAUTH 25 /**< attributed deauth/disassoc flood active now */
-#define WS_W_ROGUE_AP 20 /**< evil-twin / rogue AP (mismatched-security clone) */
+#define WS_W_BLE_FOLLOW   35 /**< BLE tracker that cleared the anti-stalking gate */
+#define WS_W_DEAUTH       25 /**< attributed deauth/disassoc flood active now */
+#define WS_W_ROGUE_AP     20 /**< evil-twin / rogue AP (mismatched-security clone) */
 
 // Recency / co-location gating (whether a signal is "live" and "near") is done
 // by the snapshot caller in recon_app.c (WATCH_FLOCK_FRESH_MS / WATCH_DEAUTH_-
@@ -24,12 +24,12 @@
 // only the pure scoring envelope below.
 
 // Score envelope, decay, and hysteresis.
-#define WS_SCORE_MAX 100 /**< clamp ceiling */
+#define WS_SCORE_MAX      100 /**< clamp ceiling */
 #define WS_DECAY_PER_TICK 4 /**< points bled off each tick when a signal is absent */
-#define WS_WATCHFUL_ON 25 /**< rise above this -> WATCHFUL candidate */
-#define WS_WATCHFUL_OFF 12 /**< fall below this -> back toward CLEAR (hysteresis) */
-#define WS_ELEVATED_ON 60 /**< rise above this (+ coincidence) -> ELEVATED candidate */
-#define WS_ELEVATED_OFF 40 /**< fall below this -> drop out of ELEVATED (hysteresis) */
+#define WS_WATCHFUL_ON    25 /**< rise above this -> WATCHFUL candidate */
+#define WS_WATCHFUL_OFF   12 /**< fall below this -> back toward CLEAR (hysteresis) */
+#define WS_ELEVATED_ON    60 /**< rise above this (+ coincidence) -> ELEVATED candidate */
+#define WS_ELEVATED_OFF   40 /**< fall below this -> drop out of ELEVATED (hysteresis) */
 
 // Dwell: a candidate state must persist this many consecutive ticks before it
 // surfaces, so a single-frame spike never flickers the UI or fires the alert.
@@ -66,7 +66,7 @@ void watchscore_init(WatchScore* ws) {
 // deauth and rogue all share the WiFi radio, so they count as ONE class; BLE
 // (follower or BLE-Flock) is a genuinely independent second radio.
 #define WS_RADIO_WIFI 0x01
-#define WS_RADIO_BLE 0x02
+#define WS_RADIO_BLE  0x02
 
 /** Append " + frag" (no leading sep for the first piece) with safe clamping. */
 static void breakdown_add(char* buf, size_t cap, const char* frag) {

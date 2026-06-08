@@ -6,10 +6,8 @@ typedef enum {
     DetailCustomToggleMark = 200,
 } DetailCustomEvent;
 
-static void recon_scene_flock_detail_button_cb(
-    GuiButtonType type,
-    InputType input,
-    void* context) {
+static void
+    recon_scene_flock_detail_button_cb(GuiButtonType type, InputType input, void* context) {
     ReconApp* app = context;
     if(input == InputTypeShort && type == GuiButtonTypeCenter) {
         view_dispatcher_send_custom_event(app->view_dispatcher, DetailCustomToggleMark);

@@ -3,9 +3,9 @@
 
 #include <gui/elements.h>
 
-#define ROW_H 11
-#define LIST_TOP 14
-#define VISIBLE_ROWS 4
+#define ROW_H            11
+#define LIST_TOP         14
+#define VISIBLE_ROWS     4
 // Deauth/disassoc frames per ~1s interval needed to call it a flood. Normal
 // roaming/idle churn is 1-2/s; a real flood is many. Below this we don't alert
 // (avoids false positives on benign disassoc churn).
@@ -84,7 +84,11 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
                 t->bssid[5]);
         } else {
             snprintf(
-                hdr, sizeof(hdr), "%s DEAUTH! x%lu", connected ? "ESP" : "...", (unsigned long)deauths);
+                hdr,
+                sizeof(hdr),
+                "%s DEAUTH! x%lu",
+                connected ? "ESP" : "...",
+                (unsigned long)deauths);
         }
     } else if(generic) {
         // Companion status counters stay 0 on a Marauder board; show the RX
@@ -136,7 +140,8 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     if(model->selected >= (int)count) model->selected = count - 1;
     if(model->selected < 0) model->selected = 0;
     if(model->selected < model->top) model->top = model->selected;
-    if(model->selected >= model->top + VISIBLE_ROWS) model->top = model->selected - VISIBLE_ROWS + 1;
+    if(model->selected >= model->top + VISIBLE_ROWS)
+        model->top = model->selected - VISIBLE_ROWS + 1;
     if(model->top < 0) model->top = 0;
 
     for(int row = 0; row < VISIBLE_ROWS; row++) {
@@ -218,8 +223,7 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
             handled = true;
         } else if(event->key == InputKeyOk && event->type == InputTypeShort) {
             int sel = 0;
-            with_view_model(
-                fv->view, FlockViewModel * model, { sel = model->selected; }, false);
+            with_view_model(fv->view, FlockViewModel * model, { sel = model->selected; }, false);
             if(fv->ok_cb) fv->ok_cb(fv->ok_ctx, sel);
             handled = true;
         }

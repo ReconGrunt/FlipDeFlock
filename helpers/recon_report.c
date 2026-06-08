@@ -8,10 +8,10 @@
 static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-4180
 
 // Shared WigleWifi-1.4 pre-header + column header (WiFi and BLE writers).
-#define WIGLE_HEADER                                                   \
+#define WIGLE_HEADER                                                    \
     "WigleWifi-1.4,appRelease=FlipDeFlock,model=FlipperZero,release=0," \
-    "device=FlipDeFlock,display=,board=ESP32,brand=Flipper\n"          \
-    "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,"        \
+    "device=FlipDeFlock,display=,board=ESP32,brand=Flipper\n"           \
+    "MAC,SSID,AuthMode,FirstSeen,Channel,RSSI,CurrentLatitude,"         \
     "CurrentLongitude,AltitudeMeters,AccuracyMeters,Type\n"
 
 static void recon_report_timestamp(char* buf, size_t len) {
@@ -309,8 +309,7 @@ bool recon_report_save_ble(void* _app, char* out_path_md, size_t out_len) {
         if((d->following || d->cat) && !isnan(d->last_lat)) {
             if(!first_feature) furi_string_cat(geo, ",\n");
             first_feature = false;
-            const char* geo_serial =
-                (app->settings.log_serials && d->serial[0]) ? d->serial : "";
+            const char* geo_serial = (app->settings.log_serials && d->serial[0]) ? d->serial : "";
             furi_string_cat_printf(
                 geo,
                 "    {\n"
@@ -404,8 +403,7 @@ bool recon_report_append_nfc(void* _app, const char* line) {
             const char* header = "time,protocol,grade,uid,sectors_default,lat,lon\n";
             storage_file_write(file, header, strlen(header));
         }
-        furi_string_printf(
-            row, "%02u:%02u:%02u,%s\n", dt.hour, dt.minute, dt.second, line);
+        furi_string_printf(row, "%02u:%02u:%02u,%s\n", dt.hour, dt.minute, dt.second, line);
         size_t len = furi_string_size(row);
         ok = storage_file_write(file, furi_string_get_cstr(row), len) == len;
         furi_string_free(row);

@@ -24,11 +24,11 @@
 #define SIG_DB_PATH RECON_APP_FOLDER "/signatures.json"
 
 // Hard bounds. A FAP loads fully into 256 KB RAM, so keep everything tiny.
-#define SIG_MAX_OUIS 64u /**< owned OUI table cap (overflow silently ignored) */
+#define SIG_MAX_OUIS     64u /**< owned OUI table cap (overflow silently ignored) */
 #define SIG_MAX_PATTERNS 32u /**< per-list SSID-pattern cap (overflow ignored) */
-#define SIG_MAX_FILE 8192u /**< largest signatures.json we will read */
-#define SIG_MAX_TOKENS 512u /**< jsmn token budget (bounds parse RAM) */
-#define SIG_MAX_NEEDLE 48u /**< longest SSID substring we keep (lowercased) */
+#define SIG_MAX_FILE     8192u /**< largest signatures.json we will read */
+#define SIG_MAX_TOKENS   512u /**< jsmn token budget (bounds parse RAM) */
+#define SIG_MAX_NEEDLE   48u /**< longest SSID substring we keep (lowercased) */
 
 struct SigDb {
     uint8_t (*ouis)[3]; /**< owned OUI table, NULL if none */
@@ -113,7 +113,12 @@ static bool sig_tok_eq(const char* js, const jsmntok_t* t, const char* key) {
  * dropped. Returns the table (caller frees) and writes the kept count to
  * *out_count, or NULL on alloc failure or when nothing valid was kept.
  */
-static uint8_t (*sig_parse_ouis(const char* js, const jsmntok_t* tokens, int count, int arr_idx, size_t* out_count))[3] {
+static uint8_t (*sig_parse_ouis(
+    const char* js,
+    const jsmntok_t* tokens,
+    int count,
+    int arr_idx,
+    size_t* out_count))[3] {
     const jsmntok_t* arr = &tokens[arr_idx];
     if(arr->type != JSMN_ARRAY || arr->size <= 0) return NULL;
 
@@ -173,11 +178,13 @@ static char** sig_parse_patterns(
                 if(!s) {
                     // Alloc failure mid-list: roll back everything kept so far
                     // and fail safe (caller registers nothing).
-                    for(size_t k = 0; k < kept; k++) free(list[k]);
+                    for(size_t k = 0; k < kept; k++)
+                        free(list[k]);
                     free(list);
                     return NULL;
                 }
-                for(size_t c = 0; c < slen; c++) s[c] = sig_ascii_lower(js[el->start + c]);
+                for(size_t c = 0; c < slen; c++)
+                    s[c] = sig_ascii_lower(js[el->start + c]);
                 s[slen] = '\0';
                 list[kept++] = s;
             }
@@ -198,11 +205,13 @@ static void sig_db_destroy(SigDb* db) {
     if(!db) return;
     free(db->ouis);
     if(db->confirmed) {
-        for(size_t i = 0; i < db->confirmed_count; i++) free(db->confirmed[i]);
+        for(size_t i = 0; i < db->confirmed_count; i++)
+            free(db->confirmed[i]);
         free(db->confirmed);
     }
     if(db->likely) {
-        for(size_t i = 0; i < db->likely_count; i++) free(db->likely[i]);
+        for(size_t i = 0; i < db->likely_count; i++)
+            free(db->likely[i]);
         free(db->likely);
     }
     free(db);
@@ -297,8 +306,7 @@ SigDb* sig_db_load(Storage* storage) {
     }
 
     // Register the owned arrays with flock_db (caller-owned for db's lifetime).
-    flock_db_set_extra_ouis(
-        (const uint8_t(*)[3])db->ouis, db->ouis ? db->oui_count : 0);
+    flock_db_set_extra_ouis((const uint8_t(*)[3])db->ouis, db->ouis ? db->oui_count : 0);
     flock_db_set_extra_ssid_patterns(
         (const char* const*)db->confirmed,
         db->confirmed ? db->confirmed_count : 0,

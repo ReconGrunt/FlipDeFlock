@@ -47,11 +47,7 @@ static void recon_scene_start_update_header(ReconApp* app) {
             bd);
     } else {
         snprintf(
-            app->text_store,
-            sizeof(app->text_store),
-            "WATCH: %s%s",
-            watchscore_state_str(st),
-            cov);
+            app->text_store, sizeof(app->text_store), "WATCH: %s%s", watchscore_state_str(st), cov);
     }
     submenu_set_header(app->submenu, app->text_store);
 }
@@ -63,14 +59,11 @@ void recon_scene_start_on_enter(void* context) {
     recon_scene_start_update_header(app);
     submenu_add_item(
         submenu, "Flock / ALPR Detect", StartItemFlock, recon_scene_start_submenu_cb, app);
-    submenu_add_item(
-        submenu, "Flock Map", StartItemFlockMap, recon_scene_start_submenu_cb, app);
-    submenu_add_item(
-        submenu, "WiFi Audit", StartItemWifi, recon_scene_start_submenu_cb, app);
+    submenu_add_item(submenu, "Flock Map", StartItemFlockMap, recon_scene_start_submenu_cb, app);
+    submenu_add_item(submenu, "WiFi Audit", StartItemWifi, recon_scene_start_submenu_cb, app);
     submenu_add_item(
         submenu, "BLE / Tracker Scan", StartItemBle, recon_scene_start_submenu_cb, app);
-    submenu_add_item(
-        submenu, "NFC / RFID Audit", StartItemNfc, recon_scene_start_submenu_cb, app);
+    submenu_add_item(submenu, "NFC / RFID Audit", StartItemNfc, recon_scene_start_submenu_cb, app);
     submenu_add_item(
         submenu, "ESP32 Firmware", StartItemFirmware, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Reports", StartItemReports, recon_scene_start_submenu_cb, app);

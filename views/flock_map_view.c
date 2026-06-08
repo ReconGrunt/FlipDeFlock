@@ -5,17 +5,17 @@
 #include <math.h>
 
 // Operator marker is fixed at screen centre; cameras are projected around it.
-#define MAP_CX 64
-#define MAP_CY 36
+#define MAP_CX      64
+#define MAP_CY      36
 // Map drawing box (below the header divider at y=11, above the scale bar).
-#define MAP_TOP 12
-#define MAP_BOTTOM 63
-#define MAP_LEFT 1
-#define MAP_RIGHT 126
+#define MAP_TOP     12
+#define MAP_BOTTOM  63
+#define MAP_LEFT    1
+#define MAP_RIGHT   126
 // Largest geotag is fitted to this radius (px) from the operator marker.
-#define MAP_FIT_R 28.0f
+#define MAP_FIT_R   28.0f
 #define HEADING_LEN 6
-#define SCALE_PX 24
+#define SCALE_PX    24
 
 struct FlockMapView {
     View* view;
@@ -179,17 +179,14 @@ static bool flock_map_view_input_callback(InputEvent* event, void* context) {
     if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
         if(event->key == InputKeyLeft) {
             // Zoom out (larger mpp).
-            with_view_model(
-                fmv->view, FlockMapModel * model, { model->zoom--; }, true);
+            with_view_model(fmv->view, FlockMapModel * model, { model->zoom--; }, true);
             handled = true;
         } else if(event->key == InputKeyRight) {
             // Zoom in (smaller mpp).
-            with_view_model(
-                fmv->view, FlockMapModel * model, { model->zoom++; }, true);
+            with_view_model(fmv->view, FlockMapModel * model, { model->zoom++; }, true);
             handled = true;
         } else if(event->key == InputKeyOk && event->type == InputTypeShort) {
-            with_view_model(
-                fmv->view, FlockMapModel * model, { model->zoom = 0; }, true);
+            with_view_model(fmv->view, FlockMapModel * model, { model->zoom = 0; }, true);
             handled = true;
         }
     }

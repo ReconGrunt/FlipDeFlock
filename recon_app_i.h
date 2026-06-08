@@ -24,12 +24,12 @@
 
 #define RECON_TAG "ReconSurvey"
 
-#define RECON_FLOCK_MAX 96
-#define RECON_WIFI_MAX 64
+#define RECON_FLOCK_MAX  96
+#define RECON_WIFI_MAX   64
 #define RECON_DEAUTH_MAX 16
-#define RECON_BLE_MAX 80
+#define RECON_BLE_MAX    80
 #define RECON_TEXT_STORE 160
-#define RECON_SSID_LEN 33
+#define RECON_SSID_LEN   33
 
 /** BLE device categories (companion firmware classifies these). */
 typedef enum {
@@ -38,10 +38,11 @@ typedef enum {
     BleCatAirTag = 2, /**< Apple Find My / AirTag */
     BleCatTile = 3,
     BleCatSmartTag = 4, /**< Samsung SmartTag */
-    BleCatFindMyDevice = 5, /**< Google Find My Device network (0xFEAA): Pebblebee/Chipolo/Moto/Eufy */
+    BleCatFindMyDevice =
+        5, /**< Google Find My Device network (0xFEAA): Pebblebee/Chipolo/Moto/Eufy */
 } BleCat;
 
-#define RECON_APP_FOLDER EXT_PATH("apps_data/flipdeflock")
+#define RECON_APP_FOLDER    EXT_PATH("apps_data/flipdeflock")
 #define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
 #define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
 

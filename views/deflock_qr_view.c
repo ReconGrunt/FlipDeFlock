@@ -10,7 +10,7 @@
 // the qrcode+temp pair in the model is ~604 B (within the <600 B budget for the
 // live buffer; the temp scratch is reused and not displayed).
 #define QR_MAX_VERSION 8
-#define QR_BUF_LEN qrcodegen_BUFFER_LEN_FOR_VERSION(QR_MAX_VERSION)
+#define QR_BUF_LEN     qrcodegen_BUFFER_LEN_FOR_VERSION(QR_MAX_VERSION)
 
 // Left square the QR is scaled to fill (px). The right column holds the text.
 #define QR_AREA 52
@@ -39,8 +39,7 @@ static void deflock_qr_view_draw_callback(Canvas* canvas, void* _model) {
 
     if(model->empty) {
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str_aligned(
-            canvas, 64, 26, AlignCenter, AlignCenter, "No marked cameras");
+        canvas_draw_str_aligned(canvas, 64, 26, AlignCenter, AlignCenter, "No marked cameras");
         canvas_draw_str_aligned(
             canvas, 64, 38, AlignCenter, AlignCenter, "Tag cameras in Flock Detect");
         return;
@@ -88,7 +87,8 @@ static void deflock_qr_view_draw_callback(Canvas* canvas, void* _model) {
     while(*p && ty <= 64) {
         char line[40];
         size_t n = 0;
-        while(p[n] && p[n] != '\n' && n < sizeof(line) - 1) n++;
+        while(p[n] && p[n] != '\n' && n < sizeof(line) - 1)
+            n++;
         memcpy(line, p, n);
         line[n] = '\0';
         canvas_draw_str(canvas, 0, ty, line);
