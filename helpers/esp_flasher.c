@@ -10,9 +10,9 @@
 #include <esp_loader_io.h>
 
 #define FLASH_BAUD   115200
-#define FLASH_RX_BUF 4096
+#define FLASH_RX_BUF 2048 /* UART RX stream buffer; reads drain it continuously */
 #define FLASH_BLOCK  1024 /* flash_write payload */
-#define BACKUP_CHUNK 4096 /* flash_read chunk (fewer SLIP round-trips = faster) */
+#define BACKUP_CHUNK 2048 /* flash_read chunk (smaller = less peak RAM on a tight heap) */
 
 struct EspFlasher {
     FuriHalSerialHandle* serial;

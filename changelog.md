@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.26
+- **Fix the ESP flasher running the Flipper out of memory.** The in-app flasher
+  (Backup / Flash a .bin) could exhaust the Flipper's heap and abort the app —
+  a FAP loads entirely into the ~256 KB RAM it shares with the firmware, and the
+  flasher's worker (thread stack + UART buffer + the 12.9 KB esp-serial-flasher
+  stub) was the tipping point. This was the flasher's first real on-hardware run.
+  Fixes: freed runtime heap by right-sizing the scan tables (Flock 96->64,
+  BLE 80->48, WiFi 64->48 — still ample for the threat model), halved the
+  flasher's transient buffers (4 KB -> 2 KB RX and read-chunk), and added a
+  low-RAM pre-flight that shows a clear message instead of crashing if the heap
+  is still too tight. No protocol or detection-logic change.
+
 ## v0.25
 Roadmap sprint, two "Next" items:
 - **Raven vs Falcon split.** A Flock unit is now positively identified as a
