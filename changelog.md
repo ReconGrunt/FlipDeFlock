@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.32
+- **Fix out-of-memory crash when saving a report (BLE/WiFi/Flock).** The report
+  writers built the *entire* report in RAM first — three growing strings at once
+  (CSV + GeoJSON + WiGLE/KML) — which on a large scan used tens of KB of heap on
+  top of the FAP's already tight share of the Flipper's ~256 KB, enough to
+  exhaust it and crash. Reports are now **streamed a row at a time straight to
+  the SD card**, so peak memory is a single ~1 KB line buffer no matter how many
+  detections there are. Output files are byte-for-byte identical.
+  - Also guards the low-heap case: if memory is too tight to even start, the save
+    fails cleanly instead of crashing, and empty report files are no longer left
+    behind when there's nothing to save.
+
 ## v0.31
 - **Fix "VERIFY FAILED (2)" after a flash.** Error 2 is a *timeout*, not a hash
   mismatch (that's error 4) — the data wasn't proven wrong, the ROM just went
