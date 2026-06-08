@@ -24,10 +24,10 @@
 
 #define RECON_TAG "ReconSurvey"
 
-#define RECON_FLOCK_MAX  96
-#define RECON_WIFI_MAX   64
+#define RECON_FLOCK_MAX  64
+#define RECON_WIFI_MAX   48
 #define RECON_DEAUTH_MAX 16
-#define RECON_BLE_MAX    80
+#define RECON_BLE_MAX    48
 #define RECON_TEXT_STORE 160
 #define RECON_SSID_LEN   33
 

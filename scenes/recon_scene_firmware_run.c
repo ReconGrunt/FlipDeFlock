@@ -65,6 +65,23 @@ void recon_scene_firmware_run_on_enter(void* context) {
     fw_log_cb(app, "hold BOOT, tap RESET.");
     fw_log_cb(app, "Working...");
 
+    // The worker needs a chunk of heap (4 KB thread stack + UART buffer + the
+    // esp-serial-flasher stub upload). A FAP shares the Flipper's ~256 KB RAM
+    // with the firmware, so on a busy system this can come up short. Check up
+    // front and fail with a message instead of letting an allocation abort the
+    // whole app (the "out of memory" crash).
+    if(memmgr_get_free_heap() < 10 * 1024) {
+        fw_log_cb(app, "Not enough free RAM.");
+        fw_log_cb(app, "Reboot the Flipper, open");
+        fw_log_cb(app, "only FlipDeFlock, retry.");
+        fw_log_cb(app, "== FAILED ==");
+        app->fw_running = false;
+        app->fw_ok = false;
+        fw_render(app);
+        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+        return;
+    }
+
     app->fw_running = true;
     app->fw_ok = false;
     app->fw_log_dirty = false;
