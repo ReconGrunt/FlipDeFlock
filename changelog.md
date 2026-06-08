@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.25
+Roadmap sprint, two "Next" items:
+- **Raven vs Falcon split.** A Flock unit is now positively identified as a
+  **Raven (acoustic/gunshot sensor)** when the companion firmware sees its
+  Raven-specific GATT services (`0x3100`–`0x3500`) — shown as
+  **"Flock Raven (audio)"** on the BLE detail screen and in reports. The
+  external-battery serial is shared across Falcon (ALPR) and Raven, so a Raven
+  is asserted **only** on that GATT match; the absence of it is never treated as
+  proof of Falcon (a wrong "audio surveillance" label is worse than a generic
+  one). New backward-compatible `rv=1` companion line-protocol flag — reflash
+  the companion firmware to emit it; older firmware just reports "Flock device".
+- **Updatable signature database.** Load extra Flock OUI prefixes and SSID
+  patterns from `apps_data/flipdeflock/signatures.json` on the SD card, **merged
+  over** the built-ins, so new signatures don't need a rebuild. **Load-only** (no
+  writes, no network) and **fail-safe**: a missing or malformed file leaves the
+  built-ins fully intact. User signatures are unverified, so an OUI-only hit
+  still scores only "possible" — they can add detections, never over-claim.
+  Capped for RAM (≤64 OUIs, ≤32 patterns/list). JSON via vendored jsmn (MIT);
+  see [docs/signatures.example.json](docs/signatures.example.json).
+
 ## v0.24
 - DeFlock moved from deflock.me to deflock.org (the old domain redirects).
   Updated all links, the in-app About text, and the Share-to-DeFlock QR handoff

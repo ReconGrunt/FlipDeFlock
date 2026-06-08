@@ -72,8 +72,9 @@ static void recon_scene_ble_detail_render(ReconApp* app) {
         (unsigned long)d.count,
         (unsigned)d.company);
     if(d.cat == BleCatFlock) {
-        // Conservative model line: the Raven/Falcon split is NEEDS VALIDATION, so
-        // flock_ble_model_str carries a "?" and today resolves to generic.
+        // Model line. A Raven is now positively identified via its 0x3100-0x3500
+        // GATT services (GATT-backed -> confident, no "?"); otherwise this stays
+        // generic. Falcon is never asserted (no Falcon-specific tell).
         furi_string_cat_printf(s, "%s\n", flock_ble_model_str((FlockBleModel)d.model));
         // Serial is always shown on-screen (saved-report logging is gated by the
         // "Log Flock serials" privacy toggle, not this view).

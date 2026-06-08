@@ -145,6 +145,7 @@ typedef struct {
 typedef struct EspLink EspLink;
 typedef struct GpsLink GpsLink;
 typedef struct ReconNfc ReconNfc;
+typedef struct SigDb SigDb;
 
 typedef struct {
     Gui* gui;
@@ -166,6 +167,7 @@ typedef struct {
     EspLink* esp;
     GpsLink* gps;
     ReconNfc* nfc;
+    SigDb* sig_db; /**< SD-loaded extra signatures (NULL = built-ins only) */
 
     FuriMutex* mutex; /**< protects flock[] and gps_* snapshot */
     FlockEntry flock[RECON_FLOCK_MAX];
@@ -255,7 +257,8 @@ void recon_app_ble_add(
     uint8_t cat,
     uint16_t company,
     const uint8_t* mfg, /**< raw mfg-data bytes (Flock 0x09C8), NULL if none */
-    size_t mfg_len);
+    size_t mfg_len,
+    bool raven_gatt); /**< companion saw Raven-specific GATT services (0x3100-0x3500) */
 void recon_app_ble_end(ReconApp* app);
 
 /** WiFi security scan results (thread-safe; called from the ESP worker). */

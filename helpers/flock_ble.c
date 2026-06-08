@@ -89,22 +89,30 @@ bool flock_ble_extract_serial(
     return false;
 }
 
-FlockBleModel flock_ble_model(const char* serial, const char* name) {
-    // CONSERVATIVE BY DESIGN. The 0x09C8 serial (e.g. "TN7...") and the
-    // "Penguin-NNNN" / "FS Ext Battery" GAP name belong to the *shared* XUNTONG
-    // external-battery unit, which Flock co-deploys on BOTH the Falcon (ALPR)
-    // and the Raven (acoustic) on the same solar pole. As of this writing there
-    // is NO published, field-validated serial-prefix -> model mapping that
-    // separates a Raven from a Falcon via this battery advert (verified against
-    // ryanohoro's Falcon teardown and colonelpanichacks/flock-you, neither of
-    // which documents such a split). A wrong confident "AUDIO SURVEILLANCE"
-    // label is worse than a generic one, so we deliberately do NOT guess.
-    //
-    // NEEDS VALIDATION: if a serial-prefix -> model table is ever corroborated
-    // against known deployments, add the prefix checks HERE (return
-    // FlockBleModelFalcon / FlockBleModelRaven) and bump the on-screen label out
-    // of its "(?)" uncertainty marker. Until then everything that decodes as a
-    // Flock external battery stays FlockBleModelGeneric.
+FlockBleModel flock_ble_model_ex(const char* serial, const char* name, bool raven_gatt) {
+    // POSITIVE Raven tell. The Raven exposes acoustic-sensor-specific GATT
+    // services (0x3100-0x3500) that the companion firmware reports via the
+    // raven_gatt flag. Those UUIDs are Raven-SPECIFIC -- the Falcon and the bare
+    // external battery do not advertise them -- so a match is a confident,
+    // GATT-backed identification of an audio-surveillance unit, not a guess. We
+    // assert this regardless of serial/name (the shared battery serial is still
+    // ambiguous, but the GATT is not).
+    if(raven_gatt) {
+        return FlockBleModelRaven;
+    }
+
+    // CONSERVATIVE BY DESIGN for everything else. The 0x09C8 serial (e.g.
+    // "TN7...") and the "Penguin-NNNN" / "FS Ext Battery" GAP name belong to the
+    // *shared* XUNTONG external-battery unit, which Flock co-deploys on BOTH the
+    // Falcon (ALPR) and the Raven (acoustic) on the same solar pole. There is NO
+    // published, field-validated serial-prefix -> model mapping that separates a
+    // Raven from a Falcon via this battery advert (verified against ryanohoro's
+    // Falcon teardown and colonelpanichacks/flock-you), and -- critically --
+    // absence of the Raven GATT is NOT proof of Falcon (the GATT may simply not
+    // have been observed in this scan window). A wrong confident "FALCON" or
+    // "AUDIO SURVEILLANCE" label is worse than a generic one, so we deliberately
+    // do NOT guess Falcon here: everything that merely decodes as a Flock
+    // external battery stays FlockBleModelGeneric.
     (void)serial;
 
     if(name && (ci_prefix(name, "PENGUIN") || ci_prefix(name, "FS EXT"))) {
@@ -116,14 +124,19 @@ FlockBleModel flock_ble_model(const char* serial, const char* name) {
     return FlockBleModelUnknown;
 }
 
+FlockBleModel flock_ble_model(const char* serial, const char* name) {
+    // Thin wrapper for host tests / older callers that lack the GATT signal.
+    return flock_ble_model_ex(serial, name, false);
+}
+
 const char* flock_ble_model_str(FlockBleModel model) {
     switch(model) {
-    // The Raven/Falcon labels carry an explicit "(?)" uncertainty marker and are
-    // never emitted today (the mapping is unvalidated -- see flock_ble_model).
+    // Raven is GATT-backed and confident -> no "?". Falcon keeps its "?" because
+    // it is never asserted (no Falcon-specific tell -- see flock_ble_model_ex).
     case FlockBleModelFalcon:
         return "Flock Falcon? (ALPR)";
     case FlockBleModelRaven:
-        return "Flock Raven? (audio)";
+        return "Flock Raven (audio)";
     case FlockBleModelGeneric:
         return "Flock device (ext. battery)";
     case FlockBleModelUnknown:

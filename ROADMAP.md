@@ -1,7 +1,7 @@
 # FlipDeFlock Roadmap
 
 A living plan, ordered by rough priority rather than a schedule. Current release:
-v0.24. The principles at the bottom constrain everything above them.
+v0.25. The principles at the bottom constrain everything above them.
 
 For the full per-version history see [changelog.md](changelog.md).
 
@@ -21,21 +21,23 @@ For the full per-version history see [changelog.md](changelog.md).
 
 ## Next
 
-- [ ] **Raven vs Falcon split.** The `0x09C8` battery serial is shared across both
-  unit types, so the advert alone can't tell them apart. Use the Raven-specific
-  GATT service UUIDs (0x3100-0x3500) the companion firmware already sees to tag a
-  pole as audio (Raven) or ALPR (Falcon). This is the "is it listening or just
-  reading plates" capability the v0.22 serial decode couldn't finish.
 - [ ] **Discreet mode** for the BLE serial / WATCHSCORE display: haptic-only, no
   on-screen "AUDIO SURVEILLANCE HERE", so reading the screen in public isn't a
-  personal-safety exposure.
-- [ ] **Updatable signature database.** Load Flock/vendor OUIs and SSID/BLE
-  patterns from a JSON file on the SD card, merged over the built-ins, so new
-  signatures don't need a rebuild. Fail safe to the built-ins; load-only, no
-  network.
+  personal-safety exposure. (Now more relevant: v0.25 can positively label a
+  Raven as audio surveillance on-screen.)
+- [ ] **Ship a seed `signatures.json`.** v0.25 added the SD-card signature loader
+  (load-only, fail-safe, merged over the built-ins). Next: distribute a
+  community-maintained `signatures.json` of new OUIs/SSID patterns so users get
+  fresh signatures without waiting on a release — and let the BLE name patterns
+  become updatable too (today the loader covers OUIs + SSID substrings).
 - [ ] **CI: retry the ESP32 core install.** The firmware build's "Install ESP32
   core" step flaky-fails on the arduino-cli core download and currently needs a
   manual re-run. Wrap it in a retry so it self-heals.
+
+Shipped in v0.25 (now in [changelog.md](changelog.md)): the **Raven vs Falcon
+split** (positive Raven ID via its 0x3100-0x3500 GATT services; Falcon never
+asserted by elimination) and the **updatable signature database** (extra
+OUIs/SSID patterns from `signatures.json` on the SD card).
 
 ## Later
 

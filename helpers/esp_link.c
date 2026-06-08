@@ -121,12 +121,17 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         return;
     }
     if(strncmp(line, "BLE,", 4) == 0) {
-        // BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>]
-        char* f[7];
+        // BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1]
+        // Up to two trailing fields follow <name>: mfghex (pure hex, NO '=') and
+        // rv=1 (Raven GATT flag, contains '='). They can appear in either order
+        // and either may be absent (older firmware omits both). 8 slots hold the
+        // 6 base fields (BLE..name) plus both optional trailers, so neither
+        // trailer gets folded back into <name>.
+        char* f[8];
         int n = 0;
         char* p = line;
         f[n++] = p;
-        while(*p && n < 7) {
+        while(*p && n < 8) {
             if(*p == ',') {
                 *p = '\0';
                 f[n++] = p + 1;
@@ -136,18 +141,27 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         if(n < 5) return;
         uint8_t addr[6];
         if(strlen(f[1]) < 12 || !parse_mac_compact(f[1], addr)) return;
-        // Trailing field: raw mfg-data hex (Flock 0x09C8). Decode to bytes for
-        // the serial extractor. Older firmware omits it -> mfg NULL, len 0.
+        // Walk the trailing fields after <name> (f[6], f[7], ...). Each is
+        // either the raw mfg-data hex (Flock 0x09C8) -- decoded here for the
+        // serial extractor -- or the rv=1 Raven-GATT flag. Distinguish them by
+        // the presence of '=': rv=1 has one, mfghex (pure hex) never does.
         uint8_t mfg[32];
         size_t mfg_len = 0;
-        if(n >= 7) {
-            const char* h = f[6];
-            for(size_t i = 0; mfg_len < sizeof(mfg); i += 2) {
-                int hi = hexval(h[i]);
-                if(hi < 0) break;
-                int lo = hexval(h[i + 1]);
-                if(lo < 0) break;
-                mfg[mfg_len++] = (uint8_t)((hi << 4) | lo);
+        bool raven_gatt = false;
+        for(int fi = 6; fi < n; fi++) {
+            const char* t = f[fi];
+            if(strchr(t, '=')) {
+                // Keyed flag field. Today the only one is rv=1 (Raven GATT).
+                if(strcmp(t, "rv=1") == 0) raven_gatt = true;
+            } else if(mfg_len == 0) {
+                // Pure-hex mfg blob. Decode to bytes (only the first one wins).
+                for(size_t i = 0; mfg_len < sizeof(mfg); i += 2) {
+                    int hi = hexval(t[i]);
+                    if(hi < 0) break;
+                    int lo = hexval(t[i + 1]);
+                    if(lo < 0) break;
+                    mfg[mfg_len++] = (uint8_t)((hi << 4) | lo);
+                }
             }
         }
         recon_app_ble_add(
@@ -158,7 +172,8 @@ static void esp_parse_companion(EspLink* esp, char* line) {
             (uint8_t)atoi(f[3]),
             (uint16_t)atoi(f[4]),
             mfg_len ? mfg : NULL,
-            mfg_len);
+            mfg_len,
+            raven_gatt);
         return;
     }
     if(line[0] == 'W' && line[1] == ',') {

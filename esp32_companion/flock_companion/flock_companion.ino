@@ -29,6 +29,14 @@
  *       fp  : FNV-1a uint32 (8 lower-hex) of the probe's IE skeleton (B1) --
  *             a MAC-independent device-CLASS fingerprint; trailing field,
  *             older parsers ignore it. Only emitted for probe requests.
+ *   BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1]   BLE device
+ *       cat   : 0 unknown 1 Flock/Raven 2 AirTag 3 Tile 4 SmartTag 5 FMDN
+ *       mfghex: raw mfg-data hex (Flock 0x09C8 only) for serial decode; pure
+ *               hex, no '='. Trailing, older parsers ignore.
+ *       rv=1  : the device exposed a Raven-specific GATT service (0x3100-
+ *               0x3500) -> positive acoustic-sensor (Raven) identification.
+ *               Trailing, contains '=' so it's distinguishable from mfghex;
+ *               only emitted when matched, older parsers ignore.
  *
  * RX from Flipper (commands, newline-terminated):
  *   scan   start reporting        stop   pause reporting
@@ -392,10 +400,13 @@ static void wifi_security_scan() {
 // One-shot BLE scan for the anti-tracker / BLE-Flock feature. Stops WiFi to free
 // the radio, active-scans a few seconds, classifies each device, then restores
 // WiFi/Flock mode.
-//   BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>]
+//   BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1]
 //   cat: 0 unknown  1 Flock/Raven  2 AirTag/FindMy  3 Tile  4 SmartTag
 //   mfghex: raw manufacturer-specific data as hex (Flock 0x09C8 only), so the
 //   Flipper can decode the device serial; trailing field, older parsers ignore.
+//   rv=1: device exposed a Raven-specific GATT service (0x3100-0x3500) -> a
+//   positive Raven (acoustic sensor) ID. Emitted AFTER mfghex when both apply;
+//   contains '=' so the Flipper tells it apart from mfghex. Older parsers ignore.
 static void ble_ensure_init() {
     if(g_ble_inited) return;
     BLEDevice::init("");
@@ -423,6 +434,11 @@ static void ble_do_scan(int seconds) {
 
         int company = -1;
         int cat = 0;
+        // raven: set when this device exposes a Raven-specific GATT service
+        // (0x3100-0x3500). Tracked separately from cat because cat=1 also covers
+        // the shared battery / Penguin / OUI cases -- only the GATT match is a
+        // positive Raven (acoustic) ID, so we surface it as its own rv=1 field.
+        bool raven = false;
         if(d.haveManufacturerData()) {
             std::string md = d.getManufacturerData();
             if(md.length() >= 2) company = (uint8_t)md[0] | ((uint8_t)md[1] << 8);
@@ -440,8 +456,10 @@ static void ble_do_scan(int seconds) {
             std::string u = d.getServiceUUID().toString();
             if(u.find("00003100") != std::string::npos || u.find("00003200") != std::string::npos ||
                u.find("00003300") != std::string::npos || u.find("00003400") != std::string::npos ||
-               u.find("00003500") != std::string::npos)
+               u.find("00003500") != std::string::npos) {
                 cat = 1; // Raven custom GATT services
+                raven = true; // Raven-specific GATT -> positive acoustic-sensor ID
+            }
             else if(cat == 0 && (u.find("feed") != std::string::npos || u.find("feec") != std::string::npos))
                 cat = 3; // Tile
             else if(cat == 0 && u.find("fd5a") != std::string::npos)
@@ -482,6 +500,9 @@ static void ble_do_scan(int seconds) {
                 Serial.printf("%02x", (uint8_t)md[j]);
             }
         }
+        // Raven GATT flag, emitted LAST so it follows the optional mfghex field.
+        // The '=' lets the Flipper distinguish it from the pure-hex mfghex token.
+        if(raven) Serial.print(",rv=1");
         Serial.print('\n');
     }
     Serial.printf("BEND,%d\n", count);
