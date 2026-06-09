@@ -61,7 +61,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // Header / status bar. A non-zero deauth count is an attack indicator and
     // takes over the header (drops channel/count to make room for the alert).
     canvas_set_font(canvas, FontSecondary);
-    char hdr[42];
+    char hdr[48];
     if(deauths >= DEAUTH_FLOOD_MIN) {
         // Attribution: name the most-attacked BSSID + channel (mutex held here).
         int top = -1;
@@ -96,7 +96,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s RX:%lu  Hits:%zu",
+            "%s  rx %lu  hits %zu",
             connected ? "ESP" : "...",
             (unsigned long)lines,
             count);
@@ -104,11 +104,11 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s F:%lu H:%lu C:%u",
+            "%s ch%u  seen %lu  hits %lu",
             connected ? "ESP" : "...",
+            channel,
             (unsigned long)frames,
-            (unsigned long)hits,
-            channel);
+            (unsigned long)hits);
     }
     canvas_draw_str(canvas, 0, 9, hdr);
 

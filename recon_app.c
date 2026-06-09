@@ -295,6 +295,30 @@ void recon_app_wifi_add(
 
 void recon_app_wifi_end(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
+    // Evil-twin pass: the same SSID on >1 distinct BSSID is a duplicate (could be
+    // a legit mesh/extender -> "dup"); if those clones run *different* security
+    // that's a strong rogue/evil-twin signal -> "rogue". Computed here, at scan
+    // completion, rather than only in the WiFi Audit screen, so Net Guardian's
+    // WATCHSCORE actually sees evil-twins during its sweep too.
+    size_t n = app->wifi_count;
+    for(size_t i = 0; i < n; i++) {
+        app->wifi[i].dup = false;
+        app->wifi[i].rogue = false;
+    }
+    for(size_t i = 0; i < n; i++) {
+        if(app->wifi[i].ssid[0] == '\0') continue;
+        for(size_t j = i + 1; j < n; j++) {
+            if(strcmp(app->wifi[i].ssid, app->wifi[j].ssid) == 0 &&
+               memcmp(app->wifi[i].bssid, app->wifi[j].bssid, 6) != 0) {
+                app->wifi[i].dup = true;
+                app->wifi[j].dup = true;
+                if(app->wifi[i].authmode != app->wifi[j].authmode) {
+                    app->wifi[i].rogue = true;
+                    app->wifi[j].rogue = true;
+                }
+            }
+        }
+    }
     app->wifi_scanning = false;
     app->wifi_done = true;
     furi_mutex_release(app->mutex);
@@ -304,9 +328,13 @@ void recon_app_wifi_end(ReconApp* app) {
 
 // Fresh-signal windows used while snapshotting (kept here next to the call
 // site; the scoring model's own tunables live in helpers/watchscore.c).
-#define WATCH_FLOCK_FRESH_MS  60000
-#define WATCH_DEAUTH_FRESH_MS 30000
-#define WATCH_FLOCK_NEAR_M    120.0f
+#define WATCH_FLOCK_FRESH_MS   60000
+#define WATCH_DEAUTH_FRESH_MS  30000
+#define WATCH_FLOCK_NEAR_M     120.0f
+// A single deauth/disassoc frame is normal WiFi churn; only a *flood* is an
+// attack signal. Match the live Flock-view banner's threshold (DEAUTH_FLOOD_MIN)
+// so the fused score never alarms on one benign frame.
+#define WATCH_DEAUTH_FLOOD_MIN 5
 
 void recon_app_watchscore_tick(ReconApp* app) {
     WatchInputs in;
@@ -350,11 +378,18 @@ void recon_app_watchscore_tick(ReconApp* app) {
         if(mins > in.ble_follow_min) in.ble_follow_min = mins;
     }
 
-    // (3) An attributed deauth/disassoc flood active right now.
-    for(size_t i = 0; i < app->deauth_count; i++) {
-        if((now - app->deauth[i].last_tick) <= WATCH_DEAUTH_FRESH_MS) {
-            in.deauth_active = true;
-            break;
+    // (3) An attributed deauth/disassoc *flood* active right now. The companion
+    // emits a DA attribution line for even a single deauth/disassoc frame, and a
+    // lone frame is normal WiFi churn (roaming, idle timeout, an AP reboot) -- so
+    // requiring only a fresh DA target falsely raised WATCHFUL on benign traffic.
+    // Gate on the per-interval rate clearing the flood threshold (the same bar
+    // the live banner uses); the DA target then supplies recency + attribution.
+    if(app->esp_deauths >= WATCH_DEAUTH_FLOOD_MIN) {
+        for(size_t i = 0; i < app->deauth_count; i++) {
+            if((now - app->deauth[i].last_tick) <= WATCH_DEAUTH_FRESH_MS) {
+                in.deauth_active = true;
+                break;
+            }
         }
     }
 

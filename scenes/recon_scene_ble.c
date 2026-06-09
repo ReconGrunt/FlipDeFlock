@@ -79,7 +79,7 @@ static void ble_show_results(ReconApp* app) {
 
     submenu_reset(app->submenu);
     snprintf(
-        app->text_store, RECON_TEXT_STORE, "BLE:%u trk:%d flw:%d", (unsigned)n, track, follow);
+        app->text_store, RECON_TEXT_STORE, "BLE %u  trk %d  follow %d", (unsigned)n, track, follow);
     submenu_set_header(app->submenu, app->text_store);
     submenu_add_item(app->submenu, "Save Report", BLE_ITEM_SAVE, ble_submenu_cb, app);
 

@@ -66,28 +66,8 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
         }
         app->wifi[j + 1] = key;
     }
-    // Evil-twin heuristic: the same SSID advertised by more than one distinct
-    // BSSID (could be a legit mesh/extender -> "dup"); if those clones run
-    // *different* security (e.g. one open, one WPA2) that's a strong rogue/
-    // evil-twin signal -> "rogue".
-    for(size_t i = 0; i < n; i++) {
-        app->wifi[i].dup = false;
-        app->wifi[i].rogue = false;
-    }
-    for(size_t i = 0; i < n; i++) {
-        if(app->wifi[i].ssid[0] == '\0') continue;
-        for(size_t j = i + 1; j < n; j++) {
-            if(strcmp(app->wifi[i].ssid, app->wifi[j].ssid) == 0 &&
-               memcmp(app->wifi[i].bssid, app->wifi[j].bssid, 6) != 0) {
-                app->wifi[i].dup = true;
-                app->wifi[j].dup = true;
-                if(app->wifi[i].authmode != app->wifi[j].authmode) {
-                    app->wifi[i].rogue = true;
-                    app->wifi[j].rogue = true;
-                }
-            }
-        }
-    }
+    // dup/rogue (evil-twin) flags are computed once at scan completion in
+    // recon_app_wifi_end (so Net Guardian sees them too); just tally here.
     int crit = 0, weak = 0, twin = 0;
     for(size_t i = 0; i < n; i++) {
         WifiAp* a = &app->wifi[i];
@@ -103,7 +83,13 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
     Submenu* submenu = app->submenu;
     submenu_reset(submenu);
     snprintf(
-        app->text_store, RECON_TEXT_STORE, "WiFi: %u  %dC %dW %dT", (unsigned)n, crit, weak, twin);
+        app->text_store,
+        RECON_TEXT_STORE,
+        "%u AP  %dcrit %dweak %dtwin",
+        (unsigned)n,
+        crit,
+        weak,
+        twin);
     submenu_set_header(submenu, app->text_store);
     submenu_add_item(submenu, "Rescan", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
     submenu_add_item(submenu, "Save Report", WIFI_ITEM_SAVE, recon_scene_wifi_submenu_cb, app);

@@ -136,14 +136,16 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     }
 
     // --- live sweep + radio counters ----------------------------------------
+    // Uptime rides on the (fixed-width) sweep line so it can't collide with the
+    // seen/hits counters as those grow over a long desk session.
     char l1[28];
-    snprintf(l1, sizeof(l1), "watch:%s  ch%u", guardian_mode(phase), channel);
+    snprintf(l1, sizeof(l1), "scan %s  ch%u", guardian_mode(phase), channel);
     canvas_draw_str(canvas, 2, 26, l1);
+    canvas_draw_str_aligned(canvas, 126, 26, AlignRight, AlignBottom, up);
 
     char l2[28];
-    snprintf(l2, sizeof(l2), "F %lu  H %lu", (unsigned long)frames, (unsigned long)hits);
+    snprintf(l2, sizeof(l2), "seen %lu  hits %lu", (unsigned long)frames, (unsigned long)hits);
     canvas_draw_str(canvas, 2, 37, l2);
-    canvas_draw_str_aligned(canvas, 126, 37, AlignRight, AlignBottom, up);
 
     // --- breakdown / tagline ------------------------------------------------
     if(bd[0]) {

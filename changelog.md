@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.35
+- **Net Guardian false-positive fix (deauth).** A *single* deauth/disassoc frame —
+  normal Wi-Fi churn (client roaming, idle timeout, an AP reboot) — could raise the
+  fused score to WATCHFUL, because the companion emits an attribution line for even
+  one frame and the scorer didn't require a flood. The score now gates on the
+  per-interval deauth **rate ≥5** (the same threshold the live banner uses), so only
+  a genuine flood counts. ELEVATED still requires two independent radios.
+- **Evil-twin detection now actually works in Net Guardian.** The rogue/evil-twin
+  (same SSID, mismatched security) flag was only computed inside the WiFi Audit
+  *screen*, so Guardian never saw it. It's now computed at every scan's completion,
+  so Guardian's sweep factors it in. (It's capped below the alarm threshold on its
+  own, so this adds no false alarms.)
+- **On-screen labels reworked for readability.** The cryptic one-letter codes are
+  now mini-words that fit the screen: Flock/ALPR `F:339 H:0 C:6` → `ch6  seen 339
+  hits 0`; Net Guardian `watch:…`/`F`/`H` → `scan …`/`seen`/`hits`; BLE
+  `trk:9 flw:0` → `trk 9  follow 0`; WiFi `2C 1W 3T` → `2crit 1weak 3twin`. Same
+  data, just legible. (Screenshots in the README may still show the old shorthand.)
+
 ## v0.34
 - **New: Net Guardian — a leave-it-on-the-desk "personal net guardian."** A
   dedicated always-on monitor (top-menu "Net Guardian"). Before this, the fused

@@ -64,34 +64,31 @@ Built for the [Momentum firmware](https://github.com/Next-Flip/Momentum-Firmware
 
 ## On-screen legend
 
-What the compact numbers/letters on each scan screen mean.
+What the numbers/words on each scan screen mean. (Screenshots above may still
+show the older shorthand — the labels were reworked for readability in v0.35.)
 
-> ⚠️ **These on-screen labels are being reworked for clarity in an upcoming
-> version** — this legend will be updated to match. (The data is the same; only
-> the abbreviations are changing.)
-
-**Net Guardian** — e.g. `(-_-) CLEAR` · `watch:WiFi+BLE ch6` · `F 2258  H 0` · `0:00:07`
+**Net Guardian** — e.g. `(-_-) CLEAR` · `scan WiFi+BLE ch6` · `seen 2258  hits 0` · `0:00:07`
 - **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
-- **watch:** — radio(s) the rotating sweep is on right now: `WiFi+BLE` / `BLE` / `WiFi`
-- **chN** — Wi-Fi channel currently being sniffed
-- **F** — frames seen (*all* 802.11 traffic in the air; climbs fast — not detections)
-- **H** — hits (Flock/ALPR detections — the number that actually matters)
+- **scan** — radio(s) the rotating sweep is on right now: `WiFi+BLE` / `BLE` / `WiFi`
+- **ch** — Wi-Fi channel currently being sniffed
+- **seen** — frames seen (*all* 802.11 traffic in the air; climbs fast — not detections)
+- **hits** — Flock/ALPR detections (the number that actually matters)
 - **0:00:07** — guardian uptime; the bottom line is the live per-signal breakdown
 
-**Flock / ALPR Detect** — header `ESP  F:… H:… C:…`
+**Flock / ALPR Detect** — header `ESP ch6  seen 339  hits 0`
 - **ESP** (or `...`) — companion connected / still waiting
-- **F / H / C** — frames seen / Flock hits / current channel
+- **ch / seen / hits** — current channel / frames seen / Flock detections
 - **row tag** — confidence: `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only. `*` = marked for the report
 - **`!DEAUTH ch<n> <bssid>`** — a deauth/disassoc **flood** is active on that channel/AP
-- *(Marauder mode shows `RX:<n> Hits:<n>` instead — serial-line heartbeat + detection count)*
+- *(Marauder mode shows `rx <n>  hits <n>` instead — serial-line heartbeat + detection count)*
 
-**BLE / Tracker Scan** — header `BLE:33 trk:9 flw:0`
-- **BLE** — total BLE devices seen · **trk** — known trackers (AirTag/Tile/SmartTag/FindMy/Flock) · **flw** — trackers flagged **following you**
+**BLE / Tracker Scan** — header `BLE 33  trk 9  follow 0`
+- **BLE** — total BLE devices seen · **trk** — known trackers (AirTag/Tile/SmartTag/FindMy/Flock) · **follow** — trackers flagged **following you**
 - **row** — `<type> <name|MAC-tail> <rssi>dB`; type = `FLOCK` / `AirTag` / `Tile` / `Tag` / `FindMy` / `BLE`
 - **prefix** — `!` following (anti-stalking) · `*` tagged for the report
 
-**WiFi Audit** — header `WiFi: 10  2C 1W 3T`
-- **10** total APs · **C** critical · **W** weak · **T** evil-**t**win counts
+**WiFi Audit** — header `10 AP  2crit 1weak 3twin`
+- **AP** — total APs seen · **crit** — critical-grade · **weak** — weak-grade · **twin** — evil-twin/duplicate-SSID counts
 - **row grade** — `CRIT` / `WEAK` / `OK` / `STRONG` / `INFO`
 - **marker** — `!` rogue/evil-twin (same SSID, mismatched security) · `~` duplicate SSID (mesh?) · `*` tagged. A row shown as `[ABCDEF]` is a hidden SSID (last 3 BSSID bytes)
 
