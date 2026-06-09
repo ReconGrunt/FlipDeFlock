@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.38
+- **Net Guardian now shows two plain-English counters: `Flock` and `Attacks`.**
+  The watch face's lower-left number is labelled **`Flock`** (Flock/ALPR cameras
+  seen this session — it was `hits`), and a new **`Attacks`** counter sits beside
+  it: distinct APs caught in a deauth/disassoc **flood** this session. `Attacks`
+  reuses the scorer's flood bar (`WATCH_DEAUTH_FLOOD_MIN`), so a lone benign
+  disassoc — normal Wi-Fi churn — never counts. The rotating sweep's mode +
+  channel moved to the bottom status line, which still flips to the live
+  per-signal breakdown on an alert.
+
 ## v0.37
 - **"frames" instead of "seen", and a per-session reset.** The Flock/ALPR header
   now labels the 802.11 capture count **`frames`** (the standard term; the old `F`

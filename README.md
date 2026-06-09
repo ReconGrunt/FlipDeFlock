@@ -68,13 +68,13 @@ What the numbers/words on each scan screen mean. RSSI is shown as **signal bars*
 (taller = stronger) rather than a raw `-33dB` number — the selected/highlighted
 row still shows the exact dB.
 
-**Net Guardian** — e.g. `(-_-) CLEAR` · `scan WiFi+BLE ch6` · `hits 0` · `0:00:07`
+**Net Guardian** — e.g. `(-_-) CLEAR` · `Flock 0   Attacks 0` · `scan WiFi+BLE ch6` · `0:00:07`
 - **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
 - **threat meter** — the fused 0–100 surveillance score as a bar; fills as independent signals correlate
-- **scan** — radio(s) the rotating sweep is on right now: `WiFi+BLE` / `BLE` / `WiFi`
-- **ch** — Wi-Fi channel currently being sniffed
-- **hits** — Flock/ALPR detections (the number that actually matters)
-- **0:00:07** — guardian uptime; the bottom line is the live per-signal breakdown
+- **Flock** — Flock/ALPR detections this session (the camera count, was `hits`)
+- **Attacks** — distinct APs caught in a deauth/disassoc **flood** this session; a lone benign disassoc (normal Wi-Fi churn) doesn't count
+- **scan … ch** — radio(s) the rotating sweep is on right now (`WiFi+BLE` / `BLE` / `WiFi`) plus the Wi-Fi channel being sniffed. On an alert this bottom line becomes the live per-signal breakdown instead
+- **0:00:07** — guardian uptime (top-right)
 
 **Flock / ALPR Detect** — header `ESP ch6  frames 339  hits 0`
 - **ESP** (or `...`) — companion connected / still waiting

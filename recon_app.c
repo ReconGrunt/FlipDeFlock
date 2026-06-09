@@ -346,6 +346,19 @@ void recon_app_wifi_end(ReconApp* app) {
 // so the fused score never alarms on one benign frame.
 #define WATCH_DEAUTH_FLOOD_MIN 5
 
+size_t recon_app_attacks_detected(ReconApp* app) {
+    // Count distinct BSSIDs that crossed the deauth-flood bar this session. Using
+    // the same threshold as the scorer keeps the on-screen "Attacks" honest: a
+    // single benign disassoc (roaming, idle timeout, an AP reboot) never counts.
+    size_t n = 0;
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    for(size_t i = 0; i < app->deauth_count; i++) {
+        if(app->deauth[i].count >= WATCH_DEAUTH_FLOOD_MIN) n++;
+    }
+    furi_mutex_release(app->mutex);
+    return n;
+}
+
 void recon_app_watchscore_tick(ReconApp* app) {
     WatchInputs in;
     memset(&in, 0, sizeof(in));

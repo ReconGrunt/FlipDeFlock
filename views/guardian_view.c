@@ -98,7 +98,6 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     furi_mutex_release(app->mutex);
 
     uint8_t phase = app->guardian_phase;
-    bool wifi_only = (app->settings.backend != EspBackendCompanion);
 
     uint32_t secs = (furi_get_tick() - app->guardian_since) / 1000;
     char up[16];
@@ -145,23 +144,26 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     canvas_draw_str(canvas, 2, 42, "thr");
     ui_meter(canvas, 36, 35, 90, 8, score);
 
-    // --- footer: scan mode + channel + hits ---------------------------------
-    char foot[28];
-    snprintf(
-        foot,
-        sizeof(foot),
-        "%s  ch%u  hits %lu",
-        guardian_mode(phase),
-        channel,
-        (unsigned long)hits);
-    canvas_draw_str(canvas, 2, 52, foot);
+    // --- counters: Flock detections + deauth-flood attacks ------------------
+    // The two numbers the guardian is FOR. "Flock" = Flock/ALPR cameras seen this
+    // session (was "hits"); "Attacks" = distinct APs under a deauth flood (flood-
+    // gated, so a lone benign disassoc never shows). Fixed columns -> clean pair.
+    size_t attacks = recon_app_attacks_detected(app);
+    char lbl[20];
+    snprintf(lbl, sizeof(lbl), "Flock %lu", (unsigned long)hits);
+    canvas_draw_str(canvas, 2, 52, lbl);
+    snprintf(lbl, sizeof(lbl), "Attacks %u", (unsigned)attacks);
+    canvas_draw_str(canvas, 66, 52, lbl);
 
-    // --- breakdown / tagline ------------------------------------------------
+    // --- breakdown (alert) / live scan status (clear) -----------------------
+    // On an alert the per-signal breakdown explains WHY; when CLEAR the same row
+    // shows the rotating sweep (mode + channel) so you can see it's still live.
     if(bd[0]) {
         draw_wrapped(canvas, bd, 62);
-    } else if(st == WatchStateClear) {
-        canvas_draw_str(
-            canvas, 2, 62, wifi_only ? "all quiet (WiFi only)" : "all quiet. watching.");
+    } else {
+        char status[28];
+        snprintf(status, sizeof(status), "scan %s  ch%u", guardian_mode(phase), channel);
+        canvas_draw_str(canvas, 2, 62, status);
     }
 }
 
