@@ -4,39 +4,36 @@
 
 #include <string.h>
 
-#define BLE_ITEM_SAVE       0
-#define BLE_ITEM_BASE       10
+// Custom-event ids for the action rows and (offset) device rows. The list view
+// reports a raw row index; the scene maps action rows first, then device rows.
+#define BLE_ACTION_COUNT 1 // [0] = Save Report
+#define BLE_EV_SAVE      0
+#define BLE_EV_DEVICE    100 // + device index
+
 #define BLE_RESCAN_GAP_MS   4000
 #define BLE_SCAN_TIMEOUT_MS 12000
 
 static bool s_pending; // a blescan is in flight (awaiting BEND)
 static uint32_t s_mark; // tick of last state transition
 
-static const char* ble_cat_str(uint8_t cat) {
-    switch(cat) {
-    case BleCatFlock:
-        return "FLOCK";
-    case BleCatAirTag:
-        return "AirTag";
-    case BleCatTile:
-        return "Tile";
-    case BleCatSmartTag:
-        return "Tag";
-    case BleCatFindMyDevice:
-        return "FindMy";
-    default:
-        return "BLE";
-    }
-}
+// Action-row labels (static lifetime; the view keeps the pointers).
+static const char* const BLE_ACTIONS[] = {"Save Report"};
 
 static int ble_rank(const BleDevice* d) {
     // following > tracker-category > plain BLE
     return (d->following ? 2 : 0) + (d->cat != BleCatUnknown ? 1 : 0);
 }
 
-static void ble_submenu_cb(void* context, uint32_t index) {
+// The list view reports the raw selected row index; map it to a custom event.
+static void ble_view_ok_cb(void* context, int selected_index) {
     ReconApp* app = context;
-    view_dispatcher_send_custom_event(app->view_dispatcher, index);
+    uint32_t ev;
+    if(selected_index < BLE_ACTION_COUNT) {
+        ev = BLE_EV_SAVE; // [0] Save Report
+    } else {
+        ev = BLE_EV_DEVICE + (uint32_t)(selected_index - BLE_ACTION_COUNT);
+    }
+    view_dispatcher_send_custom_event(app->view_dispatcher, ev);
 }
 
 static void ble_trigger(ReconApp* app) {
@@ -49,14 +46,18 @@ static void ble_trigger(ReconApp* app) {
 }
 
 static void ble_show_scanning(ReconApp* app) {
-    submenu_reset(app->submenu);
-    submenu_set_header(app->submenu, "BLE / Tracker scan");
-    submenu_add_item(app->submenu, "Scanning (~6s)...", BLE_ITEM_SAVE, ble_submenu_cb, app);
+    ble_list_view_set_actions(app->ble_list_view, BLE_ACTIONS, BLE_ACTION_COUNT);
+    ble_list_view_set_right(app->ble_list_view, NULL);
+    ble_list_view_set_header(app->ble_list_view, "BLE / Tracker scan");
+    ble_list_view_set_status(app->ble_list_view, "Scanning (~6s)...");
+    ble_list_view_reset(app->ble_list_view);
+    ble_list_view_refresh(app->ble_list_view);
 }
 
 static void ble_show_results(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     size_t n = app->ble_count;
+    // Insertion sort in place: rank desc, then rssi desc.
     for(size_t i = 1; i < n; i++) {
         BleDevice key = app->ble[i];
         int kr = ble_rank(&key);
@@ -77,34 +78,18 @@ static void ble_show_results(ReconApp* app) {
     }
     furi_mutex_release(app->mutex);
 
-    submenu_reset(app->submenu);
     snprintf(
         app->text_store, RECON_TEXT_STORE, "BLE %u  trk %d  follow %d", (unsigned)n, track, follow);
-    submenu_set_header(app->submenu, app->text_store);
-    submenu_add_item(app->submenu, "Save Report", BLE_ITEM_SAVE, ble_submenu_cb, app);
 
-    for(size_t i = 0; i < n; i++) {
-        BleDevice* d = &app->ble[i];
-        char pfx[4];
-        snprintf(pfx, sizeof(pfx), "%s%s", d->marked ? "*" : "", d->following ? "!" : "");
-        char label[48];
-        if(d->name[0]) {
-            snprintf(
-                label, sizeof(label), "%s%s %s %ddB", pfx, ble_cat_str(d->cat), d->name, d->rssi);
-        } else {
-            snprintf(
-                label,
-                sizeof(label),
-                "%s%s %02X%02X%02X %ddB",
-                pfx,
-                ble_cat_str(d->cat),
-                d->addr[3],
-                d->addr[4],
-                d->addr[5],
-                d->rssi);
-        }
-        submenu_add_item(app->submenu, label, BLE_ITEM_BASE + i, ble_submenu_cb, app);
-    }
+    char right[14];
+    snprintf(right, sizeof(right), "n%u", (unsigned)n);
+
+    ble_list_view_set_actions(app->ble_list_view, BLE_ACTIONS, BLE_ACTION_COUNT);
+    ble_list_view_set_right(app->ble_list_view, right);
+    ble_list_view_set_header(app->ble_list_view, app->text_store);
+    ble_list_view_set_status(app->ble_list_view, NULL);
+    ble_list_view_reset(app->ble_list_view);
+    ble_list_view_refresh(app->ble_list_view);
 }
 
 static bool s_ble_blocked; // companion-only feature opened in Marauder mode
@@ -138,12 +123,14 @@ void recon_scene_ble_on_enter(void* context) {
     app->esp_connected = false;
     furi_mutex_release(app->mutex);
 
+    ble_list_view_set_ok_callback(app->ble_list_view, ble_view_ok_cb, app);
+
     app->esp = esp_link_alloc(app);
     esp_link_start(app->esp);
 
     ble_show_scanning(app);
     ble_trigger(app);
-    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewSubmenu);
+    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewBleList);
 }
 
 bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
@@ -167,18 +154,20 @@ bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
         } else if(!s_pending && now - s_mark > BLE_RESCAN_GAP_MS) {
             ble_trigger(app); // continuous monitoring -> "following" detection
         }
+        // Keep the live view ticking (counts, bars, following flag).
+        ble_list_view_refresh(app->ble_list_view);
         consumed = true;
     } else if(event.type == SceneManagerEventTypeCustom) {
         uint32_t id = event.event;
-        if(id == BLE_ITEM_SAVE) {
+        if(id == BLE_EV_SAVE) {
             char path[128] = {0};
             bool ok = recon_report_save_ble(app, path, sizeof(path));
             if(app->settings.sound) {
                 notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
             consumed = true;
-        } else if(id >= BLE_ITEM_BASE) {
-            int idx = (int)id - BLE_ITEM_BASE;
+        } else if(id >= BLE_EV_DEVICE) {
+            int idx = (int)id - BLE_EV_DEVICE;
             furi_mutex_acquire(app->mutex, FuriWaitForever);
             bool valid = idx >= 0 && idx < (int)app->ble_count;
             furi_mutex_release(app->mutex);
@@ -200,5 +189,4 @@ void recon_scene_ble_on_exit(void* context) {
         app->esp = NULL;
     }
     app->settings.backend = app->saved_backend;
-    submenu_reset(app->submenu);
 }

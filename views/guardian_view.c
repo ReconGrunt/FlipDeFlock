@@ -1,5 +1,6 @@
 #include "guardian_view.h"
 #include "../recon_app_i.h"
+#include "ui_widgets.h"
 
 #include <gui/elements.h>
 #include <string.h>
@@ -88,10 +89,10 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     // read torn.
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     bool connected = app->esp_connected;
-    uint32_t frames = app->esp_frames;
     uint32_t hits = app->esp_hits;
     uint8_t channel = app->esp_channel;
     WatchState st = (WatchState)app->watch.state;
+    int score = (int)app->watch.score; // threat meter pct (0..100)
     char bd[WATCHSCORE_BREAKDOWN_LEN];
     snprintf(bd, sizeof(bd), "%s", app->watch.breakdown);
     furi_mutex_release(app->mutex);
@@ -111,48 +112,56 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
 
     canvas_clear(canvas);
 
-    // --- top banner: face + state word (inverted when ELEVATED) -------------
-    char head[24];
-    snprintf(head, sizeof(head), "%s %s", guardian_face(st), guardian_word(st));
-    if(st == WatchStateElevated) {
-        canvas_set_color(canvas, ColorBlack);
-        canvas_draw_box(canvas, 0, 0, 128, 14);
-        canvas_set_color(canvas, ColorWhite);
-    } else {
-        canvas_set_color(canvas, ColorBlack);
-    }
-    canvas_set_font(canvas, FontPrimary);
-    canvas_draw_str(canvas, 2, 11, head);
-    canvas_set_color(canvas, ColorBlack);
-    canvas_draw_line(canvas, 0, 15, 128, 15);
-
-    canvas_set_font(canvas, FontSecondary);
+    // --- HUD title bar (inverted): "NET GUARDIAN" + uptime ------------------
+    // Leaves color=black, font=Secondary.
+    ui_title_bar(canvas, "NET GUARDIAN", up);
 
     if(!connected) {
+        canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 2, 30, "connecting ESP32...");
         canvas_draw_str(canvas, 2, 42, "hold BOOT, tap RESET");
-        canvas_draw_str_aligned(canvas, 126, 63, AlignRight, AlignBottom, up);
         return;
     }
 
-    // --- live sweep + radio counters ----------------------------------------
-    // Uptime rides on the (fixed-width) sweep line so it can't collide with the
-    // seen/hits counters as those grow over a long desk session.
-    char l1[28];
-    snprintf(l1, sizeof(l1), "scan %s  ch%u", guardian_mode(phase), channel);
-    canvas_draw_str(canvas, 2, 26, l1);
-    canvas_draw_str_aligned(canvas, 126, 26, AlignRight, AlignBottom, up);
+    // --- mascot + state word (the centerpiece) ------------------------------
+    // Face on its own bigger row; state word in FontPrimary beside it. When
+    // ELEVATED, the word gets a filled box (loud) but the mascot stays plain so
+    // it always reads.
+    canvas_set_font(canvas, FontPrimary);
+    canvas_set_color(canvas, ColorBlack);
+    canvas_draw_str(canvas, 2, 29, guardian_face(st));
 
-    char l2[28];
-    snprintf(l2, sizeof(l2), "seen %lu  hits %lu", (unsigned long)frames, (unsigned long)hits);
-    canvas_draw_str(canvas, 2, 37, l2);
+    if(st == WatchStateElevated) {
+        canvas_draw_box(canvas, 40, 18, 88, 13);
+        canvas_set_color(canvas, ColorWhite);
+        canvas_draw_str(canvas, 44, 28, guardian_word(st));
+        canvas_set_color(canvas, ColorBlack);
+    } else {
+        canvas_draw_str(canvas, 44, 28, guardian_word(st));
+    }
+
+    // --- THREAT meter -------------------------------------------------------
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_str(canvas, 2, 42, "thr");
+    ui_meter(canvas, 36, 35, 90, 8, score);
+
+    // --- footer: scan mode + channel + hits ---------------------------------
+    char foot[28];
+    snprintf(
+        foot,
+        sizeof(foot),
+        "%s  ch%u  hits %lu",
+        guardian_mode(phase),
+        channel,
+        (unsigned long)hits);
+    canvas_draw_str(canvas, 2, 52, foot);
 
     // --- breakdown / tagline ------------------------------------------------
     if(bd[0]) {
-        draw_wrapped(canvas, bd, 49);
+        draw_wrapped(canvas, bd, 62);
     } else if(st == WatchStateClear) {
         canvas_draw_str(
-            canvas, 2, 51, wifi_only ? "all quiet (WiFi only)" : "all quiet. watching.");
+            canvas, 2, 62, wifi_only ? "all quiet (WiFi only)" : "all quiet. watching.");
     }
 }
 

@@ -22,6 +22,8 @@
 #include "views/flock_map_view.h"
 #include "views/deflock_qr_view.h"
 #include "views/guardian_view.h"
+#include "views/ble_list_view.h"
+#include "views/wifi_list_view.h"
 
 #define RECON_TAG "ReconSurvey"
 
@@ -57,6 +59,8 @@ typedef enum {
     ReconViewFlockMap,
     ReconViewDeflockQr,
     ReconViewGuardian,
+    ReconViewBleList,
+    ReconViewWifiList,
 } ReconView;
 
 /** ESP32 link backend / parsing strategy. */
@@ -165,6 +169,8 @@ typedef struct {
     FlockMapView* flock_map_view;
     DeflockQrView* deflock_qr_view;
     GuardianView* guardian_view;
+    BleListView* ble_list_view;
+    WifiListView* wifi_list_view;
 
     ReconSettings settings;
 
