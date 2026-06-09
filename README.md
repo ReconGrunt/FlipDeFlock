@@ -70,18 +70,17 @@ bars, and a threat meter on the Guardian) — the *data* is the same, the layout
 newer. RSSI is now shown as **signal bars** (taller = stronger) rather than a raw
 `-33dB` number (the selected/highlighted row still shows the exact dB).
 
-**Net Guardian** — e.g. `(-_-) CLEAR` · `scan WiFi+BLE ch6` · `seen 2258  hits 0` · `0:00:07`
+**Net Guardian** — e.g. `(-_-) CLEAR` · `scan WiFi+BLE ch6` · `hits 0` · `0:00:07`
 - **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
 - **threat meter** — the fused 0–100 surveillance score as a bar; fills as independent signals correlate
 - **scan** — radio(s) the rotating sweep is on right now: `WiFi+BLE` / `BLE` / `WiFi`
 - **ch** — Wi-Fi channel currently being sniffed
-- **seen** — frames seen (*all* 802.11 traffic in the air; climbs fast — not detections)
 - **hits** — Flock/ALPR detections (the number that actually matters)
 - **0:00:07** — guardian uptime; the bottom line is the live per-signal breakdown
 
-**Flock / ALPR Detect** — header `ESP ch6  seen 339  hits 0`
+**Flock / ALPR Detect** — header `ESP ch6  frames 339  hits 0`
 - **ESP** (or `...`) — companion connected / still waiting
-- **ch / seen / hits** — current channel / frames seen / Flock detections
+- **ch / frames / hits** — current channel / 802.11 frames captured / Flock detections. `frames` and `hits` count *this session* (they reset to 0 each time you open the screen), not the ESP's lifetime totals
 - **row tag** — confidence: `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only. `*` = marked for the report
 - **`!DEAUTH ch<n> <bssid>`** — a deauth/disassoc **flood** is active on that channel/AP
 - *(Marauder mode shows `rx <n>  hits <n>` instead — serial-line heartbeat + detection count)*

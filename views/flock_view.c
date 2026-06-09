@@ -116,7 +116,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s ch%u  seen %lu  hits %lu",
+            "%s ch%u  frames %lu  hits %lu",
             connected ? "ESP" : "...",
             channel,
             (unsigned long)frames,

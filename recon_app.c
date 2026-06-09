@@ -88,8 +88,18 @@ void recon_app_set_esp_status(
     app->esp_connected = connected;
     // (0,0,0) is a keepalive/banner; don't clobber real counters with it.
     if(!(frames == 0 && hits == 0 && channel == 0)) {
-        app->esp_frames = frames;
-        app->esp_hits = hits;
+        // The companion sends lifetime totals. Rebase per session so the count
+        // restarts at 0 each scan. The first status line after a scene enter
+        // captures the base; a drop (ESP rebooted -> counter reset) re-bases too.
+        if(app->esp_rebase) {
+            app->esp_frames_base = frames;
+            app->esp_hits_base = hits;
+            app->esp_rebase = false;
+        }
+        if(frames < app->esp_frames_base) app->esp_frames_base = frames;
+        if(hits < app->esp_hits_base) app->esp_hits_base = hits;
+        app->esp_frames = frames - app->esp_frames_base;
+        app->esp_hits = hits - app->esp_hits_base;
         app->esp_channel = channel;
     }
     furi_mutex_release(app->mutex);

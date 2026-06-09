@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.37
+- **"frames" instead of "seen", and a per-session reset.** The Flock/ALPR header
+  now labels the 802.11 capture count **`frames`** (the standard term; the old `F`
+  was dropped earlier to avoid confusion with "Flock", and "seen" was non-standard).
+  The companion reports lifetime totals that only zero on an ESP reboot, so the
+  count used to climb forever across sessions — **`frames` and `hits` now rebase to
+  0 each time you open a scan screen** (Flock/ALPR and Net Guardian), showing the
+  current session. An ESP reboot mid-session re-bases cleanly (no underflow).
+
 ## v0.36
 - **UI overhaul — "Guardian HUD."** A consistent framed/tactical look across every
   scan screen, with the Guardian mascot kept and made the centerpiece:

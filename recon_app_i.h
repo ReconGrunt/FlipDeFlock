@@ -191,8 +191,14 @@ typedef struct {
     int gps_sats;
 
     bool esp_connected;
-    uint32_t esp_frames;
-    uint32_t esp_hits;
+    uint32_t esp_frames; /**< 802.11 frames this *session* (companion total minus base) */
+    uint32_t esp_hits; /**< Flock hits this session (companion total minus base) */
+    // The companion's frame/hit counters are lifetime totals (reset only on ESP
+    // reboot). We rebase them per scan session so the on-screen count starts at 0
+    // each time you open a scan screen instead of climbing forever.
+    uint32_t esp_frames_base;
+    uint32_t esp_hits_base;
+    bool esp_rebase; /**< next status line captures the per-session base */
     uint8_t esp_channel;
     uint32_t esp_lines; /**< RX line heartbeat (generic mode liveness) */
     uint32_t esp_deauths; /**< deauth/disassoc frames seen (attack indicator) */

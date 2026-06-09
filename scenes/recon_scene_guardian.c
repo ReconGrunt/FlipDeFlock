@@ -62,6 +62,7 @@ void recon_scene_guardian_on_enter(void* context) {
     app->esp_deauths = 0;
     app->esp_frames = 0;
     app->esp_hits = 0;
+    app->esp_rebase = true; // per-session rebase off the companion's lifetime total
     app->esp_connected = false;
     furi_mutex_release(app->mutex);
 
