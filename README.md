@@ -59,16 +59,14 @@ Built for the [Momentum firmware](https://github.com/Next-Flip/Momentum-Firmware
 | | |
 |:--:|:--:|
 | <img src="assets/screenshots/alpr.png" width="330" alt="Flock / ALPR Detect"><br>**Flock / ALPR Detect** | <img src="assets/screenshots/menu.png" width="330" alt="Main menu"><br>**Main menu** |
-| <img src="assets/screenshots/ble-scan.png" width="330" alt="BLE / Tracker scan"><br>**BLE / Tracker scan** | <img src="assets/screenshots/wifi-audit.png" width="330" alt="WiFi Audit"><br>**WiFi Audit** |
-| <img src="assets/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** (backup &amp; flash) | |
+| <img src="assets/screenshots/ble-scan.png" width="330" alt="BLE / Tracker scan"><br>**BLE / Tracker scan** | <img src="assets/screenshots/ble-scan-results.png" width="330" alt="BLE / Tracker results"><br>**BLE / Tracker results** |
+| <img src="assets/screenshots/wifi-audit.png" width="330" alt="WiFi Audit"><br>**WiFi Audit** | <img src="assets/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** (backup &amp; flash) |
 
 ## On-screen legend
 
-What the numbers/words on each scan screen mean. **The screenshots above predate
-the v0.36 "Guardian HUD" restyle** (inverted title bars, on-row signal-strength
-bars, and a threat meter on the Guardian) — the *data* is the same, the layout is
-newer. RSSI is now shown as **signal bars** (taller = stronger) rather than a raw
-`-33dB` number (the selected/highlighted row still shows the exact dB).
+What the numbers/words on each scan screen mean. RSSI is shown as **signal bars**
+(taller = stronger) rather than a raw `-33dB` number — the selected/highlighted
+row still shows the exact dB.
 
 **Net Guardian** — e.g. `(-_-) CLEAR` · `scan WiFi+BLE ch6` · `hits 0` · `0:00:07`
 - **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
