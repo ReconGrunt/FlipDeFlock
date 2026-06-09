@@ -61,6 +61,41 @@ Built for the [Momentum firmware](https://github.com/Next-Flip/Momentum-Firmware
 | <img src="assets/screenshots/menu.png" width="330" alt="Main menu"><br>**Main menu** | <img src="assets/screenshots/ble-scan.png" width="330" alt="BLE / Tracker scan"><br>**BLE / Tracker scan** |
 | <img src="assets/screenshots/wifi-audit.png" width="330" alt="WiFi Audit"><br>**WiFi Audit** | <img src="assets/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** (backup &amp; flash) |
 
+## On-screen legend
+
+What the compact numbers/letters on each scan screen mean.
+
+> ⚠️ **These on-screen labels are being reworked for clarity in an upcoming
+> version** — this legend will be updated to match. (The data is the same; only
+> the abbreviations are changing.)
+
+**Net Guardian** — e.g. `(-_-) CLEAR` · `watch:WiFi+BLE ch6` · `F 2258  H 0` · `0:00:07`
+- **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
+- **watch:** — radio(s) the rotating sweep is on right now: `WiFi+BLE` / `BLE` / `WiFi`
+- **chN** — Wi-Fi channel currently being sniffed
+- **F** — frames seen (*all* 802.11 traffic in the air; climbs fast — not detections)
+- **H** — hits (Flock/ALPR detections — the number that actually matters)
+- **0:00:07** — guardian uptime; the bottom line is the live per-signal breakdown
+
+**Flock / ALPR Detect** — header `ESP  F:… H:… C:…`
+- **ESP** (or `...`) — companion connected / still waiting
+- **F / H / C** — frames seen / Flock hits / current channel
+- **row tag** — confidence: `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only. `*` = marked for the report
+- **`!DEAUTH ch<n> <bssid>`** — a deauth/disassoc **flood** is active on that channel/AP
+- *(Marauder mode shows `RX:<n> Hits:<n>` instead — serial-line heartbeat + detection count)*
+
+**BLE / Tracker Scan** — header `BLE:33 trk:9 flw:0`
+- **BLE** — total BLE devices seen · **trk** — known trackers (AirTag/Tile/SmartTag/FindMy/Flock) · **flw** — trackers flagged **following you**
+- **row** — `<type> <name|MAC-tail> <rssi>dB`; type = `FLOCK` / `AirTag` / `Tile` / `Tag` / `FindMy` / `BLE`
+- **prefix** — `!` following (anti-stalking) · `*` tagged for the report
+
+**WiFi Audit** — header `WiFi: 10  2C 1W 3T`
+- **10** total APs · **C** critical · **W** weak · **T** evil-**t**win counts
+- **row grade** — `CRIT` / `WEAK` / `OK` / `STRONG` / `INFO`
+- **marker** — `!` rogue/evil-twin (same SSID, mismatched security) · `~` duplicate SSID (mesh?) · `*` tagged. A row shown as `[ABCDEF]` is a hidden SSID (last 3 BSSID bytes)
+
+**Everywhere** — `-33dB` is signal strength (RSSI); closer to 0 = physically closer.
+
 ## Status — a work in progress
 
 FlipDeFlock is actively developed, not a finished product. It's already useful in
