@@ -265,6 +265,13 @@ void recon_app_set_deauths(ReconApp* app, uint32_t deauths);
 /** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
 void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);
 
+/**
+ * Distinct APs hit by a deauth/disassoc *flood* this session (thread-safe).
+ * Uses the same flood bar as the WATCHSCORE so a lone benign disassoc -- normal
+ * Wi-Fi churn -- never counts as an attack. Drives the Net Guardian "Attacks".
+ */
+size_t recon_app_attacks_detected(ReconApp* app);
+
 /** BLE scan results (thread-safe; called from the ESP worker). */
 void recon_app_ble_begin(ReconApp* app);
 void recon_app_ble_add(
