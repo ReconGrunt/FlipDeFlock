@@ -5,15 +5,23 @@
 
 #include <string.h>
 
-#define WIFI_ITEM_RESCAN     0
-#define WIFI_ITEM_SAVE       1
-#define WIFI_ITEM_AP_BASE    10
+// Custom-event ids for the action rows and (offset) AP rows. The list view
+// reports a raw row index; the scene maps action rows first, then AP rows.
+#define WIFI_ACTION_COUNT 2 // [0] = Rescan, [1] = Save Report
+#define WIFI_EV_RESCAN    0
+#define WIFI_EV_SAVE      1
+#define WIFI_EV_AP        100 // + AP index
+
 #define WIFI_SCAN_TIMEOUT_MS 9000
 
 // GUI-thread-only scene state (one WiFi-audit scene at a time).
 static int s_state; // 0 = scanning, 1 = results, 2 = timeout
 static uint32_t s_start;
 static bool s_blocked; // companion-only feature opened in Marauder mode
+
+// Action-row labels (static lifetime; the view keeps the pointers).
+static const char* const WIFI_ACTIONS_SCAN[] = {"Rescan"};
+static const char* const WIFI_ACTIONS_RESULTS[] = {"Rescan", "Save Report"};
 
 static void recon_scene_wifi_show_guard(ReconApp* app) {
     widget_reset(app->widget);
@@ -26,29 +34,41 @@ static void recon_scene_wifi_show_guard(ReconApp* app) {
         "WiFi Audit needs the\nFlipDeFlock companion FW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
 }
 
-static void recon_scene_wifi_submenu_cb(void* context, uint32_t index) {
+// The list view reports the raw selected row index; map it to a custom event.
+static void wifi_view_ok_cb(void* context, int selected_index) {
     ReconApp* app = context;
-    view_dispatcher_send_custom_event(app->view_dispatcher, index);
+    uint32_t ev;
+    if(selected_index == WIFI_EV_RESCAN) {
+        ev = WIFI_EV_RESCAN; // [0] Rescan
+    } else if(selected_index == WIFI_EV_SAVE) {
+        ev = WIFI_EV_SAVE; // [1] Save Report (only present in results state)
+    } else {
+        ev = WIFI_EV_AP + (uint32_t)(selected_index - WIFI_ACTION_COUNT);
+    }
+    view_dispatcher_send_custom_event(app->view_dispatcher, ev);
 }
 
 static void recon_scene_wifi_show_scanning(ReconApp* app) {
-    Submenu* submenu = app->submenu;
-    submenu_reset(submenu);
-    submenu_set_header(submenu, "WiFi Audit");
-    submenu_add_item(
-        submenu, "Scanning... please wait", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
+    // One action row (Rescan); pressing OK during the scan retriggers (today the
+    // lone "Scanning" submenu item carried WIFI_ITEM_RESCAN).
+    wifi_list_view_set_actions(app->wifi_list_view, WIFI_ACTIONS_SCAN, 1);
+    wifi_list_view_set_right(app->wifi_list_view, NULL);
+    wifi_list_view_set_header(app->wifi_list_view, "WiFi Audit");
+    wifi_list_view_set_status(app->wifi_list_view, "Scanning... please wait");
+    wifi_list_view_reset(app->wifi_list_view);
+    wifi_list_view_refresh(app->wifi_list_view);
 }
 
 static void recon_scene_wifi_show_timeout(ReconApp* app) {
-    Submenu* submenu = app->submenu;
-    submenu_reset(submenu);
-    submenu_set_header(submenu, "WiFi Audit - no data");
-    submenu_add_item(submenu, "Rescan", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
-    submenu_add_item(
-        submenu, "(needs companion FW)", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
+    wifi_list_view_set_actions(app->wifi_list_view, WIFI_ACTIONS_SCAN, 1); // just Rescan
+    wifi_list_view_set_right(app->wifi_list_view, NULL);
+    wifi_list_view_set_header(app->wifi_list_view, "WiFi Audit - no data");
+    wifi_list_view_set_status(app->wifi_list_view, "no data (needs companion FW)");
+    wifi_list_view_reset(app->wifi_list_view);
+    wifi_list_view_refresh(app->wifi_list_view);
 }
 
-/** Sort the AP list worst-first (by grade, then signal) and build the menu. */
+/** Sort the AP list worst-first (by grade, then signal) and push to the view. */
 static void recon_scene_wifi_show_results(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     size_t n = app->wifi_count;
@@ -80,8 +100,6 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
     }
     furi_mutex_release(app->mutex);
 
-    Submenu* submenu = app->submenu;
-    submenu_reset(submenu);
     snprintf(
         app->text_store,
         RECON_TEXT_STORE,
@@ -90,32 +108,16 @@ static void recon_scene_wifi_show_results(ReconApp* app) {
         crit,
         weak,
         twin);
-    submenu_set_header(submenu, app->text_store);
-    submenu_add_item(submenu, "Rescan", WIFI_ITEM_RESCAN, recon_scene_wifi_submenu_cb, app);
-    submenu_add_item(submenu, "Save Report", WIFI_ITEM_SAVE, recon_scene_wifi_submenu_cb, app);
 
-    for(size_t i = 0; i < n; i++) {
-        WifiAp* a = &app->wifi[i];
-        WifiGrade g = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, NULL);
-        char tw[4];
-        snprintf(
-            tw, sizeof(tw), "%s%s", a->marked ? "*" : "", a->rogue ? "!" : (a->dup ? "~" : ""));
-        char label[48];
-        if(a->ssid[0]) {
-            snprintf(label, sizeof(label), "%s%s %s", wifi_grade_str(g), tw, a->ssid);
-        } else {
-            snprintf(
-                label,
-                sizeof(label),
-                "%s%s [%02X%02X%02X]",
-                wifi_grade_str(g),
-                tw,
-                a->bssid[3],
-                a->bssid[4],
-                a->bssid[5]);
-        }
-        submenu_add_item(submenu, label, WIFI_ITEM_AP_BASE + i, recon_scene_wifi_submenu_cb, app);
-    }
+    char right[14];
+    snprintf(right, sizeof(right), "%uAP", (unsigned)n);
+
+    wifi_list_view_set_actions(app->wifi_list_view, WIFI_ACTIONS_RESULTS, WIFI_ACTION_COUNT);
+    wifi_list_view_set_right(app->wifi_list_view, right);
+    wifi_list_view_set_header(app->wifi_list_view, app->text_store);
+    wifi_list_view_set_status(app->wifi_list_view, NULL);
+    wifi_list_view_reset(app->wifi_list_view);
+    wifi_list_view_refresh(app->wifi_list_view);
 }
 
 static void recon_scene_wifi_trigger(ReconApp* app) {
@@ -149,11 +151,13 @@ void recon_scene_wifi_on_enter(void* context) {
     app->esp_connected = false;
     furi_mutex_release(app->mutex);
 
+    wifi_list_view_set_ok_callback(app->wifi_list_view, wifi_view_ok_cb, app);
+
     app->esp = esp_link_alloc(app);
     esp_link_start(app->esp);
 
     recon_scene_wifi_trigger(app);
-    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewSubmenu);
+    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWifiList);
 }
 
 bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
@@ -175,21 +179,23 @@ bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
                 s_state = 2;
             }
         }
+        // Keep the live view ticking (bars, selection redraw).
+        wifi_list_view_refresh(app->wifi_list_view);
         consumed = true;
     } else if(event.type == SceneManagerEventTypeCustom) {
         uint32_t id = event.event;
-        if(id == WIFI_ITEM_RESCAN) {
+        if(id == WIFI_EV_RESCAN) {
             recon_scene_wifi_trigger(app);
             consumed = true;
-        } else if(id == WIFI_ITEM_SAVE) {
+        } else if(id == WIFI_EV_SAVE) {
             char path[128] = {0};
             bool ok = recon_report_save_wifi(app, path, sizeof(path));
             if(app->settings.sound) {
                 notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
             consumed = true;
-        } else if(id >= WIFI_ITEM_AP_BASE) {
-            int idx = (int)id - WIFI_ITEM_AP_BASE;
+        } else if(id >= WIFI_EV_AP) {
+            int idx = (int)id - WIFI_EV_AP;
             furi_mutex_acquire(app->mutex, FuriWaitForever);
             bool valid = idx >= 0 && idx < (int)app->wifi_count;
             furi_mutex_release(app->mutex);
@@ -211,5 +217,4 @@ void recon_scene_wifi_on_exit(void* context) {
         app->esp = NULL;
     }
     app->settings.backend = app->saved_backend; // restore Flock backend choice
-    submenu_reset(app->submenu);
 }

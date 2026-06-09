@@ -1,11 +1,12 @@
 #include "flock_view.h"
 #include "../recon_app_i.h"
+#include "ui_widgets.h"
 
 #include <gui/elements.h>
 
 #define ROW_H            11
-#define LIST_TOP         14
-#define VISIBLE_ROWS     4
+#define LIST_TOP         27
+#define VISIBLE_ROWS     3
 // Deauth/disassoc frames per ~1s interval needed to call it a flood. Normal
 // roaming/idle churn is 1-2/s; a real flood is many. Below this we don't alert
 // (avoids false positives on benign disassoc churn).
@@ -60,7 +61,18 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
 
     // Header / status bar. A non-zero deauth count is an attack indicator and
     // takes over the header (drops channel/count to make room for the alert).
-    canvas_set_font(canvas, FontSecondary);
+    // Compact right-aligned status for the inverted title bar.
+    char right[12];
+    if(deauths >= DEAUTH_FLOOD_MIN) {
+        snprintf(right, sizeof(right), "!DEAUTH");
+    } else if(generic) {
+        snprintf(right, sizeof(right), "rx %lu", (unsigned long)lines);
+    } else {
+        snprintf(right, sizeof(right), "ch%u h%lu", channel, (unsigned long)hits);
+    }
+    ui_title_bar(canvas, "FLOCK / ALPR", right); // leaves color=black, font=Secondary
+
+    // Fuller status sub-line under the bar (nothing from the old header lost).
     char hdr[48];
     if(deauths >= DEAUTH_FLOOD_MIN) {
         // Attribution: name the most-attacked BSSID + channel (mutex held here).
@@ -110,7 +122,8 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             (unsigned long)frames,
             (unsigned long)hits);
     }
-    canvas_draw_str(canvas, 0, 9, hdr);
+    canvas_set_font(canvas, FontSecondary);
+    canvas_draw_str(canvas, 0, 22, hdr);
 
     char gps_str[12];
     if(app->settings.gps_enabled) {
@@ -119,16 +132,16 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         } else {
             snprintf(gps_str, sizeof(gps_str), "G:-");
         }
-        canvas_draw_str_aligned(canvas, 128, 9, AlignRight, AlignBottom, gps_str);
+        canvas_draw_str_aligned(canvas, 128, 22, AlignRight, AlignBottom, gps_str);
     }
-    canvas_draw_line(canvas, 0, 11, 128, 11);
+    canvas_draw_line(canvas, 0, 24, 128, 24);
 
     if(count == 0) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str_aligned(
             canvas,
             64,
-            34,
+            44,
             AlignCenter,
             AlignCenter,
             connected ? "Scanning for ALPR..." : "Connect ESP32...");
@@ -178,13 +191,24 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 2, y + 8, line);
 
-        char meta[18];
-        if(e->marked) {
-            snprintf(meta, sizeof(meta), "*%ddB", e->rssi);
+        // Right edge: RSSI as signal bars (replaces the raw "-33dB"). The bars
+        // helper hardcodes ColorBlack, so on the inverted (selected) row it
+        // would be invisible -> show the exact dB as white text there instead.
+        if(sel) {
+            char meta[18];
+            if(e->marked) {
+                snprintf(meta, sizeof(meta), "*%ddB", e->rssi);
+            } else {
+                snprintf(meta, sizeof(meta), "%ddB", e->rssi);
+            }
+            canvas_draw_str_aligned(canvas, 126, y + 8, AlignRight, AlignBottom, meta);
         } else {
-            snprintf(meta, sizeof(meta), "%ddB", e->rssi);
+            if(e->marked) {
+                // marked indicator just left of the bars
+                canvas_draw_str(canvas, 96, y + 8, "*");
+            }
+            ui_signal_bars(canvas, 104, y - 1, e->rssi); // cell ~104..114, baseline y+7
         }
-        canvas_draw_str_aligned(canvas, 126, y + 8, AlignRight, AlignBottom, meta);
     }
     canvas_set_color(canvas, ColorBlack);
 

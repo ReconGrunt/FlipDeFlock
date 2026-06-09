@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.36
+- **UI overhaul — "Guardian HUD."** A consistent framed/tactical look across every
+  scan screen, with the Guardian mascot kept and made the centerpiece:
+  - **Net Guardian:** an inverted "NET GUARDIAN" title bar with a live uptime, the
+    mascot face front-and-centre with the state word beside it (it goes loud/inverted
+    on ELEVATED), a live **THREAT meter** driven by the fused score, and a clean
+    `mode · channel · hits` footer over the per-signal breakdown.
+  - **Flock/ALPR, BLE, WiFi:** inverted title bars and **signal-strength bars** on
+    every row instead of raw `-33dB` text. BLE and WiFi were converted from plain
+    menus to custom HUD list views to match (Save/Rescan are now selectable action
+    rows at the top of the list); all scan/rescan/save/detail navigation is unchanged.
+  - New shared `ui_widgets` (title bar / signal bars / meter) so the screens share
+    one visual language.
+
 ## v0.35
 - **Net Guardian false-positive fix (deauth).** A *single* deauth/disassoc frame —
   normal Wi-Fi churn (client roaming, idle timeout, an AP reboot) — could raise the

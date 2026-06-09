@@ -64,11 +64,15 @@ Built for the [Momentum firmware](https://github.com/Next-Flip/Momentum-Firmware
 
 ## On-screen legend
 
-What the numbers/words on each scan screen mean. (Screenshots above may still
-show the older shorthand — the labels were reworked for readability in v0.35.)
+What the numbers/words on each scan screen mean. **The screenshots above predate
+the v0.36 "Guardian HUD" restyle** (inverted title bars, on-row signal-strength
+bars, and a threat meter on the Guardian) — the *data* is the same, the layout is
+newer. RSSI is now shown as **signal bars** (taller = stronger) rather than a raw
+`-33dB` number (the selected/highlighted row still shows the exact dB).
 
 **Net Guardian** — e.g. `(-_-) CLEAR` · `scan WiFi+BLE ch6` · `seen 2258  hits 0` · `0:00:07`
 - **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
+- **threat meter** — the fused 0–100 surveillance score as a bar; fills as independent signals correlate
 - **scan** — radio(s) the rotating sweep is on right now: `WiFi+BLE` / `BLE` / `WiFi`
 - **ch** — Wi-Fi channel currently being sniffed
 - **seen** — frames seen (*all* 802.11 traffic in the air; climbs fast — not detections)
