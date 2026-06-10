@@ -15,5 +15,8 @@ View* guardian_view_get_view(GuardianView* gv);
 /** Set the owning ReconApp pointer (read for live data inside the draw). */
 void guardian_view_set_app(GuardianView* gv, void* app);
 
+/** Called on a short OK press (used to open the Suspicious-devices list). */
+void guardian_view_set_ok_callback(GuardianView* gv, void (*cb)(void*), void* ctx);
+
 /** Request a redraw (call from a GUI-thread tick; never hold app->mutex). */
 void guardian_view_refresh(GuardianView* gv);

@@ -24,6 +24,7 @@
 #include "views/guardian_view.h"
 #include "views/ble_list_view.h"
 #include "views/wifi_list_view.h"
+#include "views/locator_view.h"
 
 #define RECON_TAG "ReconSurvey"
 
@@ -62,6 +63,7 @@ typedef enum {
     ReconViewGuardian,
     ReconViewBleList,
     ReconViewWifiList,
+    ReconViewLocator,
 } ReconView;
 
 /** ESP32 link backend / parsing strategy. */
@@ -173,6 +175,7 @@ typedef struct {
     GuardianView* guardian_view;
     BleListView* ble_list_view;
     WifiListView* wifi_list_view;
+    LocatorView* locator_view;
 
     ReconSettings settings;
 
@@ -232,6 +235,15 @@ typedef struct {
     uint32_t guardian_since; /**< tick the Net Guardian session started (uptime) */
     uint8_t guardian_phase; /**< current rotating-sweep phase (0=flockcombo,1=ble,2=wifi) */
 
+    // Locator: hunt down one marked device by live signal strength (hot/cold).
+    uint8_t locate_mac[6]; /**< target MAC/BSSID/BLE addr */
+    uint8_t locate_kind; /**< 'w' Wi-Fi / 'b' BLE (selects the companion radio) */
+    uint8_t locate_ch; /**< Wi-Fi channel to lock to (0 = hop / BLE) */
+    char locate_label[28]; /**< human label for the target (SSID/name/type) */
+    int8_t locate_rssi; /**< latest live RSSI from the companion LOC line */
+    uint32_t locate_tick; /**< furi tick of that reading (0 = none yet) */
+    bool locate_have; /**< a reading has arrived this session */
+
     // ESP32 firmware flasher
     uint8_t fw_op; /**< 0 = backup, 1 = flash */
     char fw_path[256]; /**< bin to flash, or backup output path */
@@ -286,6 +298,17 @@ void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value);
 
 /** Fresh Flipper Zeros advertising nearby this session (thread-safe). Net Guardian "Flip". */
 size_t recon_app_flipper_count(ReconApp* app);
+
+/**
+ * Opt-in "anomaly": an unnamed, unidentified (no mfg id / no recognized category),
+ * strong, repeatedly-seen BLE device -- the closest passive proxy for "an unknown
+ * device is sitting right on you." Shared by the scorer and the Guardian sus-list
+ * so they agree. `now` is furi_get_tick(); caller holds app->mutex.
+ */
+bool recon_ble_is_anomaly(const BleDevice* e, uint32_t now);
+
+/** Store the latest Locator target RSSI from a companion LOC line (thread-safe). */
+void recon_app_set_locate_rssi(ReconApp* app, int8_t rssi);
 
 /** BLE scan results (thread-safe; called from the ESP worker). */
 void recon_app_ble_begin(ReconApp* app);

@@ -28,6 +28,13 @@ static const struct {
 static bool s_blocked; // companion-only feature opened in Marauder mode
 static uint32_t s_phase_mark; // tick of the last phase switch
 
+#define GUARDIAN_EV_SUS 100 // short-OK -> open the Suspicious list
+
+static void recon_scene_guardian_ok_cb(void* ctx) {
+    ReconApp* app = ctx;
+    view_dispatcher_send_custom_event(app->view_dispatcher, GUARDIAN_EV_SUS);
+}
+
 static void guardian_show_guard(ReconApp* app) {
     widget_reset(app->widget);
     widget_add_text_scroll_element(
@@ -83,12 +90,18 @@ void recon_scene_guardian_on_enter(void* context) {
         gps_link_start(app->gps);
     }
 
+    guardian_view_set_ok_callback(app->guardian_view, recon_scene_guardian_ok_cb, app);
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewGuardian);
 }
 
 bool recon_scene_guardian_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     if(s_blocked) return false; // Marauder guard screen: let Back exit
+
+    if(event.type == SceneManagerEventTypeCustom && event.event == GUARDIAN_EV_SUS) {
+        scene_manager_next_scene(app->scene_manager, ReconSceneGuardianSus);
+        return true;
+    }
 
     if(event.type == SceneManagerEventTypeTick) {
         // Advance the rotating sweep when the current phase's dwell elapses.

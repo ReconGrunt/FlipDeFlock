@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.41
+- **Locator: hunt a marked device by live signal strength.** A new top-menu
+  **Locator** lists every device you've **marked** (the report star/tag on a Flock,
+  BLE, or WiFi detection is now also the Locator pool — one mark, both uses) and
+  opens a homing HUD: a hot/cold RSSI meter that climbs as you physically get
+  closer, the live dBm, **peak-hold**, a **warmer/colder** trend, and an
+  "out of range" state when the target goes quiet. Works **without GPS** (a fix
+  only adds a "strongest here" note). No compass arrow — direction-finding a
+  transmitter needs a directional antenna; you close in by walking.
+- **Net Guardian → OK → Suspicious list.** The Guardian now shows *which* devices
+  tripped it — BLE **Flippers**, opt-in **anomaly** (unknown) devices, and WiFi
+  **rogue / evil-twin** APs — in a list. Selecting one marks it (so it joins the
+  report + Locator pool) and jumps straight into the Locator on it. Deauth/attack
+  *sources* are omitted: attackers spoof their MAC, so they aren't reliably
+  locatable; the list is the markable, locatable subset.
+- **Companion firmware:** new `locate <w|b> <mac> [ch]` command streams a
+  `LOC,<rssi>` line for the chosen target (Wi-Fi: matched in promiscuous frames,
+  channel-locked; BLE: matched in a repeating scan). Additive — older app builds
+  ignore `LOC`, older firmware never sends it. **Reflash required** for the homing.
+- Refactored the "anomaly" test into a shared `recon_ble_is_anomaly()` so the
+  scorer and the Guardian sus-list flag exactly the same devices.
+
 ## v0.40
 - **New app icon.** Swapped the abstract circle-slash for a **camera lens /
   aperture** — the optic that watches you — so the menu icon actually reflects what

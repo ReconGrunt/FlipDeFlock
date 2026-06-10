@@ -418,6 +418,23 @@ size_t recon_app_flipper_count(ReconApp* app) {
     return n;
 }
 
+bool recon_ble_is_anomaly(const BleDevice* e, uint32_t now) {
+    // Unnamed + no manufacturer id + no recognized category + strong + repeatedly
+    // seen + fresh. Shared by the scorer and the Guardian sus-list so they agree.
+    return e->cat == BleCatUnknown && e->name[0] == '\0' && e->company == 0xFFFF &&
+           e->rssi >= WATCH_ANOMALY_RSSI_MIN && e->count >= WATCH_ANOMALY_MIN_SEEN &&
+           (now - e->last_tick) <= WATCH_BLE_FRESH_MS;
+}
+
+void recon_app_set_locate_rssi(ReconApp* app, int8_t rssi) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->locate_rssi = rssi;
+    app->locate_tick = furi_get_tick();
+    app->locate_have = true;
+    app->esp_connected = true;
+    furi_mutex_release(app->mutex);
+}
+
 void recon_app_watchscore_tick(ReconApp* app) {
     WatchInputs in;
     memset(&in, 0, sizeof(in));
@@ -508,10 +525,7 @@ void recon_app_watchscore_tick(ReconApp* app) {
     // won't identify itself." Off by default; deliberately strict to limit FPs.
     if(app->settings.anomaly_flag) {
         for(size_t i = 0; i < app->ble_count; i++) {
-            const BleDevice* e = &app->ble[i];
-            if(e->cat == BleCatUnknown && e->name[0] == '\0' && e->company == 0xFFFF &&
-               e->rssi >= WATCH_ANOMALY_RSSI_MIN && e->count >= WATCH_ANOMALY_MIN_SEEN &&
-               (now - e->last_tick) <= WATCH_BLE_FRESH_MS) {
+            if(recon_ble_is_anomaly(&app->ble[i], now)) {
                 in.anomaly = true;
                 break;
             }
@@ -699,6 +713,8 @@ static ReconApp* recon_app_alloc(void) {
     ble_list_view_set_app(app->ble_list_view, app);
     app->wifi_list_view = wifi_list_view_alloc();
     wifi_list_view_set_app(app->wifi_list_view, app);
+    app->locator_view = locator_view_alloc();
+    locator_view_set_app(app->locator_view, app);
 
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewSubmenu, submenu_get_view(app->submenu));
@@ -720,6 +736,8 @@ static ReconApp* recon_app_alloc(void) {
         app->view_dispatcher, ReconViewBleList, ble_list_view_get_view(app->ble_list_view));
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewWifiList, wifi_list_view_get_view(app->wifi_list_view));
+    view_dispatcher_add_view(
+        app->view_dispatcher, ReconViewLocator, locator_view_get_view(app->locator_view));
 
     view_dispatcher_attach_to_gui(app->view_dispatcher, app->gui, ViewDispatcherTypeFullscreen);
 
@@ -737,6 +755,7 @@ static void recon_app_free(ReconApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewGuardian);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewBleList);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewWifiList);
+    view_dispatcher_remove_view(app->view_dispatcher, ReconViewLocator);
 
     submenu_free(app->submenu);
     variable_item_list_free(app->var_item_list);
@@ -748,6 +767,7 @@ static void recon_app_free(ReconApp* app) {
     guardian_view_free(app->guardian_view);
     ble_list_view_free(app->ble_list_view);
     wifi_list_view_free(app->wifi_list_view);
+    locator_view_free(app->locator_view);
 
     scene_manager_free(app->scene_manager);
     view_dispatcher_free(app->view_dispatcher);

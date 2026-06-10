@@ -43,10 +43,15 @@
  *              beaconflood (many DISTINCT beaconing BSSIDs/s: Marauder/Pineapple)
  *              blespam     (Apple/Samsung/Google pairing-advert flood)
  *       value: the count/rate measured. New line; older app builds ignore it.
+ *   LOC,<rssi>                             Locator: live RSSI of the active target
+ *                                          (signed dBm), streamed while homing.
  *
  * RX from Flipper (commands, newline-terminated):
  *   scan   start reporting        stop   pause reporting
  *   ver    re-send banner         ch <n> lock to channel n (0 = hop)
+ *   locate <w|b> <mac> [ch]  stream LOC for a target (w=Wi-Fi, b=BLE; mac is
+ *                            aabbccddeeff). "locate off" (or any other command)
+ *                            ends Locator mode.
  */
 
 #include <Arduino.h>
@@ -116,6 +121,33 @@ static void note_beacon_bssid(const uint8_t* bssid) {
         g_beacon_ring[g_beacon_ring_n++] = h;
         g_beacon_distinct++;
     }
+}
+
+// ---- Locator: stream live RSSI for one target so the app can home in on it ---
+// 'w' Wi-Fi (match the MAC in promiscuous frames, channel-locked) or 'b' BLE
+// (match the addr in a repeating scan). MAC kept BOTH as bytes (Wi-Fi, compared
+// to raw frame bytes) and as the lowercase hex string (BLE, compared to the
+// same toString() form the BLE line is built from -- avoids byte-order traps).
+static char g_locate_kind = 0; // 0 none / 'w' / 'b'
+static uint8_t g_locate_mac[6];
+static char g_locate_macs[13]; // lowercase hex, no separators
+static uint8_t g_locate_ch = 0;
+static int g_locate_best = -127; // strongest RSSI since the last LOC emit (Wi-Fi)
+static uint32_t g_last_loc = 0; // LOC emit throttle
+
+static int hexv(char c) {
+    if(c >= '0' && c <= '9') return c - '0';
+    if(c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if(c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+static bool parse_hexmac(const char* s, uint8_t out[6]) {
+    for(int i = 0; i < 6; i++) {
+        int hi = hexv(s[i * 2]), lo = hexv(s[i * 2 + 1]);
+        if(hi < 0 || lo < 0) return false;
+        out[i] = (uint8_t)((hi << 4) | lo);
+    }
+    return true;
 }
 
 // Dual-band (WiFi + BLE) Flock detection. BLE is initialised once and kept
@@ -269,6 +301,16 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
         g_probe_reqs++; // probe request
     } else if(subtype == 0x08) {
         note_beacon_bssid(p + 16); // beacon: addr3 = BSSID
+    }
+
+    // Locator (Wi-Fi): track the strongest RSSI of any frame to/from the target
+    // MAC (addr1/2/3). loop() emits it as a throttled LOC line.
+    if(g_locate_kind == 'w') {
+        int r = pkt->rx_ctrl.rssi;
+        if(memcmp(p + 4, g_locate_mac, 6) == 0 || memcmp(p + 10, g_locate_mac, 6) == 0 ||
+           memcmp(p + 16, g_locate_mac, 6) == 0) {
+            if(r > g_locate_best) g_locate_best = r;
+        }
     }
 
     // Deauthentication (0x0C) / disassociation (0x0A) frames: a flood of these
@@ -571,6 +613,35 @@ static void ble_do_scan(int seconds) {
     set_channel(g_channel);
 }
 
+// Locator (BLE): one short scan; emit the target's RSSI if seen. Builds the same
+// lowercased, colon-stripped toString() form the BLE line uses, so the comparison
+// is byte-order-safe against the addr the app originally parsed.
+static void ble_locate_scan() {
+    ble_ensure_init();
+    esp_wifi_set_promiscuous(false);
+    BLEScanResults res = g_ble->start(1, false);
+    int best = -127;
+    int n = res.getCount();
+    for(int i = 0; i < n; i++) {
+        BLEAdvertisedDevice d = res.getDevice(i);
+        std::string a = d.getAddress().toString();
+        char addr[13];
+        int k = 0;
+        for(size_t j = 0; j < a.size() && k < 12; j++) {
+            char c = a[j];
+            if(c == ':') continue;
+            addr[k++] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+        }
+        addr[k] = 0;
+        if(strcmp(addr, g_locate_macs) == 0) {
+            int r = d.getRSSI();
+            if(r > best) best = r;
+        }
+    }
+    g_ble->clearResults();
+    if(best > -127) Serial.printf("LOC,%d\n", best);
+}
+
 void setup() {
     Serial.begin(115200);
     delay(200);
@@ -589,6 +660,16 @@ void setup() {
 
 static void handle_command(String cmd) {
     cmd.trim();
+    // Any non-locate command ends Locator mode: unlock the Wi-Fi channel it
+    // pinned, and restore promiscuous if BLE-locate had turned it off.
+    if(!cmd.startsWith("locate")) {
+        if(g_locate_kind == 'w') g_lock_channel = 0;
+        if(g_locate_kind == 'b') {
+            esp_wifi_set_promiscuous(true);
+            set_channel(g_channel);
+        }
+        g_locate_kind = 0;
+    }
     if(cmd == "scan") {
         g_scanning = true;
         g_combo = false; // pure WiFi Flock
@@ -615,6 +696,46 @@ static void handle_command(String cmd) {
         } else {
             g_lock_channel = 0;
         }
+    } else if(cmd.startsWith("locate")) {
+        // locate <w|b> <hexmac> [ch]   -> stream LOC,<rssi> for that target
+        // locate off                   -> stop
+        if(cmd.indexOf("off") > 0) {
+            if(g_locate_kind == 'b') {
+                esp_wifi_set_promiscuous(true);
+                set_channel(g_channel);
+            }
+            g_locate_kind = 0;
+            g_lock_channel = 0;
+        } else {
+            int s1 = cmd.indexOf(' ');
+            int s2 = (s1 > 0) ? cmd.indexOf(' ', s1 + 1) : -1;
+            int s3 = (s2 > 0) ? cmd.indexOf(' ', s2 + 1) : -1;
+            if(s1 > 0 && s2 > s1) {
+                char kind = cmd.charAt(s1 + 1);
+                String macs = (s3 > s2) ? cmd.substring(s2 + 1, s3) : cmd.substring(s2 + 1);
+                macs.toLowerCase();
+                uint8_t mac[6];
+                if(macs.length() >= 12 && parse_hexmac(macs.c_str(), mac)) {
+                    memcpy(g_locate_mac, mac, 6);
+                    strncpy(g_locate_macs, macs.c_str(), 12);
+                    g_locate_macs[12] = 0;
+                    g_locate_ch = (s3 > s2) ? (uint8_t)cmd.substring(s3 + 1).toInt() : 0;
+                    g_locate_best = -127;
+                    g_scanning = false; // Locator dedicates the radio to one target
+                    g_combo = false;
+                    g_locate_kind = (kind == 'b') ? 'b' : 'w';
+                    if(g_locate_kind == 'w') {
+                        esp_wifi_set_promiscuous(true);
+                        if(g_locate_ch >= 1 && g_locate_ch <= 14) {
+                            g_lock_channel = g_locate_ch;
+                            set_channel(g_locate_ch);
+                        } else {
+                            g_lock_channel = 0;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -624,6 +745,22 @@ void loop() {
     }
 
     uint32_t now = millis();
+
+    // Locator mode owns the radio: stream the target's live RSSI as LOC lines.
+    if(g_locate_kind == 'w') {
+        if(now - g_last_loc >= 120) {
+            g_last_loc = now;
+            if(g_locate_best > -127) {
+                Serial.printf("LOC,%d\n", g_locate_best);
+                g_locate_best = -127; // reset window; quiet interval = no LOC (out of range)
+            }
+        }
+        return;
+    }
+    if(g_locate_kind == 'b') {
+        ble_locate_scan(); // ~1 s blocking scan; emits LOC if the target is seen
+        return;
+    }
 
     // Dual-band: after a WiFi-promiscuous phase, run a BLE scan phase, then
     // resume. The BLE scan blocks for a few seconds and restores promiscuous.

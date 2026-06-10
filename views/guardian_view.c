@@ -7,6 +7,8 @@
 
 struct GuardianView {
     View* view;
+    void (*ok_cb)(void*); /**< short-OK -> open the Suspicious list */
+    void* ok_ctx;
 };
 
 typedef struct {
@@ -165,23 +167,28 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     if(bd[0]) {
         draw_wrapped(canvas, bd, 62);
     } else {
-        char status[28];
-        snprintf(status, sizeof(status), "scan %s  ch%u", guardian_mode(phase), channel);
+        char status[32];
+        snprintf(status, sizeof(status), "%s ch%u  OK=sus", guardian_mode(phase), channel);
         canvas_draw_str(canvas, 2, 62, status);
     }
 }
 
-// Guardian has no list to navigate: ignore all keys so Back bubbles up to the
-// scene manager (which exits the scene and tears the radio down).
+// Short OK opens the Suspicious-devices list; every other key falls through so
+// Back still bubbles up to the scene manager (which tears the radio down).
 static bool guardian_view_input_callback(InputEvent* event, void* context) {
-    UNUSED(event);
-    UNUSED(context);
+    GuardianView* gv = context;
+    if(event->type == InputTypeShort && event->key == InputKeyOk && gv->ok_cb) {
+        gv->ok_cb(gv->ok_ctx);
+        return true;
+    }
     return false;
 }
 
 GuardianView* guardian_view_alloc(void) {
     GuardianView* gv = malloc(sizeof(GuardianView));
     gv->view = view_alloc();
+    gv->ok_cb = NULL;
+    gv->ok_ctx = NULL;
     view_set_context(gv->view, gv);
     view_allocate_model(gv->view, ViewModelTypeLocking, sizeof(GuardianViewModel));
     view_set_draw_callback(gv->view, guardian_view_draw_callback);
@@ -201,6 +208,11 @@ View* guardian_view_get_view(GuardianView* gv) {
 
 void guardian_view_set_app(GuardianView* gv, void* app) {
     with_view_model(gv->view, GuardianViewModel * model, { model->app = app; }, false);
+}
+
+void guardian_view_set_ok_callback(GuardianView* gv, void (*cb)(void*), void* ctx) {
+    gv->ok_cb = cb;
+    gv->ok_ctx = ctx;
 }
 
 void guardian_view_refresh(GuardianView* gv) {

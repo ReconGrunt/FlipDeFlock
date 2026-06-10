@@ -134,6 +134,12 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         }
         return;
     }
+    if(strncmp(line, "LOC,", 4) == 0) {
+        // LOC,<rssi>[,<mac>]  live signal strength for the active Locator target.
+        // The kind/label live app-side, so we only need the rssi here.
+        recon_app_set_locate_rssi(esp->app, (int8_t)atoi(line + 4));
+        return;
+    }
     // ---- BLE scan: BBEGIN / BLE,... / BEND ----
     if(strncmp(line, "BBEGIN", 6) == 0) {
         recon_app_ble_begin(esp->app);
