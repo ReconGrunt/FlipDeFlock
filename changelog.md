@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.39
+- **Net Guardian: Flipper detection, attack-tool signatures, and an opt-in
+  anomaly flag.** The watch face now shows three counters — **`Flock`** (cameras),
+  **`Atk`** (active attacks), **`Flip`** (Flipper Zeros nearby).
+  - **Flippers** are detected app-side (no reflash) by the standard `Flipper …`
+    BLE advertised name; they appear in the BLE list as type `Flipper`, count on the
+    Guardian, and raise **WATCHFUL** (a recon tool, not proof of an attack, so it
+    needs a second independent radio to reach ELEVATED). Excluded from the BLE
+    `trk` tracker count (a Flipper isn't a tracker).
+  - **Attack-tool signatures** (companion reflash): the companion now emits an
+    `ATK,<kind>,<value>` line for a **probe-request flood**, **beacon-spam** (many
+    distinct beaconing BSSIDs/s — Marauder/Pineapple), or a **BLE-spam** advert
+    flood (Apple/Samsung/Google pairing spam). The app fuses these into the score
+    (BLE-spam counts as an independent BLE radio) and names them in the breakdown.
+    Conservative, tunable thresholds.
+  - **Anomaly flag** (Settings → *Anomaly flag*, default **off**): flags an
+    unnamed, unidentified (no mfg id / no recognized service), strong, repeatedly
+    -seen BLE device — "something is on you and won't say what it is." Deliberately
+    light (below the WATCHFUL floor on its own) to limit false positives.
+  - **Honesty note:** a purely *passive* sniffer transmits nothing, so no device
+    can detect it. Only active transmitters are detectable; ELEVATED still requires
+    two independent radios in agreement.
+- Companion line protocol gains the `ATK` line (and the doc now lists the `DA`
+  attribution line and the S-line deauth field). All additive — older app builds
+  ignore the new line, older firmware never sends it.
+
 ## v0.38
 - **Net Guardian now shows two plain-English counters: `Flock` and `Attacks`.**
   The watch face's lower-left number is labelled **`Flock`** (Flock/ALPR cameras

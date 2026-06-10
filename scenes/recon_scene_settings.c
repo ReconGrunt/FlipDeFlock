@@ -102,6 +102,14 @@ static void log_serials_changed(VariableItem* item) {
     recon_settings_save(app);
 }
 
+static void anomaly_flag_changed(VariableItem* item) {
+    ReconApp* app = variable_item_get_context(item);
+    uint8_t idx = variable_item_get_current_value_index(item);
+    app->settings.anomaly_flag = (idx == 1);
+    variable_item_set_current_value_text(item, onoff_text[idx]);
+    recon_settings_save(app);
+}
+
 void recon_scene_settings_on_enter(void* context) {
     ReconApp* app = context;
     VariableItemList* list = app->var_item_list;
@@ -157,6 +165,13 @@ void recon_scene_settings_on_enter(void* context) {
 
     idx = app->settings.log_serials ? 1 : 0;
     item = variable_item_list_add(list, "Log Flock serials", 2, log_serials_changed, app);
+    variable_item_set_current_value_index(item, idx);
+    variable_item_set_current_value_text(item, onoff_text[idx]);
+
+    // Net Guardian: flag unidentified strong/persistent BLE devices as suspicious.
+    // Off by default -- it trades a higher false-positive rate for more coverage.
+    idx = app->settings.anomaly_flag ? 1 : 0;
+    item = variable_item_list_add(list, "Anomaly flag", 2, anomaly_flag_changed, app);
     variable_item_set_current_value_index(item, idx);
     variable_item_set_current_value_text(item, onoff_text[idx]);
 

@@ -72,6 +72,12 @@ typedef struct {
 
     bool deauth_active; /**< an attributed deauth/disassoc flood is active now */
     bool rogue_ap; /**< an evil-twin / rogue AP (mismatched-security clone) is present */
+
+    bool flipper_near; /**< a Flipper Zero (recon multitool) is advertising nearby */
+    bool attack_active; /**< an active attack-tool signature fired recently (BLE-spam / beacon flood / probe flood) */
+    bool attack_via_ble; /**< the attack signature is BLE-borne (BLE-spam) vs Wi-Fi (beacon/probe flood) */
+    char attack_label[16]; /**< short attack name for the breakdown, e.g. "BLE-spam" */
+    bool anomaly; /**< (opt-in) an unidentified, strong, persistent device is sitting right on you */
 } WatchInputs;
 
 /** Reset the scorer to CLEAR. */

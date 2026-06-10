@@ -17,6 +17,9 @@
 #define WS_W_BLE_FOLLOW   35 /**< BLE tracker that cleared the anti-stalking gate */
 #define WS_W_DEAUTH       25 /**< attributed deauth/disassoc flood active now */
 #define WS_W_ROGUE_AP     20 /**< evil-twin / rogue AP (mismatched-security clone) */
+#define WS_W_ATTACK       30 /**< an active attack-tool signature (BLE-spam / beacon / probe flood) */
+#define WS_W_FLIPPER      25 /**< a Flipper Zero advertising nearby (recon-capable device) */
+#define WS_W_ANOMALY      15 /**< (opt-in) unidentified strong persistent device on you -- soft, needs backup */
 
 // Recency / co-location gating (whether a signal is "live" and "near") is done
 // by the snapshot caller in recon_app.c (WATCH_FLOCK_FRESH_MS / WATCH_DEAUTH_-
@@ -114,6 +117,34 @@ void watchscore_eval(WatchScore* ws, const WatchInputs* in) {
         gain += WS_W_ROGUE_AP;
         radios |= WS_RADIO_WIFI;
         breakdown_add(parts, sizeof(parts), "evil-twin AP");
+    }
+
+    // An active attack-tool signature (BLE-spam advert flood, beacon flood, or
+    // probe flood). BLE-spam is a genuinely independent radio (BLE); the Wi-Fi
+    // floods share the Wi-Fi class. Stays WATCHFUL on its own (one radio) -- a
+    // second independent radio is still required to reach ELEVATED.
+    if(in->attack_active) {
+        gain += WS_W_ATTACK;
+        radios |= in->attack_via_ble ? WS_RADIO_BLE : WS_RADIO_WIFI;
+        breakdown_add(parts, sizeof(parts), in->attack_label[0] ? in->attack_label : "attack tool");
+    }
+
+    // A Flipper Zero advertising nearby. A recon-capable multitool, not proof of
+    // an attack -- so it raises WATCHFUL by itself and only adds to ELEVATED when
+    // a second independent radio agrees (its BLE class can be that radio).
+    if(in->flipper_near) {
+        gain += WS_W_FLIPPER;
+        radios |= WS_RADIO_BLE;
+        breakdown_add(parts, sizeof(parts), "Flipper Zero");
+    }
+
+    // Opt-in anomaly: an unnamed, unidentified device transmitting strongly right
+    // on you, seen repeatedly. Deliberately light (below the WATCHFUL floor on its
+    // own) so it nudges rather than alarms -- it needs corroboration to surface.
+    if(in->anomaly) {
+        gain += WS_W_ANOMALY;
+        radios |= WS_RADIO_BLE;
+        breakdown_add(parts, sizeof(parts), "unknown device on you");
     }
 
     // --- integrate: rise toward `gain`, decay when nothing is live ----------

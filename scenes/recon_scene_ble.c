@@ -73,7 +73,8 @@ static void ble_show_results(ReconApp* app) {
     }
     int track = 0, follow = 0;
     for(size_t i = 0; i < n; i++) {
-        if(app->ble[i].cat != BleCatUnknown) track++;
+        // "trk" counts trackers; a Flipper is a recon tool, not a tracker.
+        if(app->ble[i].cat != BleCatUnknown && app->ble[i].cat != BleCatFlipper) track++;
         if(app->ble[i].following) follow++;
     }
     furi_mutex_release(app->mutex);
