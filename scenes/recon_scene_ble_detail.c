@@ -18,6 +18,8 @@ static const char* ble_cat_label(uint8_t cat) {
         return "Samsung SmartTag";
     case BleCatFindMyDevice:
         return "Find My Device (FMDN)";
+    case BleCatFlipper:
+        return "Flipper Zero";
     default:
         return "BLE device";
     }

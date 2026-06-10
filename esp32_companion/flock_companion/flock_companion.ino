@@ -18,7 +18,7 @@
  *
  * Line protocol (newline-terminated, ASCII), TX to Flipper:
  *   FLOCKCO,1                              banner / version on boot and on "ver"
- *   S,<frames>,<hits>,<ch>                 status, ~1 Hz
+ *   S,<frames>,<hits>,<ch>,<deauth_rate>   status, ~1 Hz (deauth/disassoc per interval)
  *   D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>]   detection
  *       mac : aabbccddeeff (lower hex, no separators)
  *       rssi: signed dBm
@@ -37,6 +37,12 @@
  *               0x3500) -> positive acoustic-sensor (Raven) identification.
  *               Trailing, contains '=' so it's distinguishable from mfghex;
  *               only emitted when matched, older parsers ignore.
+ *   DA,<bssid>,<ch>                        deauth/disassoc attack target (attributed)
+ *   ATK,<kind>,<value>                     active attack-tool signature
+ *       kind : probeflood  (abnormal probe-request rate)
+ *              beaconflood (many DISTINCT beaconing BSSIDs/s: Marauder/Pineapple)
+ *              blespam     (Apple/Samsung/Google pairing-advert flood)
+ *       value: the count/rate measured. New line; older app builds ignore it.
  *
  * RX from Flipper (commands, newline-terminated):
  *   scan   start reporting        stop   pause reporting
@@ -77,6 +83,40 @@ static uint32_t g_last_status = 0;
 static uint32_t g_last_hop = 0;
 static uint32_t g_deauths_last = 0; // for per-interval deauth rate
 static uint32_t g_last_da = 0; // rate-limit DA attribution lines
+
+// ---- Active attack-tool detection (emitted as ATK lines, ~1 Hz) -----------
+// These are RATE signals reset every status interval, so the alert clears when
+// the attack stops. Thresholds are deliberately conservative to avoid false
+// positives in dense-but-benign RF; tune for your environment.
+//   probeflood : abnormal probe-request rate (KARMA / mass-probe tools)
+//   beaconflood: many DISTINCT beaconing BSSIDs/s (Marauder/Pineapple SSID spam)
+//   blespam    : a flood of impersonation BLE adverts (Flipper/ESP BLE spam)
+#define PROBE_FLOOD_MIN  80 // probe requests in one ~1 s interval
+#define BEACON_FLOOD_MIN 40 // distinct beaconing BSSIDs in one ~1 s interval
+#define BLE_SPAM_MIN     12 // impersonation-class adverts in one BLE scan
+static volatile uint32_t g_probe_reqs = 0; // probe requests this interval (reset ~1 Hz)
+#define BEACON_RING 64
+static uint32_t g_beacon_ring[BEACON_RING]; // recent beacon-BSSID hashes this interval
+static uint8_t g_beacon_ring_n = 0;
+static uint32_t g_beacon_distinct = 0; // distinct beaconing BSSIDs this interval
+
+// Note a beacon's source BSSID; counts it once per interval. Approximate by
+// design (a small ring + best-effort across the WiFi-callback / loop tasks) --
+// it only needs to tell "a handful of real APs" from "a spam flood."
+static void note_beacon_bssid(const uint8_t* bssid) {
+    uint32_t h = 2166136261u; // FNV-1a over the 6 BSSID bytes (inlined: no fwd dep)
+    for(int i = 0; i < 6; i++) {
+        h ^= bssid[i];
+        h *= 16777619u;
+    }
+    for(uint8_t i = 0; i < g_beacon_ring_n; i++) {
+        if(g_beacon_ring[i] == h) return; // already counted this interval
+    }
+    if(g_beacon_ring_n < BEACON_RING) {
+        g_beacon_ring[g_beacon_ring_n++] = h;
+        g_beacon_distinct++;
+    }
+}
 
 // Dual-band (WiFi + BLE) Flock detection. BLE is initialised once and kept
 // resident (avoids the Bluedroid init/deinit heap leak); the radio is shared by
@@ -221,6 +261,15 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     g_frames++;
 
     uint8_t subtype = (p[0] >> 4) & 0x0F;
+
+    // Active-attack rate sampling (counted on EVERY frame, before any Flock
+    // candidacy filtering): probe-request floods and beacon-spam (many distinct
+    // beaconing BSSIDs). Flushed/evaluated in the ~1 Hz status block.
+    if(subtype == 0x04) {
+        g_probe_reqs++; // probe request
+    } else if(subtype == 0x08) {
+        note_beacon_bssid(p + 16); // beacon: addr3 = BSSID
+    }
 
     // Deauthentication (0x0C) / disassociation (0x0A) frames: a flood of these
     // is the signature of a deauth attack or an evil-twin kicking clients off.
@@ -429,6 +478,7 @@ static void ble_do_scan(int seconds) {
     BLEScanResults found = g_ble->start(seconds, false);
     int count = found.getCount();
     if(count > 80) count = 80;
+    int spam = 0; // impersonation/pairing adverts -> BLE-spam flood indicator
     for(int i = 0; i < count; i++) {
         BLEAdvertisedDevice d = found.getDevice(i);
 
@@ -473,6 +523,11 @@ static void ble_do_scan(int seconds) {
             if(nat && oui_match(nat)) cat = 1; // Flock OUI on the BLE address
         }
 
+        // Apple/Tile/Samsung/Google pairing adverts are what BLE-spam tools
+        // (Flipper "BLE spam", ESP32 sour-apple, etc.) impersonate in bulk. A few
+        // are normal; a flood of them in one scan is the spam signature.
+        if(cat == 2 || cat == 3 || cat == 4 || cat == 5) spam++;
+
         std::string a = d.getAddress().toString();
         char addr[13];
         int k = 0;
@@ -506,6 +561,10 @@ static void ble_do_scan(int seconds) {
         Serial.print('\n');
     }
     Serial.printf("BEND,%d\n", count);
+
+    // A bulk of impersonation/pairing adverts in a single scan = a BLE-spam
+    // flood (independent BLE radio class for the app's fused score).
+    if(spam >= BLE_SPAM_MIN) Serial.printf("ATK,blespam,%d\n", spam);
 
     g_ble->clearResults();
     esp_wifi_set_promiscuous(true);
@@ -594,5 +653,13 @@ void loop() {
         uint32_t deauth_rate = g_deauths - g_deauths_last;
         g_deauths_last = g_deauths;
         Serial.printf("S,%u,%u,%u,%u\n", g_frames, g_hits, g_channel, deauth_rate);
+
+        // Active attack-tool signatures for this interval, then reset the windows.
+        if(g_probe_reqs >= PROBE_FLOOD_MIN) Serial.printf("ATK,probeflood,%u\n", g_probe_reqs);
+        if(g_beacon_distinct >= BEACON_FLOOD_MIN)
+            Serial.printf("ATK,beaconflood,%u\n", g_beacon_distinct);
+        g_probe_reqs = 0;
+        g_beacon_distinct = 0;
+        g_beacon_ring_n = 0;
     }
 }

@@ -148,6 +148,14 @@ void recon_app_ble_add(
     // stays Generic; a Raven is only asserted when the companion saw its
     // Raven-specific GATT services (raven_gatt) -- see flock_ble_model_ex.
     // Done outside the lock (pure string work, no app state).
+    // Flipper Zero detection (app-side, firmware-independent): a stock Flipper
+    // advertises its BLE GAP name as "Flipper <name>" -- the signature every
+    // reference Flipper detector keys on. Only claim it when nothing stronger
+    // already classified the device (a real tracker keeps its category).
+    if(cat == BleCatUnknown && name && strncmp(name, "Flipper", 7) == 0) {
+        cat = BleCatFlipper;
+    }
+
     char serial[RECON_BLE_SERIAL_LEN] = "";
     uint8_t model = FlockBleModelUnknown;
     if(cat == BleCatFlock) {
@@ -345,15 +353,66 @@ void recon_app_wifi_end(ReconApp* app) {
 // attack signal. Match the live Flock-view banner's threshold (DEAUTH_FLOOD_MIN)
 // so the fused score never alarms on one benign frame.
 #define WATCH_DEAUTH_FLOOD_MIN 5
+// How long a Flipper sighting stays "near" (a touch over one full sweep rotation,
+// so it doesn't blink out between BLE phases) and how long an attack-tool ATK
+// line stays "active" (these are bursty, so a short window).
+#define WATCH_BLE_FRESH_MS     90000
+#define WATCH_ATTACK_FRESH_MS  15000
+// Opt-in anomaly: an UNNAMED, unidentified (no mfg id, no recognized service)
+// device, transmitting strongly (close) and seen repeatedly = "something is on
+// you and won't say what it is." Kept tight so even when enabled it rarely fires.
+#define WATCH_ANOMALY_RSSI_MIN (-55)
+#define WATCH_ANOMALY_MIN_SEEN 3
 
 size_t recon_app_attacks_detected(ReconApp* app) {
     // Count distinct BSSIDs that crossed the deauth-flood bar this session. Using
     // the same threshold as the scorer keeps the on-screen "Attacks" honest: a
     // single benign disassoc (roaming, idle timeout, an AP reboot) never counts.
     size_t n = 0;
+    uint32_t now = furi_get_tick();
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     for(size_t i = 0; i < app->deauth_count; i++) {
         if(app->deauth[i].count >= WATCH_DEAUTH_FLOOD_MIN) n++;
+    }
+    // Also count a live attack-tool signature (BLE-spam / beacon / probe flood)
+    // as one active attack, so the Guardian's "Atk" reflects tools, not just
+    // deauth floods. Same freshness window the scorer uses.
+    if(app->esp_attack_tick && (now - app->esp_attack_tick) <= WATCH_ATTACK_FRESH_MS) n++;
+    furi_mutex_release(app->mutex);
+    return n;
+}
+
+void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->esp_attack_tick = furi_get_tick();
+    app->esp_attack_value = value;
+    // BLE-spam is the one BLE-borne signature; beacon/probe floods are Wi-Fi.
+    app->esp_attack_ble = (strncmp(kind, "ble", 3) == 0 || strncmp(kind, "BLE", 3) == 0);
+    // Map the wire kind to a short, screen-friendly label for the breakdown.
+    const char* label = "attack tool";
+    if(strstr(kind, "ble") || strstr(kind, "BLE"))
+        label = "BLE-spam";
+    else if(strstr(kind, "beacon"))
+        label = "beacon flood";
+    else if(strstr(kind, "probe"))
+        label = "probe flood";
+    strncpy(app->esp_attack_kind, label, sizeof(app->esp_attack_kind) - 1);
+    app->esp_attack_kind[sizeof(app->esp_attack_kind) - 1] = '\0';
+    app->esp_connected = true;
+    furi_mutex_release(app->mutex);
+}
+
+size_t recon_app_flipper_count(ReconApp* app) {
+    // Distinct Flipper Zeros seen recently this session. Freshness-gated so one
+    // that walked away ages out of the count instead of lingering forever.
+    size_t n = 0;
+    uint32_t now = furi_get_tick();
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    for(size_t i = 0; i < app->ble_count; i++) {
+        if(app->ble[i].cat == BleCatFlipper &&
+           (now - app->ble[i].last_tick) <= WATCH_BLE_FRESH_MS) {
+            n++;
+        }
     }
     furi_mutex_release(app->mutex);
     return n;
@@ -423,6 +482,41 @@ void recon_app_watchscore_tick(ReconApp* app) {
             break;
         }
     }
+
+    // (5) An active attack-tool signature the companion reported recently
+    // (BLE-spam advert flood / beacon-spam / probe-request flood). Bursty, so a
+    // short freshness window; the kind picks the breakdown label + radio class.
+    if(app->esp_attack_tick && (now - app->esp_attack_tick) <= WATCH_ATTACK_FRESH_MS) {
+        in.attack_active = true;
+        in.attack_via_ble = app->esp_attack_ble;
+        strncpy(in.attack_label, app->esp_attack_kind, sizeof(in.attack_label) - 1);
+        in.attack_label[sizeof(in.attack_label) - 1] = '\0';
+    }
+
+    // (6) A Flipper Zero advertising nearby (BLE name "Flipper ..."), seen this
+    // sweep's freshness window. A recon multitool -> WATCHFUL on its own.
+    for(size_t i = 0; i < app->ble_count; i++) {
+        if(app->ble[i].cat == BleCatFlipper &&
+           (now - app->ble[i].last_tick) <= WATCH_BLE_FRESH_MS) {
+            in.flipper_near = true;
+            break;
+        }
+    }
+
+    // (7) Opt-in anomaly: an unnamed, unidentified (no mfg id, no recognized
+    // category), strong, repeatedly-seen BLE device -- "something is on you and
+    // won't identify itself." Off by default; deliberately strict to limit FPs.
+    if(app->settings.anomaly_flag) {
+        for(size_t i = 0; i < app->ble_count; i++) {
+            const BleDevice* e = &app->ble[i];
+            if(e->cat == BleCatUnknown && e->name[0] == '\0' && e->company == 0xFFFF &&
+               e->rssi >= WATCH_ANOMALY_RSSI_MIN && e->count >= WATCH_ANOMALY_MIN_SEEN &&
+               (now - e->last_tick) <= WATCH_BLE_FRESH_MS) {
+                in.anomaly = true;
+                break;
+            }
+        }
+    }
     furi_mutex_release(app->mutex);
 
     // --- evaluate the scorer (pure logic on the snapshot) -------------------
@@ -457,6 +551,7 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.sound = true;
     app->settings.flash_fast = false; // safe 115200 by default
     app->settings.log_serials = false; // privacy: don't catalogue police asset serials by default
+    app->settings.anomaly_flag = false; // off by default: higher false-positive mode
 }
 
 void recon_settings_save(ReconApp* app) {
@@ -466,7 +561,7 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\n",
+            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\n",
             app->settings.backend,
             app->settings.esp_uart,
             app->settings.gps_uart,
@@ -476,7 +571,8 @@ void recon_settings_save(ReconApp* app) {
             app->settings.gps_enabled ? 1 : 0,
             app->settings.sound ? 1 : 0,
             app->settings.flash_fast ? 1 : 0,
-            app->settings.log_serials ? 1 : 0);
+            app->settings.log_serials ? 1 : 0,
+            app->settings.anomaly_flag ? 1 : 0);
         storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
         furi_string_free(s);
     }
@@ -508,6 +604,8 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.flash_fast = (val != 0);
     else if(strcmp(key, "log_serials") == 0)
         app->settings.log_serials = (val != 0);
+    else if(strcmp(key, "anomaly_flag") == 0)
+        app->settings.anomaly_flag = (val != 0);
 }
 
 void recon_settings_load(ReconApp* app) {

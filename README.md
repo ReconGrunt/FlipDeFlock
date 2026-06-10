@@ -24,7 +24,12 @@ counter-surveillance site surveys:
   ESP running and **rotates** it across Wi-Fi + BLE so the fused
   **CLEAR / WATCHFUL / ELEVATED** "am I being watched?" score stays live, with a
   pwnagotchi-style face and a discreet haptic the moment two independent radios
-  agree something's watching. Companion firmware.
+  agree something's watching. Counts **Flock cameras**, **Flipper Zeros** nearby,
+  and **active attacks** — deauth/disassoc floods, evil-twin APs, plus attack-tool
+  signatures (BLE-spam, Pineapple/Marauder beacon-spam, probe floods). An opt-in
+  **Anomaly flag** adds unidentified-device flagging. (A purely *passive* sniffer
+  emits nothing and can't be detected by anything — only active transmitters can.)
+  Companion firmware.
 - 💳 **NFC / RFID Audit** — identifies a presented card's protocol and grades its
   security posture for access-control reviews. On a MIFARE Classic, a **Deep**
   check captures the UID and tries the Flipper's on-SD key dictionary to report
@@ -68,13 +73,15 @@ What the numbers/words on each scan screen mean. RSSI is shown as **signal bars*
 (taller = stronger) rather than a raw `-33dB` number — the selected/highlighted
 row still shows the exact dB.
 
-**Net Guardian** — e.g. `(-_-) CLEAR` · `Flock 0   Attacks 0` · `scan WiFi+BLE ch6` · `0:00:07`
+**Net Guardian** — e.g. `(-_-) CLEAR` · `Flock 0  Atk 0  Flip 0` · `scan WiFi+BLE ch6` · `0:00:07`
 - **face / word** — fused "am I being watched?" state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
 - **threat meter** — the fused 0–100 surveillance score as a bar; fills as independent signals correlate
-- **Flock** — Flock/ALPR detections this session (the camera count, was `hits`)
-- **Attacks** — distinct APs caught in a deauth/disassoc **flood** this session; a lone benign disassoc (normal Wi-Fi churn) doesn't count
-- **scan … ch** — radio(s) the rotating sweep is on right now (`WiFi+BLE` / `BLE` / `WiFi`) plus the Wi-Fi channel being sniffed. On an alert this bottom line becomes the live per-signal breakdown instead
+- **Flock** — Flock/ALPR camera detections this session (was `hits`)
+- **Atk** — active attacks this session: distinct APs under a deauth/disassoc **flood**, plus a live attack-tool signature (BLE-spam, beacon-spam from a Pineapple/Marauder, or a probe flood). Flood-gated, so a lone benign disassoc never counts
+- **Flip** — Flipper Zeros advertising nearby (BLE name `Flipper …`)
+- **scan … ch** — sweep radio (`WiFi+BLE` / `BLE` / `WiFi`) + channel. On an alert this bottom line becomes the live breakdown naming the cause — e.g. `Flipper Zero`, `BLE-spam`, `beacon flood`, `deauth flood`, `evil-twin AP`, `unknown device on you`
 - **0:00:07** — guardian uptime (top-right)
+- *Detection notes:* a passive sniffer that only **listens** transmits nothing and can't be detected by anything — only active transmitters are. A Flipper alone raises **WATCHFUL**; reaching **ELEVATED** still needs two independent radios to agree. "Unknown device on you" is the opt-in **Anomaly flag** (Settings, default off): an unnamed, unidentified device transmitting strongly and repeatedly right next to you.
 
 **Flock / ALPR Detect** — header `ESP ch6  frames 339  hits 0`
 - **ESP** (or `...`) — companion connected / still waiting
@@ -85,7 +92,7 @@ row still shows the exact dB.
 
 **BLE / Tracker Scan** — header `BLE 33  trk 9  follow 0`
 - **BLE** — total BLE devices seen · **trk** — known trackers (AirTag/Tile/SmartTag/FindMy/Flock) · **follow** — trackers flagged **following you**
-- **row** — `<type> <name|MAC-tail> <rssi>dB`; type = `FLOCK` / `AirTag` / `Tile` / `Tag` / `FindMy` / `BLE`
+- **row** — `<type> <name|MAC-tail> <rssi>dB`; type = `FLOCK` / `AirTag` / `Tile` / `Tag` / `FindMy` / `Flipper` / `BLE` (`Flipper` = a Flipper Zero; it's a recon device, not a tracker, so it isn't in `trk`)
 - **prefix** — `!` following (anti-stalking) · `*` tagged for the report
 
 **WiFi Audit** — header `10 AP  2crit 1weak 3twin`
@@ -106,6 +113,19 @@ it for anything that matters, read the code and confirm the behavior yourself.
 Feedback and field data are what move it forward; see [Contributing](#contributing).
 
 ## What's new
+
+**v0.39**
+- **Net Guardian now spots Flippers, attack tools, and (opt-in) anomalies.** The
+  watch face gained two more of its three counters — **`Flock`** (cameras),
+  **`Atk`** (active attacks), **`Flip`** (Flipper Zeros nearby, detected by their
+  `Flipper …` BLE name). On top of deauth floods and evil-twin APs, the fused score
+  now reacts to **active attack-tool signatures**: BLE-spam advert floods,
+  Pineapple/Marauder **beacon-spam**, and **probe floods** (these need the updated
+  companion firmware — reflash via *ESP32 Firmware*). A new **Anomaly flag**
+  setting (default off) flags an unnamed, unidentified device transmitting strongly
+  right on you. Honest by design: a purely *passive* sniffer emits nothing and
+  can't be detected — only active transmitters can, and ELEVATED still needs two
+  independent radios to agree.
 
 **v0.34**
 - **Net Guardian — an always-on "personal net guardian."** A dedicated

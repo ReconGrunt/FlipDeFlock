@@ -144,16 +144,20 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     canvas_draw_str(canvas, 2, 42, "thr");
     ui_meter(canvas, 36, 35, 90, 8, score);
 
-    // --- counters: Flock detections + deauth-flood attacks ------------------
-    // The two numbers the guardian is FOR. "Flock" = Flock/ALPR cameras seen this
-    // session (was "hits"); "Attacks" = distinct APs under a deauth flood (flood-
-    // gated, so a lone benign disassoc never shows). Fixed columns -> clean pair.
+    // --- counters: Flock cameras / active attacks / Flippers ----------------
+    // The three "what's near me" numbers. Flock = Flock/ALPR cameras (was "hits").
+    // Atk = active attacks (deauth-flood APs, flood-gated so a benign disassoc
+    // never shows). Flip = Flipper Zeros advertising nearby. Compact fixed columns
+    // so all three read cleanly on the 128 px row.
     size_t attacks = recon_app_attacks_detected(app);
-    char lbl[20];
+    size_t flippers = recon_app_flipper_count(app);
+    char lbl[16];
     snprintf(lbl, sizeof(lbl), "Flock %lu", (unsigned long)hits);
     canvas_draw_str(canvas, 2, 52, lbl);
-    snprintf(lbl, sizeof(lbl), "Attacks %u", (unsigned)attacks);
-    canvas_draw_str(canvas, 66, 52, lbl);
+    snprintf(lbl, sizeof(lbl), "Atk %u", (unsigned)attacks);
+    canvas_draw_str(canvas, 52, 52, lbl);
+    snprintf(lbl, sizeof(lbl), "Flip %u", (unsigned)flippers);
+    canvas_draw_str(canvas, 90, 52, lbl);
 
     // --- breakdown (alert) / live scan status (clear) -----------------------
     // On an alert the per-signal breakdown explains WHY; when CLEAR the same row

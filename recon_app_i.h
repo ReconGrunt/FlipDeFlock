@@ -43,6 +43,7 @@ typedef enum {
     BleCatSmartTag = 4, /**< Samsung SmartTag */
     BleCatFindMyDevice =
         5, /**< Google Find My Device network (0xFEAA): Pebblebee/Chipolo/Moto/Eufy */
+    BleCatFlipper = 6, /**< Flipper Zero (recon multitool): advertised name "Flipper <name>" */
 } BleCat;
 
 #define RECON_APP_FOLDER    EXT_PATH("apps_data/flipdeflock")
@@ -81,6 +82,7 @@ typedef struct {
     bool sound;
     bool flash_fast; /**< raise the flash (write) baud to 230400 after connect */
     bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
+    bool anomaly_flag; /**< Net Guardian: flag unidentified strong/persistent devices (default OFF, higher FP) */
 } ReconSettings;
 
 /** One deduplicated surveillance-device sighting. */
@@ -203,6 +205,13 @@ typedef struct {
     uint32_t esp_lines; /**< RX line heartbeat (generic mode liveness) */
     uint32_t esp_deauths; /**< deauth/disassoc frames seen (attack indicator) */
 
+    // Active attack-tool signature reported by the companion (ATK line): BLE-spam
+    // advert flood, beacon-spam (Marauder / Pineapple), or probe-request flood.
+    uint32_t esp_attack_tick; /**< furi tick of the last ATK line (0 = none this session) */
+    uint32_t esp_attack_value; /**< the count/rate the companion reported with it */
+    char esp_attack_kind[16]; /**< short kind from the ATK line, e.g. "BLE-spam" */
+    bool esp_attack_ble; /**< true if the signature is BLE-borne (BLE-spam) vs Wi-Fi */
+
     WifiAp wifi[RECON_WIFI_MAX]; /**< results of the last WiFi security scan */
     size_t wifi_count;
     bool wifi_scanning; /**< true between WBEGIN and WEND */
@@ -271,6 +280,12 @@ void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t 
  * Wi-Fi churn -- never counts as an attack. Drives the Net Guardian "Attacks".
  */
 size_t recon_app_attacks_detected(ReconApp* app);
+
+/** Record an active attack-tool signature from the companion ATK line (thread-safe). */
+void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value);
+
+/** Fresh Flipper Zeros advertising nearby this session (thread-safe). Net Guardian "Flip". */
+size_t recon_app_flipper_count(ReconApp* app);
 
 /** BLE scan results (thread-safe; called from the ESP worker). */
 void recon_app_ble_begin(ReconApp* app);

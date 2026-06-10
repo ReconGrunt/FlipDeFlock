@@ -111,6 +111,29 @@ static void esp_parse_companion(EspLink* esp, char* line) {
         }
         return;
     }
+    if(strncmp(line, "ATK,", 4) == 0) {
+        // ATK,<kind>,<value>  active attack-tool signature from the companion:
+        //   blespam     a flood of impersonation BLE adverts (Flipper/ESP spam)
+        //   beaconflood a flood of distinct beaconing APs (Marauder / Pineapple)
+        //   probeflood  an abnormal probe-request rate
+        // <value> is the count/rate the companion measured. Older app builds
+        // simply ignore this unknown line; older firmware never sends it.
+        char* f[3];
+        int n = 0;
+        char* p = line;
+        f[n++] = p;
+        while(*p && n < 3) {
+            if(*p == ',') {
+                *p = '\0';
+                f[n++] = p + 1;
+            }
+            p++;
+        }
+        if(n >= 2) {
+            recon_app_set_attack(esp->app, f[1], (n >= 3) ? strtoul(f[2], NULL, 10) : 0);
+        }
+        return;
+    }
     // ---- BLE scan: BBEGIN / BLE,... / BEND ----
     if(strncmp(line, "BBEGIN", 6) == 0) {
         recon_app_ble_begin(esp->app);

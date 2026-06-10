@@ -60,6 +60,7 @@ void recon_scene_guardian_on_enter(void* context) {
     app->wifi_count = 0;
     app->deauth_count = 0;
     app->esp_deauths = 0;
+    app->esp_attack_tick = 0; // no attack-tool signature carried in from a prior run
     app->esp_frames = 0;
     app->esp_hits = 0;
     app->esp_rebase = true; // per-session rebase off the companion's lifetime total
