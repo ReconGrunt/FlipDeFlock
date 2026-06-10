@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.40
+- **New app icon.** Swapped the abstract circle-slash for a **camera lens /
+  aperture** — the optic that watches you — so the menu icon actually reflects what
+  FlipDeFlock is for. Still a 10×10 1-bit Flipper icon (a literal CCTV camera was
+  tried but turns to mush at that size).
+
 ## v0.39
 - **Net Guardian: Flipper detection, attack-tool signatures, and an opt-in
   anomaly flag.** The watch face now shows three counters — **`Flock`** (cameras),
