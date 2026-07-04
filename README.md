@@ -435,7 +435,8 @@ MIT — see [LICENSE](LICENSE).
 
 FlipDeFlock is free and MIT-licensed, and it stays that way. If it's useful and
 you want to help cover development (and any legal costs that come with mapping
-surveillance hardware), there's a **Sponsor** button at the top of the repo.
+surveillance hardware), there's a **Sponsor** button at the top of the repo, or
+you can donate directly via [Ko-fi](https://ko-fi.com/recongrunt).
 Donations are optional and never gate a feature. Spreading the word, filing good
 detections, and sending patches help just as much — see [Contributing](#contributing).
 
