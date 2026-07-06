@@ -1,15 +1,12 @@
 {
   "ouis": [
-    "aa:bb:cc",
-    "de:ad:be"
+    "aa:bb:cc"
   ],
   "ssid_confirmed": [
-    "flock-",
-    "example-confirmed-"
+    "flock-"
   ],
   "ssid_likely": [
-    "flock",
-    "example"
+    "flock"
   ],
   "ie_fps": [
     "deadbeef"
