@@ -1,7 +1,7 @@
 # FlipDeFlock Roadmap
 
 A living plan, ordered by rough priority rather than a schedule. Current release:
-v0.25. The principles at the bottom constrain everything above them.
+v0.42. The principles at the bottom constrain everything above them.
 
 For the full per-version history see [changelog.md](changelog.md).
 
@@ -14,10 +14,13 @@ For the full per-version history see [changelog.md](changelog.md).
   projection and scale bar, the NFC default-key deep check, the flasher
   backup/flash, and that the Share-to-DeFlock QR actually scans on a phone. Tune
   the `#define` thresholds from field data.
-- [ ] **Seed the probe IE-fingerprint table.** v0.22 shipped the pipeline inert
-  (empty table = no behaviour change). Capture probe-request IEs from confirmed
-  Flock units, add their hashes to `flock_db.c`, then enable the rung. It does
-  nothing useful until seeded, by design.
+- [ ] **Seed the probe IE-fingerprint table.** The pipeline ships inert (empty
+  built-in table = no behaviour change). v0.42 made it *field-seedable*: an
+  `"ie_fps"` list in `signatures.json` registers user fingerprints (capped at the
+  "Class?" rung), and each detection's fingerprint is shown as `IE-fp:` on its
+  detail screen to harvest from a confirmed unit. Remaining work: capture from
+  corroborated Flock units and, once validated, promote vetted hashes into the
+  compiled-in `flock_db.c` table (the only path that can score above "Class?").
 
 ## Next
 
@@ -25,19 +28,24 @@ For the full per-version history see [changelog.md](changelog.md).
   on-screen "AUDIO SURVEILLANCE HERE", so reading the screen in public isn't a
   personal-safety exposure. (Now more relevant: v0.25 can positively label a
   Raven as audio surveillance on-screen.)
-- [ ] **Ship a seed `signatures.json`.** v0.25 added the SD-card signature loader
-  (load-only, fail-safe, merged over the built-ins). Next: distribute a
-  community-maintained `signatures.json` of new OUIs/SSID patterns so users get
-  fresh signatures without waiting on a release — and let the BLE name patterns
-  become updatable too (today the loader covers OUIs + SSID substrings).
+- [ ] **Ship a seed `signatures.json`.** The SD-card signature loader (load-only,
+  fail-safe, merged over the built-ins) now covers OUIs, SSID substrings, and — as
+  of v0.42 — IE fingerprints. Next: distribute a community-maintained
+  `signatures.json` so users get fresh signatures without waiting on a release. The
+  remaining loader gap is **BLE name patterns** (deferred: BLE Flock ID is already
+  robust via the `0x09C8` manufacturer advert, and a user name-substring classifier
+  is false-positive-prone — revisit only as an additive-only signal).
 - [ ] **CI: retry the ESP32 core install.** The firmware build's "Install ESP32
   core" step flaky-fails on the arduino-cli core download and currently needs a
   manual re-run. Wrap it in a retry so it self-heals.
 
-Shipped in v0.25 (now in [changelog.md](changelog.md)): the **Raven vs Falcon
-split** (positive Raven ID via its 0x3100-0x3500 GATT services; Falcon never
-asserted by elimination) and the **updatable signature database** (extra
-OUIs/SSID patterns from `signatures.json` on the SD card).
+Shipped recently (full detail in [changelog.md](changelog.md)): **Net Guardian**
+(v0.34–v0.41, the fused always-on watch face + Suspicious list), the **Locator**
+RSSI-homing HUD (v0.41), the **Raven vs Falcon split** (v0.25, positive Raven ID
+via its 0x3100–0x3500 GATT services; Falcon never asserted by elimination), the
+**updatable signature database** (v0.25, extra OUIs/SSID patterns from
+`signatures.json`), and **field-updatable IE fingerprints** (v0.42, `"ie_fps"` in
+`signatures.json` + the on-screen `IE-fp:` readout, to catch MAC-randomizing units).
 
 ## Later
 

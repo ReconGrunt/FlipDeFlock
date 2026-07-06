@@ -26,6 +26,7 @@
 // Hard bounds. A FAP loads fully into 256 KB RAM, so keep everything tiny.
 #define SIG_MAX_OUIS     64u /**< owned OUI table cap (overflow silently ignored) */
 #define SIG_MAX_PATTERNS 32u /**< per-list SSID-pattern cap (overflow ignored) */
+#define SIG_MAX_IE_FPS   32u /**< IE-fingerprint table cap (overflow ignored) */
 #define SIG_MAX_FILE     8192u /**< largest signatures.json we will read */
 #define SIG_MAX_TOKENS   512u /**< jsmn token budget (bounds parse RAM) */
 #define SIG_MAX_NEEDLE   48u /**< longest SSID substring we keep (lowercased) */
@@ -37,6 +38,8 @@ struct SigDb {
     size_t confirmed_count;
     char** likely;
     size_t likely_count;
+    uint32_t* ie_fps; /**< owned IE-fingerprint table, NULL if none */
+    size_t ie_fp_count;
 };
 
 /** ASCII lower-case (no locale), matching flock_db.c's matcher contract. */
@@ -200,10 +203,61 @@ static char** sig_parse_patterns(
     return list;
 }
 
+/**
+ * Parse an IE-fingerprint array (each element an exactly-8-hex-char string = a
+ * FNV-1a uint32, matching the companion's `,fp=` field) into a freshly malloc'd
+ * uint32_t table, capped at SIG_MAX_IE_FPS. Non-8-hex or zero entries are
+ * skipped. Returns the table (caller frees) + kept count, or NULL on alloc
+ * failure / nothing kept.
+ */
+static uint32_t* sig_parse_ie_fps(
+    const char* js,
+    const jsmntok_t* tokens,
+    int count,
+    int arr_idx,
+    size_t* out_count) {
+    const jsmntok_t* arr = &tokens[arr_idx];
+    if(arr->type != JSMN_ARRAY || arr->size <= 0) return NULL;
+
+    uint32_t* table = malloc(sizeof(uint32_t) * SIG_MAX_IE_FPS);
+    if(!table) return NULL;
+
+    size_t kept = 0;
+    int idx = arr_idx + 1;
+    for(int e = 0; e < arr->size && idx < count; e++) {
+        const jsmntok_t* el = &tokens[idx];
+        if(el->type == JSMN_STRING && kept < SIG_MAX_IE_FPS) {
+            size_t slen = (size_t)(el->end - el->start);
+            if(slen == 8) { // exactly one uint32 worth of hex
+                uint32_t v = 0;
+                bool ok = true;
+                for(size_t c = 0; c < 8; c++) {
+                    int nib = sig_hex_nibble(js[el->start + c]);
+                    if(nib < 0) {
+                        ok = false;
+                        break;
+                    }
+                    v = (v << 4) | (uint32_t)nib;
+                }
+                if(ok && v != 0) table[kept++] = v; // 0 = "no fingerprint", skip
+            }
+        }
+        idx += sig_token_span(tokens, count, idx);
+    }
+
+    if(kept == 0) {
+        free(table);
+        return NULL;
+    }
+    *out_count = kept;
+    return table;
+}
+
 /** Free a SigDb and everything it owns (after deregistering). NULL-safe. */
 static void sig_db_destroy(SigDb* db) {
     if(!db) return;
     free(db->ouis);
+    free(db->ie_fps);
     if(db->confirmed) {
         for(size_t i = 0; i < db->confirmed_count; i++)
             free(db->confirmed[i]);
@@ -290,6 +344,8 @@ SigDb* sig_db_load(Storage* storage) {
             db->confirmed = sig_parse_patterns(js, tokens, count, val_idx, &db->confirmed_count);
         } else if(sig_tok_eq(js, key, "ssid_likely")) {
             db->likely = sig_parse_patterns(js, tokens, count, val_idx, &db->likely_count);
+        } else if(sig_tok_eq(js, key, "ie_fps")) {
+            db->ie_fps = sig_parse_ie_fps(js, tokens, count, val_idx, &db->ie_fp_count);
         }
 
         // Advance past key + its (possibly nested/unknown) value.
@@ -300,7 +356,7 @@ SigDb* sig_db_load(Storage* storage) {
     free(js);
 
     // Nothing usable parsed -> behave exactly like an absent file.
-    if(!db->ouis && !db->confirmed && !db->likely) {
+    if(!db->ouis && !db->confirmed && !db->likely && !db->ie_fps) {
         sig_db_destroy(db);
         return NULL;
     }
@@ -312,6 +368,7 @@ SigDb* sig_db_load(Storage* storage) {
         db->confirmed ? db->confirmed_count : 0,
         (const char* const*)db->likely,
         db->likely ? db->likely_count : 0);
+    flock_db_set_extra_ie_fps(db->ie_fps, db->ie_fps ? db->ie_fp_count : 0);
 
     return db;
 }
@@ -321,5 +378,6 @@ void sig_db_free(SigDb* db) {
     // Deregister FIRST so the matchers stop reading our arrays before we free.
     flock_db_set_extra_ouis(NULL, 0);
     flock_db_set_extra_ssid_patterns(NULL, 0, NULL, 0);
+    flock_db_set_extra_ie_fps(NULL, 0);
     sig_db_destroy(db);
 }

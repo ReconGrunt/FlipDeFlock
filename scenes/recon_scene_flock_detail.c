@@ -77,6 +77,12 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
         furi_string_cat(s, "\nGPS: no fix");
     }
 
+    // Show the probe IE-fingerprint when present: a confirmed unit's fp can be
+    // dropped into signatures.json ("ie_fps") to catch its MAC-randomized twins.
+    if(e.ie_fp != 0) {
+        furi_string_cat_printf(s, "\nIE-fp: %08lx", (unsigned long)e.ie_fp);
+    }
+
     widget_add_text_scroll_element(widget, 0, 0, 128, 44, furi_string_get_cstr(s));
     furi_string_free(s);
 

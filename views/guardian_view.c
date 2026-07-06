@@ -97,6 +97,10 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     int score = (int)app->watch.score; // threat meter pct (0..100)
     char bd[WATCHSCORE_BREAKDOWN_LEN];
     snprintf(bd, sizeof(bd), "%s", app->watch.breakdown);
+    // Guardian HUD tallies were computed in the last watchscore tick under this
+    // lock -- read them here instead of re-acquiring the mutex twice per frame.
+    unsigned attacks = app->guardian_atk_n;
+    unsigned flippers = app->guardian_flip_n;
     furi_mutex_release(app->mutex);
 
     uint8_t phase = app->guardian_phase;
@@ -151,14 +155,12 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
     // Atk = active attacks (deauth-flood APs, flood-gated so a benign disassoc
     // never shows). Flip = Flipper Zeros advertising nearby. Compact fixed columns
     // so all three read cleanly on the 128 px row.
-    size_t attacks = recon_app_attacks_detected(app);
-    size_t flippers = recon_app_flipper_count(app);
     char lbl[16];
     snprintf(lbl, sizeof(lbl), "Flock %lu", (unsigned long)hits);
     canvas_draw_str(canvas, 2, 52, lbl);
-    snprintf(lbl, sizeof(lbl), "Atk %u", (unsigned)attacks);
+    snprintf(lbl, sizeof(lbl), "Atk %u", attacks);
     canvas_draw_str(canvas, 52, 52, lbl);
-    snprintf(lbl, sizeof(lbl), "Flip %u", (unsigned)flippers);
+    snprintf(lbl, sizeof(lbl), "Flip %u", flippers);
     canvas_draw_str(canvas, 90, 52, lbl);
 
     // --- breakdown (alert) / live scan status (clear) -----------------------

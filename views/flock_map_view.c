@@ -21,20 +21,11 @@ struct FlockMapView {
     View* view;
 };
 
-// One projected camera (screen-space, derived after the mutex is released).
-typedef struct {
-    int16_t x, y;
-    uint8_t conf;
-} MapPoint;
-
 typedef struct {
     void* app; /**< ReconApp* */
-    MapPoint pts[RECON_FLOCK_MAX];
-    uint8_t count;
-    bool gps_valid;
-    float gps_course;
-    float span_m; /**< ground distance the fitted radius represents */
-    int8_t zoom;
+    int8_t zoom; /**< user zoom step (Left/Right); 0 = auto-fit. The draw callback
+                   *   reads all live data from ReconApp under the mutex into local
+                   *   scratch, so no per-camera state is cached in the model. */
 } FlockMapModel;
 
 static void flock_map_view_draw_callback(Canvas* canvas, void* _model) {
@@ -206,10 +197,6 @@ FlockMapView* flock_map_view_alloc(void) {
         FlockMapModel * model,
         {
             model->app = NULL;
-            model->count = 0;
-            model->gps_valid = false;
-            model->gps_course = NAN;
-            model->span_m = 0.0f;
             model->zoom = 0;
         },
         false);

@@ -2,10 +2,11 @@
 #include <string.h>
 
 /**
- * 31 OUI prefixes observed in fielded Flock Safety deployments.
- * First 30 from @NitekryDPaul research; last (82:6b:f2) from DeFlockJoplin
- * field testing. These are generic vendor prefixes (Liteon, Espressif, etc.),
- * hence OUI-only matches are scored "possible", never "confirmed".
+ * 32 OUI prefixes observed in fielded Flock Safety deployments.
+ * First 30 from @NitekryDPaul research; 82:6b:f2 from DeFlockJoplin field
+ * testing; b4:1e:52 is Flock Safety's own IEEE-registered OUI (GainSec). These
+ * are generic vendor prefixes (Liteon, Espressif, etc.), hence OUI-only matches
+ * are scored "possible", never "confirmed".
  */
 static const uint8_t flock_ouis[][3] = {
     {0x70, 0xc9, 0x4e}, {0x3c, 0x91, 0x80}, {0xd8, 0xf3, 0xbc},
@@ -38,6 +39,8 @@ static const char* const* extra_ssid_confirmed = NULL;
 static size_t extra_ssid_confirmed_count = 0;
 static const char* const* extra_ssid_likely = NULL;
 static size_t extra_ssid_likely_count = 0;
+static const uint32_t* extra_ie_fps = NULL;
+static size_t extra_ie_fp_count = 0;
 
 void flock_db_set_extra_ouis(const uint8_t (*ouis)[3], size_t count) {
     // NULL/0 clears the registration; otherwise just hold the caller's pointer.
@@ -54,6 +57,12 @@ void flock_db_set_extra_ssid_patterns(
     extra_ssid_confirmed_count = (confirmed && confirmed_count) ? confirmed_count : 0;
     extra_ssid_likely = (likely && likely_count) ? likely : NULL;
     extra_ssid_likely_count = (likely && likely_count) ? likely_count : 0;
+}
+
+void flock_db_set_extra_ie_fps(const uint32_t* fps, size_t count) {
+    // NULL/0 clears the registration; otherwise just hold the caller's pointer.
+    extra_ie_fps = (fps && count) ? fps : NULL;
+    extra_ie_fp_count = (fps && count) ? count : 0;
 }
 
 size_t flock_oui_count(void) {
@@ -155,13 +164,19 @@ static const uint32_t flock_ie_fps[] = {
 
 #define FLOCK_IE_FP_COUNT (sizeof(flock_ie_fps) / sizeof(flock_ie_fps[0]))
 
-bool flock_ie_fp_match(uint32_t fp) {
-    if(fp == 0) return false; // 0 = "no fingerprint", never a match
+FlockIeFp flock_ie_fp_match(uint32_t fp) {
+    if(fp == 0) return FlockIeFpNone; // 0 = "no fingerprint", never a match
+    // Built-ins first: a compiled-in (maintainer-verified) hit is the strongest.
     for(size_t i = 0; i < FLOCK_IE_FP_COUNT; i++) {
         if(flock_ie_fps[i] == 0) continue; // skip the sentinel / unseeded slots
-        if(flock_ie_fps[i] == fp) return true;
+        if(flock_ie_fps[i] == fp) return FlockIeFpBuiltin;
     }
-    return false;
+    // Then the optional user-supplied extras (UNVERIFIED -> the caller caps these
+    // at FlockConfidenceProbeFp; they can only ADD a candidate-class match).
+    for(size_t i = 0; i < extra_ie_fp_count; i++) {
+        if(extra_ie_fps[i] == fp) return FlockIeFpUser;
+    }
+    return FlockIeFpNone;
 }
 
 FlockConfidence flock_score(const uint8_t* mac, const char* ssid, bool is_probe_req) {

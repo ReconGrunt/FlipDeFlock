@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.42
+- **Catch cameras that randomize their MAC — with field-updatable "class"
+  fingerprints.** Flock's fielded cameras have moved to phoning home as ordinary
+  Wi-Fi *probe requests* (their old setup Wi-Fi network is usually off now), and
+  they rotate their MAC to dodge OUI matching. The defense is the probe's **IE
+  fingerprint** — the shape of its 802.11 info-elements, which is MAC-independent.
+  The app has computed this on the companion for a while, but the match table shipped
+  empty and could only be seeded by rebuilding. Now:
+  - **`signatures.json` accepts an `"ie_fps"` list** (8-hex fingerprints), alongside
+    the existing `ouis` / `ssid_confirmed` / `ssid_likely`. Same load-only, offline,
+    fail-safe rules; capped for RAM (≤32).
+  - **The Flock detail screen shows a detection's `IE-fp:`** so you can read it off a
+    *confirmed* camera and drop it into the file to catch its MAC-randomized twins.
+  - **Precision preserved:** a user fingerprint only ever scores a candidate
+    **"Class?"** — never "Confirmed", even with a Flock OUI — because it's unverified
+    community data. A missing/garbled file still falls back cleanly to the built-ins.
+- **Performance pass (no behavior change).** Under-the-hood only, all build- and
+  host-tested: the Flock live-list now snapshots its data and draws *unlocked*
+  (instead of holding the scan lock across the whole screen redraw, which stalled the
+  ESP worker every frame); the WiFi-audit sort grades each network once instead of
+  O(n²) times; the Net Guardian reads its Flock/Atk/Flip counters from one snapshot
+  instead of re-locking three times per frame; and ~400 B of dead map-view buffers
+  were removed.
+
 ## v0.41
 - **Locator: hunt a marked device by live signal strength.** A new top-menu
   **Locator** lists every device you've **marked** (the report star/tag on a Flock,

@@ -28,7 +28,8 @@ void recon_app_report_flock(
     int8_t rssi,
     uint8_t channel,
     char ftype,
-    FlockConfidence confidence) {
+    FlockConfidence confidence,
+    uint32_t ie_fp) {
     if(confidence == FlockConfidenceNone) return;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -60,6 +61,9 @@ void recon_app_report_flock(
         if(channel != 0) entry->channel = channel;
         if(ftype) entry->ftype = ftype;
         if(confidence > entry->confidence) entry->confidence = confidence;
+        // Keep the probe fingerprint so the detail screen can show it (for
+        // seeding). Don't let a later fp-less sighting (BLE/beacon) wipe it.
+        if(ie_fp != 0) entry->ie_fp = ie_fp;
         if(ssid && ssid[0] && entry->ssid[0] == '\0') {
             strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
             entry->ssid[RECON_SSID_LEN - 1] = '\0';
@@ -241,7 +245,7 @@ void recon_app_ble_add(
     // gets geotagged, and lands in reports. (Done after releasing the mutex;
     // recon_app_report_flock takes it itself.)
     if(cat == BleCatFlock) {
-        recon_app_report_flock(app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed);
+        recon_app_report_flock(app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed, 0);
     }
 }
 
@@ -364,24 +368,6 @@ void recon_app_wifi_end(ReconApp* app) {
 #define WATCH_ANOMALY_RSSI_MIN (-55)
 #define WATCH_ANOMALY_MIN_SEEN 3
 
-size_t recon_app_attacks_detected(ReconApp* app) {
-    // Count distinct BSSIDs that crossed the deauth-flood bar this session. Using
-    // the same threshold as the scorer keeps the on-screen "Attacks" honest: a
-    // single benign disassoc (roaming, idle timeout, an AP reboot) never counts.
-    size_t n = 0;
-    uint32_t now = furi_get_tick();
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    for(size_t i = 0; i < app->deauth_count; i++) {
-        if(app->deauth[i].count >= WATCH_DEAUTH_FLOOD_MIN) n++;
-    }
-    // Also count a live attack-tool signature (BLE-spam / beacon / probe flood)
-    // as one active attack, so the Guardian's "Atk" reflects tools, not just
-    // deauth floods. Same freshness window the scorer uses.
-    if(app->esp_attack_tick && (now - app->esp_attack_tick) <= WATCH_ATTACK_FRESH_MS) n++;
-    furi_mutex_release(app->mutex);
-    return n;
-}
-
 void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_attack_tick = furi_get_tick();
@@ -400,22 +386,6 @@ void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value) {
     app->esp_attack_kind[sizeof(app->esp_attack_kind) - 1] = '\0';
     app->esp_connected = true;
     furi_mutex_release(app->mutex);
-}
-
-size_t recon_app_flipper_count(ReconApp* app) {
-    // Distinct Flipper Zeros seen recently this session. Freshness-gated so one
-    // that walked away ages out of the count instead of lingering forever.
-    size_t n = 0;
-    uint32_t now = furi_get_tick();
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    for(size_t i = 0; i < app->ble_count; i++) {
-        if(app->ble[i].cat == BleCatFlipper &&
-           (now - app->ble[i].last_tick) <= WATCH_BLE_FRESH_MS) {
-            n++;
-        }
-    }
-    furi_mutex_release(app->mutex);
-    return n;
 }
 
 bool recon_ble_is_anomaly(const BleDevice* e, uint32_t now) {
@@ -531,6 +501,25 @@ void recon_app_watchscore_tick(ReconApp* app) {
             }
         }
     }
+
+    // Cache the Guardian HUD tallies under this same lock so guardian_view can
+    // read them from its own snapshot instead of re-acquiring the mutex (and
+    // re-walking these arrays) twice per frame. Mirrors recon_app_flipper_count /
+    // recon_app_attacks_detected exactly.
+    uint8_t flip_n = 0;
+    for(size_t i = 0; i < app->ble_count; i++) {
+        if(app->ble[i].cat == BleCatFlipper &&
+           (now - app->ble[i].last_tick) <= WATCH_BLE_FRESH_MS)
+            flip_n++;
+    }
+    uint8_t atk_n = 0;
+    for(size_t i = 0; i < app->deauth_count; i++) {
+        if(app->deauth[i].count >= WATCH_DEAUTH_FLOOD_MIN) atk_n++;
+    }
+    if(app->esp_attack_tick && (now - app->esp_attack_tick) <= WATCH_ATTACK_FRESH_MS) atk_n++;
+    app->guardian_flip_n = flip_n;
+    app->guardian_atk_n = atk_n;
+
     furi_mutex_release(app->mutex);
 
     // --- evaluate the scorer (pure logic on the snapshot) -------------------

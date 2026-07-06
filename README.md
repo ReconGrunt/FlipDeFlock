@@ -127,6 +127,18 @@ Feedback and field data are what move it forward; see [Contributing](#contributi
 
 ## What's new
 
+**v0.42**
+- **Detect MAC-randomizing cameras, and update signatures without a rebuild.** Fielded
+  Flock cameras now phone home as plain Wi-Fi **probe requests** and rotate their MAC to
+  evade OUI matching — so the durable signal is the probe's **IE fingerprint** (the shape
+  of its 802.11 info-elements, independent of the MAC). You can now drop an **`"ie_fps"`**
+  list into `apps_data/flipdeflock/signatures.json` (next to `ouis` / `ssid_*`), and each
+  detection's fingerprint is shown as **`IE-fp:`** on its detail screen so you can harvest
+  it from a *confirmed* camera and catch its randomized twins. Still load-only, offline,
+  and fail-safe — and an unverified user fingerprint only ever scores a candidate
+  **"Class?"**, never "Confirmed" (precision over recall). Plus an internal performance
+  pass (unlocked list rendering, single-pass WiFi grading, fewer Guardian re-locks).
+
 **v0.41**
 - **Locator — find a marked device by signal, and a Suspicious list on the Guardian.**
   Mark any detection (the report star on Flock / BLE / WiFi is now also the Locator

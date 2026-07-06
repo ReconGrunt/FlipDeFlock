@@ -34,20 +34,29 @@ typedef enum {
     FlockConfidenceConfirmed, /**< SSID matches a known Flock naming pattern. */
 } FlockConfidence;
 
+/** Source of an IE-fingerprint match, so a caller can gate confidence by trust. */
+typedef enum {
+    FlockIeFpNone = 0, /**< no match (or fp==0 "no fingerprint"). */
+    FlockIeFpBuiltin, /**< matched a compiled-in, maintainer-verified fingerprint. */
+    FlockIeFpUser, /**< matched a user-supplied (signatures.json) fingerprint -- UNVERIFIED. */
+} FlockIeFp;
+
 /**
  * B1: match a probe-request IE-skeleton FNV-1a hash (from the companion's
- * `,fp=<hex32>` field) against a curated table of confirmed-Flock fingerprints.
+ * `,fp=<hex32>` field) against the curated table of confirmed-Flock fingerprints
+ * PLUS any user-supplied ones registered from signatures.json.
  *
- * PRECISION GUARD: the table ships EMPTY/inert. We do not yet have validated
- * confirmed-Flock IE-fp captures, so nothing matches and there is zero behaviour
- * change (zero false positives) until real seeds are added. This honours
- * precision-over-recall: a false "Flock" is worse than a missed one. The match
- * is a device-CLASS / firmware-stack signature, never a unique device ID.
+ * PRECISION GUARD: the compiled-in table ships EMPTY/inert -- we do not yet have
+ * validated captures, so a built-in match is currently impossible (zero false
+ * positives). User fingerprints are UNVERIFIED: a FlockIeFpUser match MUST be
+ * capped at the candidate-class level (FlockConfidenceProbeFp) by the caller and
+ * can never reach Confirmed. The match is a device-CLASS / firmware-stack
+ * signature, never a unique device ID.
  *
  * @param fp  IE-skeleton hash; 0 means "no fingerprint" and never matches.
- * @return    true only if `fp` is in the curated table (currently always false).
+ * @return    FlockIeFpBuiltin / FlockIeFpUser / FlockIeFpNone.
  */
-bool flock_ie_fp_match(uint32_t fp);
+FlockIeFp flock_ie_fp_match(uint32_t fp);
 
 /** Number of known Flock-associated OUI prefixes. */
 size_t flock_oui_count(void);
@@ -95,6 +104,20 @@ void flock_db_set_extra_ssid_patterns(
     size_t confirmed_count,
     const char* const* likely,
     size_t likely_count);
+
+/**
+ * Register OPTIONAL, user-supplied IE-fingerprint hashes (FNV-1a uint32 of the
+ * probe IE skeleton, as emitted in the companion `,fp=` field) that
+ * `flock_ie_fp_match` tests IN ADDITION to the compiled-in table, reporting them
+ * as FlockIeFpUser. Loaded at runtime from signatures.json and merged OVER the
+ * built-ins (can only ADD matches). Pass NULL/0 to clear (the fail-safe default).
+ *
+ * Ownership: the array is CALLER-OWNED and must outlive use. LOAD-ONLY /
+ * UNVERIFIED: because a false positive is worse than a missed detection, a user
+ * fingerprint match is capped at FlockConfidenceProbeFp ("Class?") by the caller
+ * -- it can never, even with a Flock OUI, assert a Confirmed detection.
+ */
+void flock_db_set_extra_ie_fps(const uint32_t* fps, size_t count);
 
 /**
  * Confidence contributed by an SSID string alone (may be NULL/empty for hidden

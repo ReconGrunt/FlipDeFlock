@@ -93,8 +93,11 @@ typedef struct {
     char ssid[RECON_SSID_LEN];
     int8_t rssi;
     uint8_t channel;
-    char ftype; /**< P/B/R/O */
+    char ftype; /**< P/B/R/O/F/L */
     FlockConfidence confidence;
+    uint32_t ie_fp; /**< probe IE-skeleton fingerprint of this detection (0=none);
+                      *   shown on the detail screen so it can be seeded into
+                      *   signatures.json to catch MAC-randomized siblings. */
     float lat; /**< geotag of best sighting, NAN if none */
     float lon;
     float heading; /**< observer course-over-ground at sighting, NAN if none */
@@ -234,6 +237,9 @@ typedef struct {
     WatchScore watch; /**< fused "am I being watched?" scorer (C1) */
     uint32_t guardian_since; /**< tick the Net Guardian session started (uptime) */
     uint8_t guardian_phase; /**< current rotating-sweep phase (0=flockcombo,1=ble,2=wifi) */
+    uint8_t guardian_flip_n; /**< cached nearby-Flipper count for the HUD (set each
+                              *   watchscore tick, so the view needn't re-lock). */
+    uint8_t guardian_atk_n; /**< cached active-attack count for the HUD. */
 
     // Locator: hunt down one marked device by live signal strength (hot/cold).
     uint8_t locate_mac[6]; /**< target MAC/BSSID/BLE addr */
@@ -267,7 +273,8 @@ void recon_app_report_flock(
     int8_t rssi,
     uint8_t channel,
     char ftype,
-    FlockConfidence confidence);
+    FlockConfidence confidence,
+    uint32_t ie_fp);
 
 /** Update the cached ESP status line (thread-safe). */
 void recon_app_set_esp_status(
@@ -286,18 +293,12 @@ void recon_app_set_deauths(ReconApp* app, uint32_t deauths);
 /** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
 void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);
 
-/**
- * Distinct APs hit by a deauth/disassoc *flood* this session (thread-safe).
- * Uses the same flood bar as the WATCHSCORE so a lone benign disassoc -- normal
- * Wi-Fi churn -- never counts as an attack. Drives the Net Guardian "Attacks".
- */
-size_t recon_app_attacks_detected(ReconApp* app);
-
 /** Record an active attack-tool signature from the companion ATK line (thread-safe). */
 void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value);
 
-/** Fresh Flipper Zeros advertising nearby this session (thread-safe). Net Guardian "Flip". */
-size_t recon_app_flipper_count(ReconApp* app);
+// Net Guardian HUD tallies (nearby Flippers / active attacks) are cached in
+// app->guardian_flip_n / guardian_atk_n by recon_app_watchscore_tick each tick,
+// so the view reads them from its own snapshot without re-acquiring the mutex.
 
 /**
  * Opt-in "anomaly": an unnamed, unidentified (no mfg id / no recognized category),

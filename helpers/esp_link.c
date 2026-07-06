@@ -294,17 +294,25 @@ static void esp_parse_companion(EspLink* esp, char* line) {
                 break;
             }
         }
-        if(flock_ie_fp_match(fp)) {
-            // Curated IE-fp match. + Flock OUI -> CONFIRMED; otherwise (e.g. a
-            // wildcard probe from a randomized/unknown MAC) -> a candidate
+        FlockIeFp fp_src = flock_ie_fp_match(fp);
+        if(fp_src == FlockIeFpBuiltin) {
+            // Verified compiled-in class fp. + Flock OUI -> CONFIRMED; otherwise
+            // (e.g. a wildcard probe from a randomized/unknown MAC) -> a candidate
             // device-CLASS match. Never weaker than the ESP's own score.
             FlockConfidence fp_conf = flock_oui_match(mac) ? FlockConfidenceConfirmed :
                                                              FlockConfidenceProbeFp;
             if(fp_conf > conf) conf = fp_conf;
             ftype = 'F'; // source label "probe-fp" in the detail scene
+        } else if(fp_src == FlockIeFpUser) {
+            // UNVERIFIED user fp (signatures.json): a candidate device-CLASS match
+            // ONLY -- capped at "Class?", never Confirmed even with a Flock OUI.
+            if(FlockConfidenceProbeFp > conf) conf = FlockConfidenceProbeFp;
+            ftype = 'F';
         }
 
-        recon_app_report_flock(esp->app, mac, ssid, rssi, ch, ftype, conf);
+        // Pass the raw fp through so the detail screen can show it (for seeding),
+        // whether or not it matched a known fingerprint yet.
+        recon_app_report_flock(esp->app, mac, ssid, rssi, ch, ftype, conf, fp);
     }
 }
 
@@ -386,7 +394,7 @@ static void esp_parse_generic(EspLink* esp, char* line) {
             continue;
         }
 
-        recon_app_report_flock(esp->app, mac, ssid ? ssid : "", 0, 0, 'O', conf);
+        recon_app_report_flock(esp->app, mac, ssid ? ssid : "", 0, 0, 'O', conf, 0);
     }
 }
 

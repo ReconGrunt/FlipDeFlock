@@ -72,31 +72,41 @@ static void recon_scene_wifi_show_timeout(ReconApp* app) {
 static void recon_scene_wifi_show_results(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     size_t n = app->wifi_count;
-    // Insertion sort in place: grade desc, then rssi desc.
+    // Grade each AP ONCE up front -- wifi_audit_grade is a pure function of
+    // (authmode,pairwise,wps,ssid), so caching it turns the old O(n^2) grade
+    // recompute (it was called inside the insertion loop) into a single O(n)
+    // pass, shrinking the work done while app->mutex is held.
+    static WifiGrade grades[RECON_WIFI_MAX];
+    for(size_t i = 0; i < n; i++) {
+        grades[i] = wifi_audit_grade(
+            app->wifi[i].authmode,
+            app->wifi[i].pairwise,
+            app->wifi[i].wps,
+            app->wifi[i].ssid,
+            NULL);
+    }
+    // Insertion sort in place (grade desc, then rssi desc), keeping grades[] aligned.
     for(size_t i = 1; i < n; i++) {
         WifiAp key = app->wifi[i];
-        WifiGrade kg = wifi_audit_grade(key.authmode, key.pairwise, key.wps, key.ssid, NULL);
+        WifiGrade kg = grades[i];
         int j = (int)i - 1;
-        while(j >= 0) {
-            WifiAp* a = &app->wifi[j];
-            WifiGrade ag = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, NULL);
-            if(ag > kg || (ag == kg && a->rssi >= key.rssi)) break;
+        while(j >= 0 && !(grades[j] > kg || (grades[j] == kg && app->wifi[j].rssi >= key.rssi))) {
             app->wifi[j + 1] = app->wifi[j];
+            grades[j + 1] = grades[j];
             j--;
         }
         app->wifi[j + 1] = key;
+        grades[j + 1] = kg;
     }
     // dup/rogue (evil-twin) flags are computed once at scan completion in
-    // recon_app_wifi_end (so Net Guardian sees them too); just tally here.
+    // recon_app_wifi_end (so Net Guardian sees them too); tally from the cache.
     int crit = 0, weak = 0, twin = 0;
     for(size_t i = 0; i < n; i++) {
-        WifiAp* a = &app->wifi[i];
-        WifiGrade g = wifi_audit_grade(a->authmode, a->pairwise, a->wps, a->ssid, NULL);
-        if(g == WifiGradeCritical)
+        if(grades[i] == WifiGradeCritical)
             crit++;
-        else if(g == WifiGradeWeak)
+        else if(grades[i] == WifiGradeWeak)
             weak++;
-        if(a->dup || a->rogue) twin++;
+        if(app->wifi[i].dup || app->wifi[i].rogue) twin++;
     }
     furi_mutex_release(app->mutex);
 

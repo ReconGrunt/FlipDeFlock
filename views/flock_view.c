@@ -39,12 +39,31 @@ static char confidence_char(FlockConfidence c) {
     }
 }
 
+// One visible list row, copied out of the shared table under the mutex so the
+// render pass can run entirely unlocked.
+typedef struct {
+    char conf_ch;
+    char ssid[RECON_SSID_LEN];
+    uint8_t mac[6];
+    int8_t rssi;
+    bool marked;
+    bool selected;
+} FlockRowSnap;
+
 static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     FlockViewModel* model = _model;
     ReconApp* app = model->app;
     if(!app) return;
 
     canvas_clear(canvas);
+
+    // ---- snapshot live data under the mutex; do ALL snprintf/canvas AFTER ----
+    // Holding app->mutex across the whole canvas render stalls the ESP worker
+    // every frame; copy the scalars, the deauth attribution and the <=3 visible
+    // rows into locals (cheap, no canvas/snprintf), release, then draw. Same
+    // pattern as flock_map_view.c.
+    FlockRowSnap rows[VISIBLE_ROWS];
+    int nrows = 0;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
 
@@ -56,12 +75,62 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     uint32_t lines = app->esp_lines;
     uint32_t deauths = app->esp_deauths;
     bool generic = (app->settings.backend == EspBackendGeneric);
+    bool gps_enabled = app->settings.gps_enabled;
     bool gps_valid = app->gps_valid;
     int gps_sats = app->gps_sats;
 
-    // Header / status bar. A non-zero deauth count is an attack indicator and
-    // takes over the header (drops channel/count to make room for the alert).
-    // Compact right-aligned status for the inverted title bar.
+    // Most-attacked BSSID + channel for the deauth header attribution.
+    bool have_attr = false;
+    uint8_t attr_ch = 0, attr_b3 = 0, attr_b4 = 0, attr_b5 = 0;
+    {
+        int top = -1;
+        uint32_t topc = 0;
+        for(size_t i = 0; i < app->deauth_count; i++) {
+            if(app->deauth[i].count > topc) {
+                topc = app->deauth[i].count;
+                top = (int)i;
+            }
+        }
+        if(top >= 0) {
+            DeauthTarget* t = &app->deauth[top];
+            have_attr = true;
+            attr_ch = t->channel;
+            attr_b3 = t->bssid[3];
+            attr_b4 = t->bssid[4];
+            attr_b5 = t->bssid[5];
+        }
+    }
+
+    // Clamp selection/scroll (touches only the view model) then copy the visible
+    // rows, so the render loop below needs no lock.
+    if(count > 0) {
+        if(model->selected >= (int)count) model->selected = count - 1;
+        if(model->selected < 0) model->selected = 0;
+        if(model->selected < model->top) model->top = model->selected;
+        if(model->selected >= model->top + VISIBLE_ROWS)
+            model->top = model->selected - VISIBLE_ROWS + 1;
+        if(model->top < 0) model->top = 0;
+
+        for(int row = 0; row < VISIBLE_ROWS; row++) {
+            int idx = model->top + row;
+            if(idx >= (int)count) break;
+            FlockEntry* e = &app->flock[idx];
+            FlockRowSnap* r = &rows[nrows++];
+            r->conf_ch = confidence_char(e->confidence);
+            strncpy(r->ssid, e->ssid, RECON_SSID_LEN - 1);
+            r->ssid[RECON_SSID_LEN - 1] = '\0';
+            memcpy(r->mac, e->mac, 6);
+            r->rssi = e->rssi;
+            r->marked = e->marked;
+            r->selected = (idx == model->selected);
+        }
+    }
+
+    furi_mutex_release(app->mutex);
+
+    // ---- render from the snapshot (no mutex held) --------------------------
+    // Header / status bar. A real deauth flood takes over the header. Compact
+    // right-aligned status for the inverted title bar.
     char right[12];
     if(deauths >= DEAUTH_FLOOD_MIN) {
         snprintf(right, sizeof(right), "!DEAUTH");
@@ -75,25 +144,9 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // Fuller status sub-line under the bar (nothing from the old header lost).
     char hdr[48];
     if(deauths >= DEAUTH_FLOOD_MIN) {
-        // Attribution: name the most-attacked BSSID + channel (mutex held here).
-        int top = -1;
-        uint32_t topc = 0;
-        for(size_t i = 0; i < app->deauth_count; i++) {
-            if(app->deauth[i].count > topc) {
-                topc = app->deauth[i].count;
-                top = (int)i;
-            }
-        }
-        if(top >= 0) {
-            DeauthTarget* t = &app->deauth[top];
+        if(have_attr) {
             snprintf(
-                hdr,
-                sizeof(hdr),
-                "!DEAUTH ch%u %02X%02X%02X",
-                t->channel,
-                t->bssid[3],
-                t->bssid[4],
-                t->bssid[5]);
+                hdr, sizeof(hdr), "!DEAUTH ch%u %02X%02X%02X", attr_ch, attr_b3, attr_b4, attr_b5);
         } else {
             snprintf(
                 hdr,
@@ -126,7 +179,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     canvas_draw_str(canvas, 0, 22, hdr);
 
     char gps_str[12];
-    if(app->settings.gps_enabled) {
+    if(gps_enabled) {
         if(gps_valid) {
             snprintf(gps_str, sizeof(gps_str), "G:%d", gps_sats);
         } else {
@@ -145,26 +198,13 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             AlignCenter,
             AlignCenter,
             connected ? "Scanning for ALPR..." : "Connect ESP32...");
-        furi_mutex_release(app->mutex);
         return;
     }
 
-    // Clamp selection/scroll.
-    if(model->selected >= (int)count) model->selected = count - 1;
-    if(model->selected < 0) model->selected = 0;
-    if(model->selected < model->top) model->top = model->selected;
-    if(model->selected >= model->top + VISIBLE_ROWS)
-        model->top = model->selected - VISIBLE_ROWS + 1;
-    if(model->top < 0) model->top = 0;
-
-    for(int row = 0; row < VISIBLE_ROWS; row++) {
-        int idx = model->top + row;
-        if(idx >= (int)count) break;
-        FlockEntry* e = &app->flock[idx];
-
+    for(int row = 0; row < nrows; row++) {
+        FlockRowSnap* r = &rows[row];
         int y = LIST_TOP + row * ROW_H;
-        bool sel = (idx == model->selected);
-        if(sel) {
+        if(r->selected) {
             canvas_set_color(canvas, ColorBlack);
             canvas_draw_box(canvas, 0, y - 1, 128, ROW_H);
             canvas_set_color(canvas, ColorWhite);
@@ -173,20 +213,20 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         }
 
         char line[48];
-        if(e->ssid[0] != '\0') {
-            snprintf(line, sizeof(line), "%c %s", confidence_char(e->confidence), e->ssid);
+        if(r->ssid[0] != '\0') {
+            snprintf(line, sizeof(line), "%c %s", r->conf_ch, r->ssid);
         } else {
             snprintf(
                 line,
                 sizeof(line),
                 "%c %02X:%02X:%02X:%02X:%02X:%02X",
-                confidence_char(e->confidence),
-                e->mac[0],
-                e->mac[1],
-                e->mac[2],
-                e->mac[3],
-                e->mac[4],
-                e->mac[5]);
+                r->conf_ch,
+                r->mac[0],
+                r->mac[1],
+                r->mac[2],
+                r->mac[3],
+                r->mac[4],
+                r->mac[5]);
         }
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(canvas, 2, y + 8, line);
@@ -194,25 +234,23 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         // Right edge: RSSI as signal bars (replaces the raw "-33dB"). The bars
         // helper hardcodes ColorBlack, so on the inverted (selected) row it
         // would be invisible -> show the exact dB as white text there instead.
-        if(sel) {
+        if(r->selected) {
             char meta[18];
-            if(e->marked) {
-                snprintf(meta, sizeof(meta), "*%ddB", e->rssi);
+            if(r->marked) {
+                snprintf(meta, sizeof(meta), "*%ddB", r->rssi);
             } else {
-                snprintf(meta, sizeof(meta), "%ddB", e->rssi);
+                snprintf(meta, sizeof(meta), "%ddB", r->rssi);
             }
             canvas_draw_str_aligned(canvas, 126, y + 8, AlignRight, AlignBottom, meta);
         } else {
-            if(e->marked) {
+            if(r->marked) {
                 // marked indicator just left of the bars
                 canvas_draw_str(canvas, 96, y + 8, "*");
             }
-            ui_signal_bars(canvas, 104, y - 1, e->rssi); // cell ~104..114, baseline y+7
+            ui_signal_bars(canvas, 104, y - 1, r->rssi); // cell ~104..114, baseline y+7
         }
     }
     canvas_set_color(canvas, ColorBlack);
-
-    furi_mutex_release(app->mutex);
 }
 
 static bool flock_view_input_callback(InputEvent* event, void* context) {

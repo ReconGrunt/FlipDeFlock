@@ -21,12 +21,18 @@
  *   - UNVERIFIED: user signatures are not vetted. Because a false positive is
  *     worse than a missed detection, an OUI-only hit (built-in OR user) is
  *     still only scored "possible"; SSID matches follow the documented ladder.
- *   - BOUNDED RAM: counts are capped (<=64 OUIs, <=32 patterns per list) and
- *     all transient parse buffers are freed before return; the only lasting
- *     allocation is the small owned arrays held by the returned handle.
+ *   - BOUNDED RAM: counts are capped (<=64 OUIs, <=32 patterns per list, <=32
+ *     IE-fingerprints) and all transient parse buffers are freed before return;
+ *     the only lasting allocation is the small owned arrays held by the handle.
  *
  * JSON schema (all keys optional; extra keys ignored):
- *   { "ouis": ["aa:bb:cc"], "ssid_confirmed": ["flock-"], "ssid_likely": ["flock"] }
+ *   { "ouis": ["aa:bb:cc"], "ssid_confirmed": ["flock-"], "ssid_likely": ["flock"],
+ *     "ie_fps": ["deadbeef"] }
+ *
+ * "ie_fps" are 8-hex-char probe IE-skeleton fingerprints (the value shown as
+ * "IE-fp:" on a Flock detection's detail screen). They survive MAC randomization
+ * but, being UNVERIFIED user data, only ever score a candidate "Class?" -- never
+ * "Confirmed".
  *
  * See docs/signatures.example.json for a documented sample.
  */
