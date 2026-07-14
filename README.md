@@ -8,18 +8,22 @@ counter-surveillance site surveys:
 - 🛰️ **Flock / ALPR Detect** — finds Flock Safety / ALPR cameras over Wi-Fi and
   BLE (the companion firmware interleaves a 2.4 GHz sniff with a BLE scan),
   geotags them with GPS, and marks them for a report.
+  
 - 🗺️ **On-device Map** — a live Flipper-screen map plotting detected cameras by
   bearing and distance around your GPS position (auto-fit, heading, scale bar).
   Lets you see what's nearby in the field without exporting.
+  
 - 📶 **WiFi Audit** — scans nearby networks and grades each one's security
   (Open/WEP/WPA1/WPA2/WPA3, WPS, TKIP, hidden), spelling out what's weak, and
   flags **evil-twin** SSIDs (same name, multiple BSSIDs). Also does passive
   deauth/disassoc-flood detection that alerts live on the Detect screen.
   *Requires the companion firmware* (Marauder doesn't emit encryption over serial).
+  
 - 📡 **BLE / Tracker Scan** — detects Flock/Raven BLE beacons and AirTag / Tile /
   SmartTag trackers, and flags any tracker that follows you across GPS waypoints
   (anti-stalking). Positively labels a **Raven (audio sensor)** when it sees the
   Raven's own Bluetooth services. Companion firmware.
+  
 - 🛡️ **Net Guardian** — a leave-it-on-the-desk "personal net guardian." Keeps the
   ESP running and **rotates** it across Wi-Fi + BLE so the fused
   **CLEAR / WATCHFUL / ELEVATED** "am I being watched?" score stays live, with a
@@ -31,25 +35,30 @@ counter-surveillance site surveys:
   emits nothing and can't be detected by anything — only active transmitters can.)
   Press **OK** to open a **Suspicious list** (Flippers, anomaly devices, rogue APs)
   and send one straight to the Locator. Companion firmware.
+  
 - 🎯 **Locator** — **mark** any device (the report star on a Flock / BLE / WiFi
   detection doubles as the Locator pool) and hunt it down by **live signal
   strength**: a hot/cold meter that climbs as you physically get closer, peak-hold,
   and a warmer/colder trend. Works **without GPS** (a fix only adds a "strongest
   here" note). Honest by design — there's no compass arrow (that needs a
   directional antenna); you close in by walking. Companion firmware.
+  
 - 💳 **NFC / RFID Audit** — identifies a presented card's protocol and grades its
   security posture for access-control reviews. On a MIFARE Classic, a **Deep**
   check captures the UID and tries the Flipper's on-SD key dictionary to report
   how many sectors open with factory/default keys (trivially cloneable).
+  
 - ⚡ **ESP32 Firmware** — backs up the board's current firmware to SD and flashes
   a `.bin` (companion / Marauder / a backup) straight from the Flipper, no
   computer. Lets you switch between Marauder and the FlipDeFlock companion. (Built
   on Espressif's esp-serial-flasher; put the ESP in bootloader mode first.)
+  
 - 🗺️ **Reports** — exports to Markdown, DeFlock-compatible GeoJSON (ready to
   contribute to [deflock.org](https://deflock.org)), CSV, and WiGLE CSV (the
   wardriving format) on the SD card.
+  
 - 📲 **Share to DeFlock** — renders a QR per camera that opens DeFlock on your
-  phone at that location, so you contribute through the official app. The
+  phone so you contribute through the official app. The
   Flipper and ESP never touch a network; submission stays an off-device,
   phone-side action, which keeps the passive-only promise intact. No Flipper GPS
   is needed to contribute — DeFlock lets you place the pin by hand.
