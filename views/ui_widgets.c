@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "ui_widgets.h"
 
 int ui_title_bar(Canvas* canvas, const char* title, const char* right) {

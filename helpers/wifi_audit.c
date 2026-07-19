@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "wifi_audit.h"
 
 // esp wifi_auth_mode_t values (stable low range across IDF versions).

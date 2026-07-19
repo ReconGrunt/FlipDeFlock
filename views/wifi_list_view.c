@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "wifi_list_view.h"
 #include "../recon_app_i.h"
 #include "../helpers/wifi_audit.h"

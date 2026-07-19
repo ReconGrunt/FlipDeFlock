@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 /**
  * @file flock_db.h
  * Flock Safety / ALPR surveillance-device detection database and scoring.

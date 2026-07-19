@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #pragma once
 
 /*
  * In-app ESP32 flasher: connect (download mode), flash a .bin, and back up the
  * current firmware to SD. Built on Espressif's esp-serial-flasher (Apache-2.0,
- * vendored under lib/esp-serial-flasher). This port + worker is original (MIT).
+ * vendored under lib/esp-serial-flasher). This port + worker is original
+ * (GPL-3.0-or-later).
  *
  * Bootloader entry is MANUAL: the user puts the ESP32 into download/bootloader
  * mode (hold BOOT, tap RESET) before connecting. reset/enter-bootloader port

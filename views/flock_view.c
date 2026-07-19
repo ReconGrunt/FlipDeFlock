@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "flock_view.h"
 #include "../recon_app_i.h"
 #include "ui_widgets.h"

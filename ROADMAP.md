@@ -94,4 +94,4 @@ via its 0x3100–0x3500 GATT services; Falcon never asserted by elimination), th
 - The `.fap` loads entirely into ~256 KB of RAM. Justify every byte.
 - API 87.1, and it must build with both `ufbt` and `fbt`.
 - Detections are indicators, not proof. Never over-claim.
-- The app stays free and MIT.
+- The app stays free and open source (GPL-3.0-or-later).

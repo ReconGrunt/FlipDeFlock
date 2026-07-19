@@ -450,11 +450,40 @@ helper.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+**GPL-3.0-or-later** — see [LICENSE](LICENSE).
+
+```
+Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+```
+
+FlipDeFlock is copyleft: you're free to use, study, share, and modify it, but if
+you distribute a modified version you must publish your source under the same
+GPL-3.0-or-later terms and keep the copyright and license notices intact. Bundled
+third-party components keep their own (compatible) licenses:
+esp-serial-flasher (Apache-2.0), Nayuki qrcodegen (MIT), jsmn (MIT), and the ESP
+MD5 routine (BSD) — see their headers under `lib/`.
+
+## Name & trademark
+
+The code is free to reuse under the GPL, but **"FlipDeFlock"** — the name and
+logo — is the project's identity, not part of the licensed code. Please don't
+publish a fork, repackage, or app-store listing under the FlipDeFlock name or logo
+in a way that implies it's the official project. Rename your derivative and a clear
+"based on FlipDeFlock" credit is welcome. The friendly move when building on this
+is to **fork on GitHub** (keeps the link and credit intact) rather than re-uploading
+a detached copy.
 
 ## Support
 
-FlipDeFlock is free and MIT-licensed, and it stays that way. If it's useful and
+FlipDeFlock is free and open source (GPL-3.0-or-later), and it stays that way. If
+it's useful and
 you want to help cover development (and any legal costs that come with mapping
 surveillance hardware), there's a **Sponsor** button at the top of the repo, or
 you can donate directly via [Ko-fi](https://ko-fi.com/recongrunt).
@@ -484,7 +513,8 @@ Open an issue or a pull request. A few ground rules keep the project coherent:
 - Target **API 87.1**, and it must build with both `ufbt` and `fbt`.
 - Keep it lean. The `.fap` loads entirely into the Flipper's 256 KB of RAM.
 
-By contributing you agree to license your work under this repo's MIT license.
+By contributing you agree to license your work under this repo's GPL-3.0-or-later
+license.
 
 ## Roadmap
 

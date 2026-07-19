@@ -15,7 +15,7 @@ App(
     "geotagging and DeFlock-compatible reports.",
     fap_private_libs=[
         # Espressif esp-serial-flasher (Apache-2.0), vendored under
-        # lib/esp-serial-flasher. Our port/worker/UI is original (MIT).
+        # lib/esp-serial-flasher. Our port/worker/UI is original (GPL-3.0-or-later).
         Lib(
             name="esp-serial-flasher",
             fap_include_paths=["include"],
