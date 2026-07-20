@@ -83,13 +83,19 @@ void recon_scene_guardian_on_enter(void* context) {
 
     // ESP first so it claims its UART (and disables the expansion manager); GPS
     // only if it's on a different port (else it would steal the ESP's UART).
-    app->esp = esp_link_alloc(app);
-    esp_link_start(app->esp);
-    esp_link_send(app->esp, GUARD_PHASES[0].cmd);
+    // Re-entry guard: keep the live link across the Sus detail round-trip
+    // (see recon_scene_flock_on_enter for the full rationale).
+    if(!app->esp) {
+        app->esp = esp_link_alloc(app);
+        esp_link_start(app->esp);
+        esp_link_send(app->esp, GUARD_PHASES[0].cmd);
+    }
 
     if(app->settings.gps_enabled && app->settings.gps_uart != app->settings.esp_uart) {
-        app->gps = gps_link_alloc(app);
-        gps_link_start(app->gps);
+        if(!app->gps) {
+            app->gps = gps_link_alloc(app);
+            gps_link_start(app->gps);
+        }
     }
 
     guardian_view_set_ok_callback(app->guardian_view, recon_scene_guardian_ok_cb, app);

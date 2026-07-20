@@ -165,8 +165,12 @@ void recon_scene_wifi_on_enter(void* context) {
 
     wifi_list_view_set_ok_callback(app->wifi_list_view, wifi_view_ok_cb, app);
 
-    app->esp = esp_link_alloc(app);
-    esp_link_start(app->esp);
+    // Re-entry guard: keep the live link across a detail-view round-trip
+    // (see recon_scene_flock_on_enter for the full rationale).
+    if(!app->esp) {
+        app->esp = esp_link_alloc(app);
+        esp_link_start(app->esp);
+    }
 
     recon_scene_wifi_trigger(app);
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWifiList);

@@ -115,6 +115,7 @@ static void esp_flasher_rx_irq(FuriHalSerialHandle* handle, FuriHalSerialRxEvent
 
 EspFlasher* esp_flasher_alloc(FuriHalSerialId ch, EspFlasherLog log_cb, void* ctx) {
     EspFlasher* f = malloc(sizeof(EspFlasher));
+    if(!f) return NULL; // heap critically low; caller already handles a NULL link
     f->log = log_cb;
     f->ctx = ctx;
     f->rx = furi_stream_buffer_alloc(FLASH_RX_BUF, 1);
@@ -230,6 +231,12 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
     }
 
     uint8_t* buf = malloc(FLASH_BLOCK);
+    if(!buf) {
+        esp_flasher_logf(f, "Out of RAM.");
+        storage_file_close(file);
+        storage_file_free(file);
+        return false;
+    }
     uint32_t done = 0;
     int last_pct = -1;
     bool ok = true;
@@ -240,8 +247,26 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
             break;
         }
         uint32_t want = (img - done < FLASH_BLOCK) ? (img - done) : FLASH_BLOCK;
+        // Real file bytes still expected in this block. `img` is `size` rounded up
+        // to 4 bytes, so only the true final block may legitimately read short --
+        // by the 1-3 alignment bytes, which we 0xFF-pad below. A short read of the
+        // REAL bytes means a truncated file or an SD glitch mid-stream; padding it
+        // as EOF would shift every later block and corrupt the image (and MD5
+        // verify checks the bytes we streamed, so it would still report "OK").
+        uint32_t real = (size > done) ? (size - done) : 0;
+        if(real > want) real = want;
         uint16_t n = storage_file_read(file, buf, (uint16_t)want);
-        if(n < want) memset(buf + n, 0xFF, want - n); // pad the final block
+        if(n != real) {
+            esp_flasher_logf(
+                f,
+                "SD read error @%lu (%u/%lu).",
+                (unsigned long)done,
+                (unsigned)n,
+                (unsigned long)real);
+            ok = false;
+            break;
+        }
+        if(want > n) memset(buf + n, 0xFF, want - n); // 4-byte alignment tail padding only
         err = esp_loader_flash_write(buf, want);
         if(err != ESP_LOADER_SUCCESS) {
             esp_flasher_logf(f, "write failed @%lu (%d).", (unsigned long)done, (int)err);
@@ -311,6 +336,12 @@ bool esp_flasher_backup(EspFlasher* f, Storage* storage, const char* out_path) {
     }
 
     uint8_t* buf = malloc(BACKUP_CHUNK);
+    if(!buf) {
+        esp_flasher_logf(f, "Out of RAM.");
+        storage_file_close(file);
+        storage_file_free(file);
+        return false;
+    }
     uint32_t addr = 0;
     int last_pct = -1;
     bool ok = true;

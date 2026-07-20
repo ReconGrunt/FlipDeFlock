@@ -48,8 +48,13 @@ void recon_scene_locator_home_on_enter(void* context) {
 
     // ESP first so it claims its UART; GPS only if on a different port (the
     // homing meter works without it -- GPS only adds the "strongest here" note).
-    app->esp = esp_link_alloc(app);
-    esp_link_start(app->esp);
+    // Re-entry guard for consistency with the scan scenes; the target `locate`
+    // command below is (re)sent every enter so the companion always homes the
+    // currently selected device.
+    if(!app->esp) {
+        app->esp = esp_link_alloc(app);
+        esp_link_start(app->esp);
+    }
     char cmd[40];
     snprintf(
         cmd,
@@ -66,8 +71,10 @@ void recon_scene_locator_home_on_enter(void* context) {
     esp_link_send(app->esp, cmd);
 
     if(app->settings.gps_enabled && app->settings.gps_uart != app->settings.esp_uart) {
-        app->gps = gps_link_alloc(app);
-        gps_link_start(app->gps);
+        if(!app->gps) {
+            app->gps = gps_link_alloc(app);
+            gps_link_start(app->gps);
+        }
     }
 
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewLocator);

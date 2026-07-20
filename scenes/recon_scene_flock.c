@@ -32,16 +32,25 @@ void recon_scene_flock_on_enter(void* context) {
     // ESP first so it claims its UART (and disables the expansion manager)
     // before GPS. GPS only starts if it's on a *different* port -- otherwise it
     // would steal the ESP's UART and silently kill detection.
-    app->esp = esp_link_alloc(app);
-    esp_link_start(app->esp);
-    // On the companion firmware, run dual-band (WiFi + BLE) Flock detection.
-    // Marauder can't do this -> it stays WiFi-only via the generic backend.
-    if(app->settings.backend == EspBackendCompanion) {
-        esp_link_send(app->esp, "flockcombo");
+    // Re-entry guard: scene_manager_next_scene (opening a detail view) SUSPENDS
+    // this scene without calling on_exit, and pressing Back re-runs on_enter.
+    // Re-allocating over the still-live link would leak it (heap + worker stack)
+    // and orphan the UART, so the replacement can't acquire it and scanning dies.
+    // Alloc only when there is no live link; on_exit frees and NULLs it.
+    if(!app->esp) {
+        app->esp = esp_link_alloc(app);
+        esp_link_start(app->esp);
+        // On the companion firmware, run dual-band (WiFi + BLE) Flock detection.
+        // Marauder can't do this -> it stays WiFi-only via the generic backend.
+        if(app->settings.backend == EspBackendCompanion) {
+            esp_link_send(app->esp, "flockcombo");
+        }
     }
     if(app->settings.gps_enabled && app->settings.gps_uart != app->settings.esp_uart) {
-        app->gps = gps_link_alloc(app);
-        gps_link_start(app->gps);
+        if(!app->gps) { // same re-entry guard as the ESP link above
+            app->gps = gps_link_alloc(app);
+            gps_link_start(app->gps);
+        }
     }
 
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewFlock);

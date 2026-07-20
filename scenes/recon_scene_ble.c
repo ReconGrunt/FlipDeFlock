@@ -128,8 +128,12 @@ void recon_scene_ble_on_enter(void* context) {
 
     ble_list_view_set_ok_callback(app->ble_list_view, ble_view_ok_cb, app);
 
-    app->esp = esp_link_alloc(app);
-    esp_link_start(app->esp);
+    // Re-entry guard: keep the live link across a detail-view round-trip
+    // (see recon_scene_flock_on_enter for the full rationale).
+    if(!app->esp) {
+        app->esp = esp_link_alloc(app);
+        esp_link_start(app->esp);
+    }
 
     ble_show_scanning(app);
     ble_trigger(app);

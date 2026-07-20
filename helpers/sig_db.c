@@ -32,6 +32,7 @@
 #define SIG_MAX_FILE     8192u /**< largest signatures.json we will read */
 #define SIG_MAX_TOKENS   512u /**< jsmn token budget (bounds parse RAM) */
 #define SIG_MAX_NEEDLE   48u /**< longest SSID substring we keep (lowercased) */
+#define SIG_MAX_DEPTH    16  /**< max JSON nesting we recurse (schema is flat) -> bounds stack */
 
 struct SigDb {
     uint8_t (*ouis)[3]; /**< owned OUI table, NULL if none */
@@ -81,8 +82,13 @@ static bool sig_parse_oui(const char* s, size_t len, uint8_t out[3]) {
  * (recursively, including nested objects/arrays). Used to skip over the value
  * of an unrecognised top-level key without mis-parsing it.
  */
-static int sig_token_span(const jsmntok_t* tokens, int count, int i) {
+static int sig_token_span_d(const jsmntok_t* tokens, int count, int i, int depth) {
     if(i >= count) return 0;
+    // Depth cap: jsmn bounds the token COUNT but not nesting depth, so a crafted
+    // file like {"x":[[[[...]]]]} recurses once per level and overflows the 4 KB
+    // app stack (~100 levels) while staying within the token budget. Bail by
+    // claiming the rest of the tokens -- the caller then stops parsing safely.
+    if(depth > SIG_MAX_DEPTH) return count - i;
     const jsmntok_t* t = &tokens[i];
     if(t->type == JSMN_PRIMITIVE || t->type == JSMN_STRING) {
         return 1;
@@ -90,19 +96,24 @@ static int sig_token_span(const jsmntok_t* tokens, int count, int i) {
     if(t->type == JSMN_OBJECT) {
         int span = 1;
         for(int k = 0; k < t->size; k++) {
-            span += sig_token_span(tokens, count, i + span); // key
-            span += sig_token_span(tokens, count, i + span); // value
+            span += sig_token_span_d(tokens, count, i + span, depth + 1); // key
+            span += sig_token_span_d(tokens, count, i + span, depth + 1); // value
         }
         return span;
     }
     if(t->type == JSMN_ARRAY) {
         int span = 1;
         for(int k = 0; k < t->size; k++) {
-            span += sig_token_span(tokens, count, i + span);
+            span += sig_token_span_d(tokens, count, i + span, depth + 1);
         }
         return span;
     }
     return 1;
+}
+
+/** Token span of the value at tokens[i] (depth-capped; see sig_token_span_d). */
+static int sig_token_span(const jsmntok_t* tokens, int count, int i) {
+    return sig_token_span_d(tokens, count, i, 0);
 }
 
 /** True if string token `t` equals the (NUL-terminated) literal `key`. */
