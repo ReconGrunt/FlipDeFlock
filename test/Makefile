@@ -13,9 +13,10 @@ CFLAGS += -Imocks -I../helpers
 
 # Pure-logic modules under test, compiled straight from the app tree.
 MODULES := ../helpers/flock_db.c ../helpers/watchscore.c ../helpers/wifi_audit.c \
-           ../helpers/esp_parser.c
+           ../helpers/esp_parser.c ../helpers/detect_rules.c
 MOCKS   := mocks/furi_string_mock.c
-TESTS   := test_flock_db.c test_watchscore.c test_wifi_audit.c test_esp_parser.c test_main.c
+TESTS   := test_flock_db.c test_watchscore.c test_wifi_audit.c test_esp_parser.c \
+           test_detect_rules.c test_main.c
 HEADERS := test.h mocks/core/string.h
 
 BIN := run_tests
@@ -26,8 +27,9 @@ test: build
 
 build: $(BIN)
 
+# -lm: detect_rules uses cosf/sqrtf/fabsf (needs libm on glibc/Linux CI).
 $(BIN): $(MODULES) $(MOCKS) $(TESTS) $(HEADERS)
-	$(CC) $(CFLAGS) $(MODULES) $(MOCKS) $(TESTS) -o $(BIN)
+	$(CC) $(CFLAGS) $(MODULES) $(MOCKS) $(TESTS) -o $(BIN) -lm
 
 clean:
 	rm -f $(BIN)

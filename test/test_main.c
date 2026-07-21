@@ -13,6 +13,7 @@ void suite_flock_db(void);
 void suite_watchscore(void);
 void suite_wifi_audit(void);
 void suite_esp_parser(void);
+void suite_detect_rules(void);
 
 int main(void) {
     printf("FlipDeFlock host unit tests\n");
@@ -20,6 +21,7 @@ int main(void) {
     suite_watchscore();
     suite_wifi_audit();
     suite_esp_parser();
+    suite_detect_rules();
 
     printf("\n%d checks, %d failed\n", g_checks, g_fails);
     if(g_fails) {
