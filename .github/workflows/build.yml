@@ -89,3 +89,16 @@ jobs:
         with:
           skip-setup: true
           task: lint
+
+  # Host unit tests for the pure-logic modules (plain gcc, no SDK). Runs in
+  # parallel with the .fap build. NOT continue-on-error: a failed check exits
+  # non-zero and fails the workflow, so it gates merges (see test/README.md).
+  host-tests:
+    runs-on: ubuntu-latest
+    name: "Host unit tests"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build + run host tests
+        run: make -C test

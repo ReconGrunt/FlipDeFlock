@@ -13,6 +13,10 @@ esp32_companion/**/build/
 *.bin
 *.hex
 
+# Host unit-test binary (built by test/Makefile)
+test/run_tests
+test/run_tests.exe
+
 # Editor / OS
 .vscode/
 .idea/
