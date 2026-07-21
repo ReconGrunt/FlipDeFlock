@@ -3,6 +3,9 @@ App(
     name="FlipDeFlock",
     apptype=FlipperAppType.EXTERNAL,
     targets=["f7"],
+    # Default glob (*.c*) minus the host-only unit tests, which include host
+    # mocks + gcc-only headers and must not be pulled into the .fap build.
+    sources=["*.c*", "!test"],
     entry_point="recon_site_survey_app",
     stack_size=4 * 1024,
     requires=["gui", "storage", "notification"],
