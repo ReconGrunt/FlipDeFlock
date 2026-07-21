@@ -2,7 +2,7 @@
 // Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
-#include "../helpers/gps_link.h"
+#include "../helpers/scan_session.h"
 
 // "Net Guardian": a leave-it-on-the-desk monitor. It keeps the ESP worker alive
 // and rotates the companion through its detection modes so EVERY WATCHSCORE
@@ -81,22 +81,14 @@ void recon_scene_guardian_on_enter(void* context) {
     app->guardian_phase = 0;
     s_phase_mark = app->guardian_since;
 
-    // ESP first so it claims its UART (and disables the expansion manager); GPS
-    // only if it's on a different port (else it would steal the ESP's UART).
-    // Re-entry guard: keep the live link across the Sus detail round-trip
-    // (see recon_scene_flock_on_enter for the full rationale).
-    if(!app->esp) {
-        app->esp = esp_link_alloc(app);
-        esp_link_start(app->esp);
+    // ESP first so it claims its UART; GPS only if it's on a different port.
+    // scan_session_start keeps the live link across the Sus detail round-trip
+    // (idempotent; see scan_session.h / bug B1) and returns true only on a FRESH
+    // start, so the first sweep phase is kicked off exactly once.
+    if(scan_session_start(app)) {
         esp_link_send(app->esp, GUARD_PHASES[0].cmd);
     }
-
-    if(app->settings.gps_enabled && app->settings.gps_uart != app->settings.esp_uart) {
-        if(!app->gps) {
-            app->gps = gps_link_alloc(app);
-            gps_link_start(app->gps);
-        }
-    }
+    scan_session_gps_start(app);
 
     guardian_view_set_ok_callback(app->guardian_view, recon_scene_guardian_ok_cb, app);
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewGuardian);
@@ -136,15 +128,6 @@ bool recon_scene_guardian_on_event(void* context, SceneManagerEvent event) {
 
 void recon_scene_guardian_on_exit(void* context) {
     ReconApp* app = context;
-    if(app->esp) {
-        esp_link_stop(app->esp);
-        esp_link_free(app->esp);
-        app->esp = NULL;
-    }
-    if(app->gps) {
-        gps_link_stop(app->gps);
-        gps_link_free(app->gps);
-        app->gps = NULL;
-    }
+    scan_session_stop(app);
     widget_reset(app->widget);
 }

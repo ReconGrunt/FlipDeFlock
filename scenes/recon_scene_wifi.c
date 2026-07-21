@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
+#include "../helpers/scan_session.h"
 #include "../helpers/wifi_audit.h"
 #include "../helpers/recon_report.h"
 
@@ -170,12 +171,9 @@ void recon_scene_wifi_on_enter(void* context) {
 
     wifi_list_view_set_ok_callback(app->wifi_list_view, wifi_view_ok_cb, app);
 
-    // Re-entry guard: keep the live link across a detail-view round-trip
-    // (see recon_scene_flock_on_enter for the full rationale).
-    if(!app->esp) {
-        app->esp = esp_link_alloc(app);
-        esp_link_start(app->esp);
-    }
+    // scan_session_start keeps the live link across a detail-view round-trip
+    // (idempotent; see scan_session.h / bug B1).
+    scan_session_start(app);
 
     recon_scene_wifi_trigger(app);
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWifiList);
@@ -232,10 +230,6 @@ bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
 
 void recon_scene_wifi_on_exit(void* context) {
     ReconApp* app = context;
-    if(app->esp) {
-        esp_link_stop(app->esp);
-        esp_link_free(app->esp);
-        app->esp = NULL;
-    }
+    scan_session_stop(app);
     app->settings.backend = app->saved_backend; // restore Flock backend choice
 }

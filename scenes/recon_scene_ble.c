@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
+#include "../helpers/scan_session.h"
 #include "../helpers/recon_report.h"
 
 #include <string.h>
@@ -128,12 +129,9 @@ void recon_scene_ble_on_enter(void* context) {
 
     ble_list_view_set_ok_callback(app->ble_list_view, ble_view_ok_cb, app);
 
-    // Re-entry guard: keep the live link across a detail-view round-trip
-    // (see recon_scene_flock_on_enter for the full rationale).
-    if(!app->esp) {
-        app->esp = esp_link_alloc(app);
-        esp_link_start(app->esp);
-    }
+    // scan_session_start keeps the live link across a detail-view round-trip
+    // (idempotent; see scan_session.h / bug B1).
+    scan_session_start(app);
 
     ble_show_scanning(app);
     ble_trigger(app);
@@ -190,10 +188,6 @@ bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
 
 void recon_scene_ble_on_exit(void* context) {
     ReconApp* app = context;
-    if(app->esp) {
-        esp_link_stop(app->esp);
-        esp_link_free(app->esp);
-        app->esp = NULL;
-    }
+    scan_session_stop(app);
     app->settings.backend = app->saved_backend;
 }
