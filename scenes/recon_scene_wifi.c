@@ -3,6 +3,7 @@
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
 #include "../helpers/scan_session.h"
+#include "../helpers/scene_util.h"
 #include "../helpers/wifi_audit.h"
 #include "../helpers/recon_report.h"
 
@@ -25,17 +26,6 @@ static bool s_blocked; // companion-only feature opened in Marauder mode
 // Action-row labels (static lifetime; the view keeps the pointers).
 static const char* const WIFI_ACTIONS_SCAN[] = {"Rescan"};
 static const char* const WIFI_ACTIONS_RESULTS[] = {"Rescan", "Save Report"};
-
-static void recon_scene_wifi_show_guard(ReconApp* app) {
-    widget_reset(app->widget);
-    widget_add_text_scroll_element(
-        app->widget,
-        0,
-        0,
-        128,
-        64,
-        "WiFi Audit needs the\nFlipDeFlock companion FW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
-}
 
 // The list view reports the raw selected row index; map it to a custom event.
 static void wifi_view_ok_cb(void* context, int selected_index) {
@@ -159,8 +149,9 @@ void recon_scene_wifi_on_enter(void* context) {
     app->saved_backend = app->settings.backend;
     if(app->settings.backend != EspBackendCompanion) {
         s_blocked = true;
-        recon_scene_wifi_show_guard(app);
-        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+        scene_show_companion_guard(
+            app,
+            "WiFi Audit needs the\nFlipDeFlock companion FW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
     s_blocked = false;
@@ -209,9 +200,7 @@ bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
         } else if(id == WIFI_EV_SAVE) {
             char path[128] = {0};
             bool ok = recon_report_save_wifi(app, path, sizeof(path));
-            if(app->settings.sound) {
-                notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
-            }
+            scene_report_notify(app, ok);
             consumed = true;
         } else if(id >= WIFI_EV_AP) {
             int idx = (int)id - WIFI_EV_AP;

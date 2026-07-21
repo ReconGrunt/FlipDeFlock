@@ -3,6 +3,7 @@
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
 #include "../helpers/scan_session.h"
+#include "../helpers/scene_util.h"
 
 // Locator step 2: the homing HUD. Tells the companion to stream live RSSI for
 // the selected target (`locate <w|b> <mac> <ch>`) and shows the hot/cold meter.
@@ -10,24 +11,14 @@
 
 static bool s_blocked;
 
-static void locator_home_show_guard(ReconApp* app) {
-    widget_reset(app->widget);
-    widget_add_text_scroll_element(
-        app->widget,
-        0,
-        0,
-        128,
-        64,
-        "Locator needs the\nFlipDeFlock companion FW\n(live signal homing).\n\nYou're in Marauder mode.\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
-    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
-}
-
 void recon_scene_locator_home_on_enter(void* context) {
     ReconApp* app = context;
 
     if(app->settings.backend != EspBackendCompanion) {
         s_blocked = true;
-        locator_home_show_guard(app);
+        scene_show_companion_guard(
+            app,
+            "Locator needs the\nFlipDeFlock companion FW\n(live signal homing).\n\nYou're in Marauder mode.\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
     s_blocked = false;

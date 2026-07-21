@@ -3,6 +3,7 @@
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
 #include "../helpers/scan_session.h"
+#include "../helpers/scene_util.h"
 #include "../helpers/recon_report.h"
 
 #include <string.h>
@@ -98,25 +99,15 @@ static void ble_show_results(ReconApp* app) {
 
 static bool s_ble_blocked; // companion-only feature opened in Marauder mode
 
-static void ble_show_guard(ReconApp* app) {
-    widget_reset(app->widget);
-    widget_add_text_scroll_element(
-        app->widget,
-        0,
-        0,
-        128,
-        64,
-        "BLE / Tracker Scan needs\nthe FlipDeFlock companion\nFW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
-}
-
 void recon_scene_ble_on_enter(void* context) {
     ReconApp* app = context;
     // BLE scan needs the companion firmware protocol; explain in Marauder mode.
     app->saved_backend = app->settings.backend;
     if(app->settings.backend != EspBackendCompanion) {
         s_ble_blocked = true;
-        ble_show_guard(app);
-        view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
+        scene_show_companion_guard(
+            app,
+            "BLE / Tracker Scan needs\nthe FlipDeFlock companion\nFW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
     s_ble_blocked = false;
@@ -167,9 +158,7 @@ bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
         if(id == BLE_EV_SAVE) {
             char path[128] = {0};
             bool ok = recon_report_save_ble(app, path, sizeof(path));
-            if(app->settings.sound) {
-                notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
-            }
+            scene_report_notify(app, ok);
             consumed = true;
         } else if(id >= BLE_EV_DEVICE) {
             int idx = (int)id - BLE_EV_DEVICE;

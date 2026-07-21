@@ -3,6 +3,7 @@
 #include "../recon_app_i.h"
 #include "../helpers/esp_link.h"
 #include "../helpers/scan_session.h"
+#include "../helpers/scene_util.h"
 
 // "Net Guardian": a leave-it-on-the-desk monitor. It keeps the ESP worker alive
 // and rotates the companion through its detection modes so EVERY WATCHSCORE
@@ -37,18 +38,6 @@ static void recon_scene_guardian_ok_cb(void* ctx) {
     view_dispatcher_send_custom_event(app->view_dispatcher, GUARDIAN_EV_SUS);
 }
 
-static void guardian_show_guard(ReconApp* app) {
-    widget_reset(app->widget);
-    widget_add_text_scroll_element(
-        app->widget,
-        0,
-        0,
-        128,
-        64,
-        "Net Guardian needs the\nFlipDeFlock companion FW\n(it rotates WiFi + BLE).\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
-    view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewWidget);
-}
-
 void recon_scene_guardian_on_enter(void* context) {
     ReconApp* app = context;
 
@@ -56,7 +45,9 @@ void recon_scene_guardian_on_enter(void* context) {
     // Marauder mode explain and bail (Flock/ALPR Detect still works there).
     if(app->settings.backend != EspBackendCompanion) {
         s_blocked = true;
-        guardian_show_guard(app);
+        scene_show_companion_guard(
+            app,
+            "Net Guardian needs the\nFlipDeFlock companion FW\n(it rotates WiFi + BLE).\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
     s_blocked = false;
