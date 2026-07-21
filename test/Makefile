@@ -13,10 +13,10 @@ CFLAGS += -Imocks -I../helpers
 
 # Pure-logic modules under test, compiled straight from the app tree.
 MODULES := ../helpers/flock_db.c ../helpers/watchscore.c ../helpers/wifi_audit.c \
-           ../helpers/esp_parser.c ../helpers/detect_rules.c
+           ../helpers/esp_parser.c ../helpers/detect_rules.c ../helpers/report_escape.c
 MOCKS   := mocks/furi_string_mock.c
 TESTS   := test_flock_db.c test_watchscore.c test_wifi_audit.c test_esp_parser.c \
-           test_detect_rules.c test_main.c
+           test_detect_rules.c test_report_escape.c test_main.c
 HEADERS := test.h mocks/core/string.h
 
 BIN := run_tests
