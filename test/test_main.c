@@ -12,12 +12,14 @@ int g_fails = 0;
 void suite_flock_db(void);
 void suite_watchscore(void);
 void suite_wifi_audit(void);
+void suite_esp_parser(void);
 
 int main(void) {
     printf("FlipDeFlock host unit tests\n");
     suite_flock_db();
     suite_watchscore();
     suite_wifi_audit();
+    suite_esp_parser();
 
     printf("\n%d checks, %d failed\n", g_checks, g_fails);
     if(g_fails) {
