@@ -398,12 +398,31 @@ bool recon_ble_is_anomaly(const BleDevice* e, uint32_t now) {
            (now - e->last_tick) <= WATCH_BLE_FRESH_MS;
 }
 
+#define LOCATE_TREND_DB 2 /**< dB vs the smoothed average before we call it warmer/colder */
+
 void recon_app_set_locate_rssi(ReconApp* app, int8_t rssi) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->locate_rssi = rssi;
     app->locate_tick = furi_get_tick();
     app->locate_have = true;
     app->esp_connected = true;
+    // Fold peak/EMA/trend on EVERY LOC line, not just on redraw -- LOC arrives
+    // faster than the display ticks, so folding in the draw callback dropped
+    // transient peaks between frames. rssi >= 0 is the reset/invalid sentinel.
+    if(rssi < 0) {
+        if(!app->locate_init) {
+            app->locate_peak = rssi;
+            app->locate_ema = (float)rssi;
+            app->locate_trend = 0;
+            app->locate_init = true;
+        } else {
+            if(rssi > app->locate_peak) app->locate_peak = rssi;
+            float d = (float)rssi - app->locate_ema;
+            app->locate_trend =
+                (int8_t)((d >= LOCATE_TREND_DB) ? 1 : (d <= -LOCATE_TREND_DB ? -1 : 0));
+            app->locate_ema = app->locate_ema * 0.7f + (float)rssi * 0.3f;
+        }
+    }
     furi_mutex_release(app->mutex);
 }
 

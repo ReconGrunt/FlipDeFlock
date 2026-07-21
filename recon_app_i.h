@@ -251,6 +251,10 @@ typedef struct {
     int8_t locate_rssi; /**< latest live RSSI from the companion LOC line */
     uint32_t locate_tick; /**< furi tick of that reading (0 = none yet) */
     bool locate_have; /**< a reading has arrived this session */
+    int8_t locate_peak; /**< strongest RSSI folded from every LOC line (peak-hold) */
+    float locate_ema; /**< smoothed RSSI for the warmer/colder trend */
+    int8_t locate_trend; /**< +1 warmer / -1 colder / 0 steady */
+    bool locate_init; /**< first valid reading folded yet */
 
     // ESP32 firmware flasher
     uint8_t fw_op; /**< 0 = backup, 1 = flash */

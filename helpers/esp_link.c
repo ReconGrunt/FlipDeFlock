@@ -28,6 +28,7 @@ struct EspLink {
     volatile bool running;
     char line[ESP_LINE_MAX];
     size_t line_len;
+    bool skip_line; /**< dropping the remainder of an overlong (overflowed) line */
     uint32_t lines; /**< total completed RX lines (heartbeat) */
 };
 
@@ -421,7 +422,12 @@ static int32_t esp_worker(void* context) {
         if(evt & EspEvtRx) {
             while(furi_stream_buffer_receive(esp->rx_stream, &byte, 1, 0) == 1) {
                 if(byte == '\n' || byte == '\r') {
-                    if(esp->line_len > 0) {
+                    if(esp->skip_line) {
+                        // End of an overlong line -- drop it whole (don't parse the
+                        // tail as a spurious record); resume on the next line.
+                        esp->skip_line = false;
+                        esp->line_len = 0;
+                    } else if(esp->line_len > 0) {
                         esp->line[esp->line_len] = '\0';
                         // Every completed line counts as RX activity.
                         esp->lines++;
@@ -433,9 +439,14 @@ static int32_t esp_worker(void* context) {
                         }
                         esp->line_len = 0;
                     }
+                } else if(esp->skip_line) {
+                    // still discarding the remainder of the overlong line
                 } else if(esp->line_len < ESP_LINE_MAX - 1) {
                     esp->line[esp->line_len++] = (char)byte;
                 } else {
+                    // Overflow: drop this whole line instead of re-parsing its tail
+                    // as a new (injectable) record.
+                    esp->skip_line = true;
                     esp->line_len = 0;
                 }
             }

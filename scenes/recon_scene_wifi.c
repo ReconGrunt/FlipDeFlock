@@ -39,13 +39,18 @@ static void recon_scene_wifi_show_guard(ReconApp* app) {
 // The list view reports the raw selected row index; map it to a custom event.
 static void wifi_view_ok_cb(void* context, int selected_index) {
     ReconApp* app = context;
+    // Action rows come first, then AP rows. The action-row count is state-
+    // dependent: scanning/timeout show only [0]=Rescan; results also has [1]=Save.
+    // Using the fixed WIFI_ACTION_COUNT put every AP row off by one whenever fewer
+    // than two actions were shown.
+    int actions = (s_state == 1) ? 2 : 1; // results state has Save; others don't
     uint32_t ev;
-    if(selected_index == WIFI_EV_RESCAN) {
-        ev = WIFI_EV_RESCAN; // [0] Rescan
-    } else if(selected_index == WIFI_EV_SAVE) {
-        ev = WIFI_EV_SAVE; // [1] Save Report (only present in results state)
+    if(selected_index == 0) {
+        ev = WIFI_EV_RESCAN;
+    } else if(actions == 2 && selected_index == 1) {
+        ev = WIFI_EV_SAVE;
     } else {
-        ev = WIFI_EV_AP + (uint32_t)(selected_index - WIFI_ACTION_COUNT);
+        ev = WIFI_EV_AP + (uint32_t)(selected_index - actions);
     }
     view_dispatcher_send_custom_event(app->view_dispatcher, ev);
 }

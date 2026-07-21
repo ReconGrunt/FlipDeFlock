@@ -37,6 +37,8 @@ void recon_scene_locator_home_on_enter(void* context) {
     app->locate_have = false;
     app->locate_rssi = 0;
     app->locate_tick = 0;
+    app->locate_init = false; // reset the peak-hold fold (now lives in ReconApp)
+    app->locate_peak = -128;
     app->esp_connected = false;
     uint8_t kind = app->locate_kind;
     uint8_t ch = app->locate_ch;

@@ -27,6 +27,14 @@ struct GpsLink {
     size_t line_len;
 };
 
+/** One hex nibble 0-15, or -1 if `c` is not a hex digit. */
+static int nmea_hex(char c) {
+    if(c >= '0' && c <= '9') return c - '0';
+    if(c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if(c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+}
+
 /** Convert NMEA ddmm.mmmm + hemisphere to signed decimal degrees. */
 static float nmea_to_decimal(const char* field, const char* dir) {
     if(!field || field[0] == '\0') return NAN;
@@ -69,9 +77,14 @@ static void gps_publish(GpsLink* gps, float lat, float lon, int sats, bool valid
         app->gps_lat = lat;
         app->gps_lon = lon;
         app->gps_valid = true;
+    } else if(!valid) {
+        // Explicit lock loss (RMC 'V' / GGA fixq==0 / GLL 'V'): stop reporting the
+        // last fix as current -- previously we kept it, so a lost lock still tagged
+        // detections with a stale location. A garbled-but-"valid" sentence (one that
+        // fails gps_coord_sane) is ignored rather than cleared, keeping the last fix.
+        app->gps_valid = false;
     }
     if(sats >= 0) app->gps_sats = sats;
-    // When !valid we keep the last good fix and only refresh sat count above.
     furi_mutex_release(app->mutex);
 }
 
@@ -80,9 +93,18 @@ static void gps_parse_line(GpsLink* gps, char* line) {
     size_t len = strlen(line);
     if(len < 7) return;
 
-    // Drop checksum suffix "*hh" if present.
+    // Verify + drop the "*hh" checksum: XOR of everything between '$' and '*'.
+    // Without this, a noise-garbled sentence whose fields happen to land in range
+    // would be accepted as a real fix.
     char* star = strchr(line, '*');
-    if(star) *star = '\0';
+    if(star) {
+        uint8_t sum = 0;
+        for(const char* p = line + 1; p < star; p++) sum ^= (uint8_t)*p;
+        int hi = nmea_hex(star[1]);
+        int lo = hi < 0 ? -1 : nmea_hex(star[2]); // only read [2] when [1] is a hex digit
+        if(hi < 0 || lo < 0 || (uint8_t)((hi << 4) | lo) != sum) return; // bad checksum -> drop
+        *star = '\0';
+    }
 
     const char* type = line + 3; // skip "$GP"/"$GN"/...
     char* fields[20];
@@ -103,6 +125,8 @@ static void gps_parse_line(GpsLink* gps, char* line) {
     } else if(strncmp(type, "GGA", 3) == 0 && nf >= 8) {
         int fixq = atoi(fields[6]);
         int sats = atoi(fields[7]);
+        if(sats < 0) sats = 0;
+        if(sats > 64) sats = 64; // clamp: don't let the device drive the count to nonsense
         float lat = nmea_to_decimal(fields[2], fields[3]);
         float lon = nmea_to_decimal(fields[4], fields[5]);
         gps_publish(gps, lat, lon, sats, fixq > 0);

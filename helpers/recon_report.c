@@ -11,6 +11,7 @@
 static void csv_field_escape(const char* in, char* out, size_t out_len); // RFC-4180
 static void json_escape(const char* in, char* out, size_t out_len); // JSON string content
 static void xml_escape(const char* in, char* out, size_t out_len); // XML/KML text + attrs
+static void md_escape(const char* in, char* out, size_t out_len); // Markdown table cells
 
 // Shared WigleWifi-1.4 pre-header + column header (WiFi and BLE writers).
 #define WIGLE_HEADER                                                    \
@@ -166,6 +167,9 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
             snprintf(lon_s, sizeof(lon_s), "-");
         }
 
+        char ssid_md[80];
+        md_escape(e->ssid[0] ? e->ssid : "(hidden)", ssid_md, sizeof(ssid_md));
+
         rfile_printf(
             &md,
             line,
@@ -178,7 +182,7 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
             e->mac[3],
             e->mac[4],
             e->mac[5],
-            e->ssid[0] ? e->ssid : "(hidden)",
+            ssid_md,
             e->rssi,
             e->channel,
             (unsigned long)e->count,
@@ -629,6 +633,39 @@ static void json_escape(const char* in, char* out, size_t out_len) {
     out[j] = '\0';
 }
 
+// Markdown table-cell escape: a raw '|' breaks the column layout and a backtick
+// opens a code span, so an odd SSID could corrupt the table; newlines would split
+// the row. Truncation-safe (mirrors json_escape).
+static void md_escape(const char* in, char* out, size_t out_len) {
+    if(out_len == 0) return;
+    size_t j = 0;
+    for(const char* p = in; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        char seq[2];
+        size_t need;
+        switch(c) {
+        case '|':
+            seq[0] = '\\', seq[1] = '|', need = 2;
+            break;
+        case '`':
+            seq[0] = '\'', need = 1;
+            break;
+        case '\n':
+        case '\r':
+        case '\t':
+            seq[0] = ' ', need = 1;
+            break;
+        default:
+            seq[0] = (c < 0x20) ? ' ' : (char)c, need = 1;
+            break;
+        }
+        if(j + need > out_len - 1) break; // leave room for NUL; don't split a seq
+        memcpy(out + j, seq, need);
+        j += need;
+    }
+    out[j] = '\0';
+}
+
 // XML/KML escape for element text and attribute values. Same goal as json_escape
 // but for the KML reports (which are XML). Truncation-safe.
 static void xml_escape(const char* in, char* out, size_t out_len) {
@@ -744,13 +781,16 @@ bool recon_report_save_wifi(void* _app, char* out_path_md, size_t out_len) {
         // Flatten reasons (newline -> "; ") for a single table/CSV cell.
         furi_string_replace_all(reasons, "\n", "; ");
 
+        char ssid_md[80];
+        md_escape(a->ssid[0] ? a->ssid : "(hidden)", ssid_md, sizeof(ssid_md));
+
         rfile_printf(
             &md,
             line,
             "| %u | %s | %s | %02X:%02X:%02X:%02X:%02X:%02X | %s | %u | %d | %s | %s |\n",
             (unsigned)(i + 1),
             wifi_grade_str(g),
-            a->ssid[0] ? a->ssid : "(hidden)",
+            ssid_md,
             a->bssid[0],
             a->bssid[1],
             a->bssid[2],

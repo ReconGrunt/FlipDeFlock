@@ -351,14 +351,19 @@ SigDb* sig_db_load(Storage* storage) {
         int val_idx = i + 1;
         if(val_idx >= count) break;
 
+        // Guard each assignment so a duplicate top-level key can't overwrite (and
+        // leak) the array we already parsed -- keep the first, ignore the rest.
         if(sig_tok_eq(js, key, "ouis")) {
-            db->ouis = sig_parse_ouis(js, tokens, count, val_idx, &db->oui_count);
+            if(!db->ouis) db->ouis = sig_parse_ouis(js, tokens, count, val_idx, &db->oui_count);
         } else if(sig_tok_eq(js, key, "ssid_confirmed")) {
-            db->confirmed = sig_parse_patterns(js, tokens, count, val_idx, &db->confirmed_count);
+            if(!db->confirmed)
+                db->confirmed = sig_parse_patterns(js, tokens, count, val_idx, &db->confirmed_count);
         } else if(sig_tok_eq(js, key, "ssid_likely")) {
-            db->likely = sig_parse_patterns(js, tokens, count, val_idx, &db->likely_count);
+            if(!db->likely)
+                db->likely = sig_parse_patterns(js, tokens, count, val_idx, &db->likely_count);
         } else if(sig_tok_eq(js, key, "ie_fps")) {
-            db->ie_fps = sig_parse_ie_fps(js, tokens, count, val_idx, &db->ie_fp_count);
+            if(!db->ie_fps)
+                db->ie_fps = sig_parse_ie_fps(js, tokens, count, val_idx, &db->ie_fp_count);
         }
 
         // Advance past key + its (possibly nested/unknown) value.

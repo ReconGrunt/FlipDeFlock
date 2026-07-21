@@ -11,6 +11,9 @@ void recon_scene_flock_map_on_enter(void* context) {
     app->esp_connected = false;
     app->esp_deauths = 0;
     app->deauth_count = 0;
+    app->esp_frames = 0; // per-session frame/hit counters start at 0...
+    app->esp_hits = 0;
+    app->esp_rebase = true; // ...and rebase off the companion's lifetime total (like flock/guardian)
     furi_mutex_release(app->mutex);
 
     // ESP first so it claims its UART (and disables the expansion manager)

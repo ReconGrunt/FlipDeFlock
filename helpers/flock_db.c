@@ -114,12 +114,28 @@ static bool ci_contains(const char* haystack, const char* needle_lower) {
     return false;
 }
 
+/** True if `ssid` is exactly "Flock-" + 6 hex digits (the provisioning-AP name). */
+static bool is_flock_provisioning_ssid(const char* ssid) {
+    const char* pfx = "flock-"; // case-insensitive prefix
+    for(int i = 0; i < 6; i++) {
+        if(ssid[i] == '\0' || ascii_lower(ssid[i]) != pfx[i]) return false;
+    }
+    for(int i = 6; i < 12; i++) {
+        char c = ssid[i]; // '\0' (short SSID) is not hex -> correctly rejected
+        bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        if(!hex) return false;
+    }
+    return ssid[12] == '\0';
+}
+
 FlockConfidence flock_ssid_confidence(const char* ssid) {
     if(!ssid || ssid[0] == '\0') return FlockConfidenceNone;
 
-    // Strong, near-unique naming patterns -> confirmed.
-    // "Flock-XXXXXX" provisioning APs and the "test_flck" service SSID.
-    if(ci_contains(ssid, "flock-") || ci_contains(ssid, "test_flck")) {
+    // Strong, near-unique naming -> confirmed. Anchor the provisioning-AP name
+    // exactly ("Flock-" + 6 hex): an unanchored "flock-" substring wrongly
+    // confirmed benign names like "Flock-Guest" or the Flock Freight / chat SSIDs.
+    // Those still fall through to the "likely" contains-check below.
+    if(is_flock_provisioning_ssid(ssid) || ci_contains(ssid, "test_flck")) {
         return FlockConfidenceConfirmed;
     }
 

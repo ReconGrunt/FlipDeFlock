@@ -133,7 +133,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // ---- render from the snapshot (no mutex held) --------------------------
     // Header / status bar. A real deauth flood takes over the header. Compact
     // right-aligned status for the inverted title bar.
-    char right[12];
+    char right[16]; // fits "ch165 h999999" + NUL; snprintf truncates safely beyond
     if(deauths >= DEAUTH_FLOOD_MIN) {
         snprintf(right, sizeof(right), "!DEAUTH");
     } else if(generic) {
