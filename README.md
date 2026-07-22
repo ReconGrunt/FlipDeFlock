@@ -312,6 +312,8 @@ By contributing you agree to license your work under GPL-3.0-or-later.
 
 FlipDeFlock is free and stays that way. To help cover development (and the legal
 costs of mapping surveillance hardware), use the **Sponsor** button at the top of
-the repo or [Ko-fi](https://ko-fi.com/recongrunt). Donations never gate a feature.
+the repo, [Ko-fi](https://ko-fi.com/recongrunt), or
+[Buy Me a Coffee](https://buymeacoffee.com/recongrunt). Donations never gate a
+feature.
 
 Planned work and deferred items (with reasons) are in [ROADMAP.md](ROADMAP.md).
