@@ -16,7 +16,11 @@ float detect_dist_m(float lat1, float lon1, float lat2, float lon2) {
     return sqrtf(dlat * dlat + dlon * dlon);
 }
 
-bool flock_geotag_should_update(bool have_fix, bool already_tagged, int8_t rssi, int8_t geotag_rssi) {
+bool flock_geotag_should_update(
+    bool have_fix,
+    bool already_tagged,
+    int8_t rssi,
+    int8_t geotag_rssi) {
     // Tag if we have a fix and either it isn't tagged yet, or this sighting is
     // meaningfully stronger (6 dB margin absorbs scan-to-scan RSSI jitter).
     return have_fix && (!already_tagged || rssi > geotag_rssi + 6);

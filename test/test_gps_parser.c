@@ -29,7 +29,8 @@ static bool parse(const char* s, NmeaFix* out) {
 // Append the correct "*hh" NMEA checksum to `body` ("$GP..." without it).
 static void with_cksum(const char* body, char* out, size_t n) {
     uint8_t sum = 0;
-    for(const char* p = body + 1; *p; p++) sum ^= (uint8_t)*p;
+    for(const char* p = body + 1; *p; p++)
+        sum ^= (uint8_t)*p;
     snprintf(out, n, "%s*%02X", body, sum);
 }
 

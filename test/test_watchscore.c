@@ -13,7 +13,8 @@
 #include <string.h>
 
 static void run_ticks(WatchScore* ws, const WatchInputs* in, int ticks) {
-    for(int i = 0; i < ticks; i++) watchscore_eval(ws, in);
+    for(int i = 0; i < ticks; i++)
+        watchscore_eval(ws, in);
 }
 
 void suite_watchscore(void) {
@@ -59,7 +60,8 @@ void suite_watchscore(void) {
     for(int i = 0; i < 20; i++) {
         watchscore_eval(&ws, &two_radio);
         CHECK(!(prev == WatchStateClear && ws.state == WatchStateElevated)); // B16: no jump
-        if(ws.state == WatchStateWatchful && !reached_elevated) saw_watchful_before_elevated = true;
+        if(ws.state == WatchStateWatchful && !reached_elevated)
+            saw_watchful_before_elevated = true;
         if(ws.state == WatchStateElevated) reached_elevated = true;
         if(ws.just_elevated) elevated_events++;
         prev = ws.state;

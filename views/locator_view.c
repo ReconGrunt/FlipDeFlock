@@ -9,12 +9,12 @@
 
 // RSSI window mapped to the 0..100 meter. -35 dBm ~ right on top of it; -95 dBm
 // ~ at the edge of range. Clamped, so the bar saturates rather than clipping.
-#define LOC_RSSI_CEIL (-35)
+#define LOC_RSSI_CEIL  (-35)
 #define LOC_RSSI_FLOOR (-95)
 // A reading older than this means the target has gone quiet / out of range.
-#define LOC_FRESH_MS 2500
+#define LOC_FRESH_MS   2500
 // dB change before we call it warmer/colder (vs the smoothed average).
-#define LOC_TREND_DB 2
+#define LOC_TREND_DB   2
 
 struct LocatorView {
     View* view;
@@ -72,7 +72,8 @@ static void locator_view_draw_callback(Canvas* canvas, void* _model) {
 
     if(!connected) {
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 2, 30, port_busy ? "UART busy - check port" : "connecting ESP32...");
+        canvas_draw_str(
+            canvas, 2, 30, port_busy ? "UART busy - check port" : "connecting ESP32...");
         canvas_draw_str(
             canvas, 2, 42, port_busy ? "free the GPS UART/port" : "hold BOOT, tap RESET");
         return;
@@ -94,7 +95,7 @@ static void locator_view_draw_callback(Canvas* canvas, void* _model) {
     canvas_set_font(canvas, FontPrimary);
     canvas_draw_str(canvas, 2, 36, dbm);
     canvas_set_font(canvas, FontSecondary);
-    const char* word = !fresh ? "quiet" :
+    const char* word = !fresh           ? "quiet" :
                        model->trend > 0 ? "WARMER" :
                        model->trend < 0 ? "colder" :
                                           "steady";
@@ -133,8 +134,7 @@ LocatorView* locator_view_alloc(void) {
     view_allocate_model(lv->view, ViewModelTypeLocking, sizeof(LocatorViewModel));
     view_set_draw_callback(lv->view, locator_view_draw_callback);
     view_set_input_callback(lv->view, locator_view_input_callback);
-    with_view_model(
-        lv->view, LocatorViewModel * model, { model->app = NULL; }, false);
+    with_view_model(lv->view, LocatorViewModel * model, { model->app = NULL; }, false);
     return lv;
 }
 
@@ -148,8 +148,7 @@ View* locator_view_get_view(LocatorView* lv) {
 }
 
 void locator_view_set_app(LocatorView* lv, void* app) {
-    with_view_model(
-        lv->view, LocatorViewModel * model, { model->app = app; }, false);
+    with_view_model(lv->view, LocatorViewModel * model, { model->app = app; }, false);
 }
 
 void locator_view_reset(LocatorView* lv) {
@@ -167,6 +166,5 @@ void locator_view_reset(LocatorView* lv) {
 }
 
 void locator_view_refresh(LocatorView* lv) {
-    with_view_model(
-        lv->view, LocatorViewModel * model, { UNUSED(model); }, true);
+    with_view_model(lv->view, LocatorViewModel * model, { UNUSED(model); }, true);
 }

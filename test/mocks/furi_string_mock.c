@@ -38,7 +38,8 @@ void furi_string_reset(FuriString* s) {
 void furi_string_cat_str(FuriString* s, const char* suffix) {
     size_t add = strlen(suffix);
     if(s->len + add + 1 > s->cap) {
-        while(s->len + add + 1 > s->cap) s->cap *= 2;
+        while(s->len + add + 1 > s->cap)
+            s->cap *= 2;
         s->buf = realloc(s->buf, s->cap);
     }
     memcpy(s->buf + s->len, suffix, add + 1); // includes the NUL

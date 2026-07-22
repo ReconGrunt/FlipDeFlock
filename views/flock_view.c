@@ -212,9 +212,9 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             44,
             AlignCenter,
             AlignCenter,
-            connected      ? "Scanning for ALPR..." :
-            port_busy      ? "UART busy - check port" :
-                             "Connect ESP32...");
+            connected ? "Scanning for ALPR..." :
+            port_busy ? "UART busy - check port" :
+                        "Connect ESP32...");
         return;
     }
 

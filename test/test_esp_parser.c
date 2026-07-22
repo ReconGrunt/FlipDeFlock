@@ -122,8 +122,9 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(m.u.ble.company, 2504);
     CHECK_STR_EQ(m.u.ble.name, "Tag");
     CHECK_INT_EQ((long)m.u.ble.mfg_len, 4);
-    CHECK(m.u.ble.mfg[0] == 0x09 && m.u.ble.mfg[1] == 0xc8 && m.u.ble.mfg[2] == 0xaa &&
-          m.u.ble.mfg[3] == 0xbb);
+    CHECK(
+        m.u.ble.mfg[0] == 0x09 && m.u.ble.mfg[1] == 0xc8 && m.u.ble.mfg[2] == 0xaa &&
+        m.u.ble.mfg[3] == 0xbb);
     CHECK_INT_EQ(m.u.ble.raven_gatt, 1);
 
     // Trailers in the other order (rv=1 then mfghex) still decode correctly.

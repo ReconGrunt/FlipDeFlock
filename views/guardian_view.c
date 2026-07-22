@@ -126,7 +126,8 @@ static void guardian_view_draw_callback(Canvas* canvas, void* _model) {
 
     if(!connected) {
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 2, 30, port_busy ? "UART busy - check port" : "connecting ESP32...");
+        canvas_draw_str(
+            canvas, 2, 30, port_busy ? "UART busy - check port" : "connecting ESP32...");
         canvas_draw_str(
             canvas, 2, 42, port_busy ? "free the GPS UART/port" : "hold BOOT, tap RESET");
         return;

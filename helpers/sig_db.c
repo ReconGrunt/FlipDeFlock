@@ -32,7 +32,7 @@
 #define SIG_MAX_FILE     8192u /**< largest signatures.json we will read */
 #define SIG_MAX_TOKENS   512u /**< jsmn token budget (bounds parse RAM) */
 #define SIG_MAX_NEEDLE   48u /**< longest SSID substring we keep (lowercased) */
-#define SIG_MAX_DEPTH    16  /**< max JSON nesting we recurse (schema is flat) -> bounds stack */
+#define SIG_MAX_DEPTH    16 /**< max JSON nesting we recurse (schema is flat) -> bounds stack */
 
 struct SigDb {
     uint8_t (*ouis)[3]; /**< owned OUI table, NULL if none */
@@ -358,7 +358,8 @@ SigDb* sig_db_load(Storage* storage) {
             if(!db->ouis) db->ouis = sig_parse_ouis(js, tokens, count, val_idx, &db->oui_count);
         } else if(sig_tok_eq(js, key, "ssid_confirmed")) {
             if(!db->confirmed)
-                db->confirmed = sig_parse_patterns(js, tokens, count, val_idx, &db->confirmed_count);
+                db->confirmed =
+                    sig_parse_patterns(js, tokens, count, val_idx, &db->confirmed_count);
         } else if(sig_tok_eq(js, key, "ssid_likely")) {
             if(!db->likely)
                 db->likely = sig_parse_patterns(js, tokens, count, val_idx, &db->likely_count);

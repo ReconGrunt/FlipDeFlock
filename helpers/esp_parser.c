@@ -79,8 +79,8 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
         // Verified compiled-in class fp. + Flock OUI -> CONFIRMED; otherwise (e.g. a
         // wildcard probe from a randomized/unknown MAC) -> a candidate device-CLASS
         // match. Never weaker than the ESP's own score.
-        FlockConfidence fp_conf =
-            flock_oui_match(mac) ? FlockConfidenceConfirmed : FlockConfidenceProbeFp;
+        FlockConfidence fp_conf = flock_oui_match(mac) ? FlockConfidenceConfirmed :
+                                                         FlockConfidenceProbeFp;
         if(fp_conf > conf) conf = fp_conf;
         ftype = 'F'; // source label "probe-fp" in the detail scene
     } else if(fp_src == FlockIeFpUser) {

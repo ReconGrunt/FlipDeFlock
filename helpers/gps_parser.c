@@ -64,7 +64,8 @@ bool nmea_parse_line(char* line, NmeaFix* out) {
     char* star = strchr(line, '*');
     if(star) {
         uint8_t sum = 0;
-        for(const char* p = line + 1; p < star; p++) sum ^= (uint8_t)*p;
+        for(const char* p = line + 1; p < star; p++)
+            sum ^= (uint8_t)*p;
         int hi = nmea_hex(star[1]);
         int lo = hi < 0 ? -1 : nmea_hex(star[2]); // only read [2] when [1] is a hex digit
         if(hi < 0 || lo < 0 || (uint8_t)((hi << 4) | lo) != sum) return false; // bad checksum

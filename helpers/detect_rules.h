@@ -28,7 +28,11 @@ float detect_dist_m(float lat1, float lon1, float lat2, float lon2);
  * meaningfully stronger. RSSI oscillates +/-5-10 dB scan-to-scan, so the 6 dB
  * margin stops the tag jittering between roughly-equal sightings.
  */
-bool flock_geotag_should_update(bool have_fix, bool already_tagged, int8_t rssi, int8_t geotag_rssi);
+bool flock_geotag_should_update(
+    bool have_fix,
+    bool already_tagged,
+    int8_t rssi,
+    int8_t geotag_rssi);
 
 // ---- BLE anti-stalking "following" gate (recon_app_ble_add) ------------
 //
