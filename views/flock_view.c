@@ -76,6 +76,9 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     uint8_t channel = app->esp_channel;
     uint32_t lines = app->esp_lines;
     uint32_t deauths = app->esp_deauths;
+    bool proto_mismatch = app->esp_proto_mismatch;
+    uint8_t proto_version = app->esp_proto_version;
+    uint32_t dropped = app->esp_dropped_lines;
     bool generic = (app->settings.backend == EspBackendGeneric);
     bool gps_enabled = app->settings.gps_enabled;
     bool gps_valid = app->gps_valid;
@@ -144,8 +147,15 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     ui_title_bar(canvas, "FLOCK / ALPR", right); // leaves color=black, font=Secondary
 
     // Fuller status sub-line under the bar (nothing from the old header lost).
+    // A wire-protocol version mismatch is the highest-priority health warning (the
+    // data may be mis-parsed), then a deauth flood. A non-zero dropped-line count
+    // (overlong RX lines) is appended as a "!dN" health suffix on the normal lines.
+    char drop[16] = "";
+    if(dropped) snprintf(drop, sizeof(drop), " !d%lu", (unsigned long)dropped);
     char hdr[48];
-    if(deauths >= DEAUTH_FLOOD_MIN) {
+    if(proto_mismatch) {
+        snprintf(hdr, sizeof(hdr), "! Companion FW proto v%u mismatch", proto_version);
+    } else if(deauths >= DEAUTH_FLOOD_MIN) {
         if(have_attr) {
             snprintf(
                 hdr, sizeof(hdr), "!DEAUTH ch%u %02X%02X%02X", attr_ch, attr_b3, attr_b4, attr_b5);
@@ -163,19 +173,21 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s  rx %lu  hits %zu",
+            "%s  rx %lu  hits %zu%s",
             connected ? "ESP" : "...",
             (unsigned long)lines,
-            count);
+            count,
+            drop);
     } else {
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s ch%u  frames %lu  hits %lu",
+            "%s ch%u  frames %lu  hits %lu%s",
             connected ? "ESP" : "...",
             channel,
             (unsigned long)frames,
-            (unsigned long)hits);
+            (unsigned long)hits,
+            drop);
     }
     canvas_set_font(canvas, FontSecondary);
     canvas_draw_str(canvas, 0, 22, hdr);

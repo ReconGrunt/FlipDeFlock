@@ -120,6 +120,19 @@ void recon_app_set_deauths(ReconApp* app, uint32_t deauths) {
     furi_mutex_release(app->mutex);
 }
 
+void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->esp_proto_version = version;
+    app->esp_proto_mismatch = mismatch;
+    furi_mutex_release(app->mutex);
+}
+
+void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->esp_dropped_lines = dropped;
+    furi_mutex_release(app->mutex);
+}
+
 void recon_app_ble_begin(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->ble_scanning = true;

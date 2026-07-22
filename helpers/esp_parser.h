@@ -31,6 +31,13 @@
 extern "C" {
 #endif
 
+// Wire-protocol version this app speaks. The companion announces its own version
+// in the FLOCKCO banner (see EspMsgBanner.version); a mismatch means the two may
+// disagree on line formats, so the app flags it as a health warning rather than
+// silently mis-parsing. A banner version of 0 means "old firmware, no version
+// field" and is treated as compatible/unknown, not a mismatch.
+#define ESP_PROTO_VERSION 1
+
 /** Which companion record a line decoded to (EspMsgIgnore = unrecognised/malformed). */
 typedef enum {
     EspMsgIgnore = 0,
@@ -102,6 +109,9 @@ typedef struct {
         struct { // EspMsgLocate (LOC)
             int8_t rssi;
         } locate;
+        struct { // EspMsgBanner (FLOCKCO)
+            uint8_t version; /**< companion's announced wire-protocol version (0 = old FW) */
+        } banner;
     } u;
 } EspMsg;
 

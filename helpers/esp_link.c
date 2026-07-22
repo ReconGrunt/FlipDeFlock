@@ -31,6 +31,7 @@ struct EspLink {
     size_t line_len;
     bool skip_line; /**< dropping the remainder of an overlong (overflowed) line */
     uint32_t lines; /**< total completed RX lines (heartbeat) */
+    uint32_t dropped; /**< overlong lines dropped whole (wire-protocol health metric) */
 };
 
 // ---- parsing helpers -----------------------------------------------------
@@ -58,6 +59,13 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
     switch(m->type) {
     case EspMsgBanner:
         recon_app_set_esp_status(app, 0, 0, 0, true);
+        // Version gate: flag (don't refuse) if the companion speaks a different
+        // wire-protocol version than we do, so a mismatch surfaces instead of
+        // silently mis-parsing. Version 0 = old FW with no version field = OK.
+        recon_app_set_esp_proto(
+            app,
+            m->u.banner.version,
+            m->u.banner.version != 0 && m->u.banner.version != ESP_PROTO_VERSION);
         break;
     case EspMsgWifiBegin:
         recon_app_wifi_begin(app);
@@ -258,9 +266,12 @@ static int32_t esp_worker(void* context) {
                     esp->line[esp->line_len++] = (char)byte;
                 } else {
                     // Overflow: drop this whole line instead of re-parsing its tail
-                    // as a new (injectable) record.
+                    // as a new (injectable) record. Count it as a health metric so a
+                    // chronic line-length mismatch between firmware and app is visible.
                     esp->skip_line = true;
                     esp->line_len = 0;
+                    esp->dropped++;
+                    recon_app_set_esp_dropped(esp->app, esp->dropped);
                 }
             }
         }

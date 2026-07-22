@@ -167,6 +167,11 @@ void suite_esp_parser(void) {
 
     // --- banners / batch markers / junk ------------------------------------
     CHECK_INT_EQ(P("FLOCKCO,1"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 1); // wire-protocol version parsed from the banner
+    CHECK_INT_EQ(P("FLOCKCO,2"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 2); // a different version still parses (app flags mismatch)
+    CHECK_INT_EQ(P("FLOCKCO"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 0); // no version field (old FW) -> 0
     CHECK_INT_EQ(P("WBEGIN"), EspMsgWifiBegin);
     CHECK_INT_EQ(P("WEND"), EspMsgWifiEnd); // must NOT be mistaken for "W,"
     CHECK_INT_EQ(P("BBEGIN"), EspMsgBleBegin);

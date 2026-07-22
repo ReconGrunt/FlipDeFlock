@@ -143,6 +143,10 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
     out->type = EspMsgIgnore;
 
     if(strncmp(line, "FLOCKCO", 7) == 0) {
+        // FLOCKCO,<ver> -- the companion's wire-protocol version (absent on old FW).
+        char* f[2];
+        int n = esp_split_fields(line, f, 2);
+        out->u.banner.version = (n >= 2) ? (uint8_t)atoi(f[1]) : 0;
         out->type = EspMsgBanner;
         return out->type;
     }

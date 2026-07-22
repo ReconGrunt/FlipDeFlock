@@ -212,6 +212,9 @@ typedef struct {
     uint8_t esp_channel;
     uint32_t esp_lines; /**< RX line heartbeat (generic mode liveness) */
     uint32_t esp_deauths; /**< deauth/disassoc frames seen (attack indicator) */
+    uint8_t esp_proto_version; /**< companion wire-protocol version (FLOCKCO banner; 0 = unknown) */
+    bool esp_proto_mismatch; /**< companion speaks a different protocol version than the app */
+    uint32_t esp_dropped_lines; /**< overlong RX lines dropped whole (wire-protocol health metric) */
 
     // Active attack-tool signature reported by the companion (ATK line): BLE-spam
     // advert flood, beacon-spam (Marauder / Pineapple), or probe-request flood.
@@ -295,6 +298,13 @@ void recon_app_set_esp_lines(ReconApp* app, uint32_t lines);
 
 /** Update the deauth/disassoc frame counter (thread-safe). */
 void recon_app_set_deauths(ReconApp* app, uint32_t deauths);
+
+/** Record the companion's announced wire-protocol version + whether it mismatches
+ *  what this app speaks (thread-safe). See ESP_PROTO_VERSION in esp_parser.h. */
+void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch);
+
+/** Update the count of overlong RX lines dropped whole (health metric; thread-safe). */
+void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
 
 /** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
 void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);
