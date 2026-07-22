@@ -29,15 +29,15 @@ jobs:
           path: ${{ steps.build-app.outputs.fap-artifacts }}
           if-no-files-found: error
 
-      # --- API drift guard (advisory only — MUST NOT fail the job) -------------
+      # --- API drift guard (REQUIRED gate) -------------------------------------
       # build.yml uses `sdk-channel: release`, which floats: when the official
       # SDK bumps its API version, this app (targeted at API 87.1) keeps building
       # against whatever ships. This step reads the API version ufbt resolved and
-      # emits a ::warning:: annotation if it is not 87.1. It never exits non-zero
-      # (no `exit 1`; the whole body is `|| true`-guarded and continue-on-error),
-      # so a moving SDK warns us without turning the build red.
-      - name: API 87.1 drift check (advisory)
-        continue-on-error: true
+      # FAILS the job if it is a confirmed mismatch with 87.1 -- the intended
+      # signal to pin the SDK (sdk-index-url) or bump the target deliberately. It
+      # stays defensive: if the version cannot be determined it passes (no guess),
+      # so it only turns the build red on a parsed, real drift.
+      - name: API 87.1 drift check (required)
         run: |
           set +e
           EXPECTED="87.1"
@@ -77,15 +77,16 @@ jobs:
 
           echo "Detected SDK API version: $API_VER (expected $EXPECTED)"
           if [ "$API_VER" != "$EXPECTED" ]; then
-            echo "::warning title=API drift::ufbt built against API $API_VER but this app targets API $EXPECTED. The 'release' SDK channel has drifted; review for compatibility. (Advisory only — build not failed.)"
-          else
-            echo "API version matches expected $EXPECTED."
+            echo "::error title=API drift::ufbt built against API $API_VER but this app targets API $EXPECTED. Pin the SDK (sdk-index-url) to API $EXPECTED, or bump the target deliberately, then re-run."
+            exit 1
           fi
+          echo "API version matches expected $EXPECTED."
           exit 0
 
-      - name: Lint sources (advisory)
+      # Required gate: the first-party tree is clang-format clean (see the tree-wide
+      # format commit); a new violation now fails CI instead of only warning.
+      - name: Lint sources (required — clang-format)
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
-        continue-on-error: true
         with:
           skip-setup: true
           task: lint
