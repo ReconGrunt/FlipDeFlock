@@ -17,9 +17,6 @@
 #define BLE_RESCAN_GAP_MS   4000
 #define BLE_SCAN_TIMEOUT_MS 12000
 
-static bool s_pending; // a blescan is in flight (awaiting BEND)
-static uint32_t s_mark; // tick of last state transition
-
 // Action-row labels (static lifetime; the view keeps the pointers).
 static const char* const BLE_ACTIONS[] = {"Save Report"};
 
@@ -45,8 +42,8 @@ static void ble_trigger(ReconApp* app) {
     app->ble_done = false;
     furi_mutex_release(app->mutex);
     if(app->esp) esp_link_send(app->esp, "blescan");
-    s_pending = true;
-    s_mark = furi_get_tick();
+    app->ble_pending = true;
+    app->ble_mark = furi_get_tick();
 }
 
 static void ble_show_scanning(ReconApp* app) {
@@ -97,20 +94,18 @@ static void ble_show_results(ReconApp* app) {
     ble_list_view_refresh(app->ble_list_view);
 }
 
-static bool s_ble_blocked; // companion-only feature opened in Marauder mode
-
 void recon_scene_ble_on_enter(void* context) {
     ReconApp* app = context;
     // BLE scan needs the companion firmware protocol; explain in Marauder mode.
     app->saved_backend = app->settings.backend;
     if(app->settings.backend != EspBackendCompanion) {
-        s_ble_blocked = true;
+        app->ble_blocked = true;
         scene_show_companion_guard(
             app,
             "BLE / Tracker Scan needs\nthe FlipDeFlock companion\nFW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
-    s_ble_blocked = false;
+    app->ble_blocked = false;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->ble_count = 0;
@@ -133,21 +128,21 @@ bool recon_scene_ble_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     bool consumed = false;
 
-    if(s_ble_blocked) return false; // Marauder mode guard screen; let Back exit
+    if(app->ble_blocked) return false; // Marauder mode guard screen; let Back exit
 
     if(event.type == SceneManagerEventTypeTick) {
         furi_mutex_acquire(app->mutex, FuriWaitForever);
         bool done = app->ble_done;
         furi_mutex_release(app->mutex);
         uint32_t now = furi_get_tick();
-        if(s_pending && done) {
+        if(app->ble_pending && done) {
             ble_show_results(app);
-            s_pending = false;
-            s_mark = now;
-        } else if(s_pending && now - s_mark > BLE_SCAN_TIMEOUT_MS) {
-            s_pending = false;
-            s_mark = now; // give up; allow a rescan
-        } else if(!s_pending && now - s_mark > BLE_RESCAN_GAP_MS) {
+            app->ble_pending = false;
+            app->ble_mark = now;
+        } else if(app->ble_pending && now - app->ble_mark > BLE_SCAN_TIMEOUT_MS) {
+            app->ble_pending = false;
+            app->ble_mark = now; // give up; allow a rescan
+        } else if(!app->ble_pending && now - app->ble_mark > BLE_RESCAN_GAP_MS) {
             ble_trigger(app); // continuous monitoring -> "following" detection
         }
         // Keep the live view ticking (counts, bars, following flag).

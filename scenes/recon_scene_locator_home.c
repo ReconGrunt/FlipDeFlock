@@ -9,19 +9,17 @@
 // the selected target (`locate <w|b> <mac> <ch>`) and shows the hot/cold meter.
 // Companion-only: the generic/Marauder backend has no `locate` command.
 
-static bool s_blocked;
-
 void recon_scene_locator_home_on_enter(void* context) {
     ReconApp* app = context;
 
     if(app->settings.backend != EspBackendCompanion) {
-        s_blocked = true;
+        app->locator_blocked = true;
         scene_show_companion_guard(
             app,
             "Locator needs the\nFlipDeFlock companion FW\n(live signal homing).\n\nYou're in Marauder mode.\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
-    s_blocked = false;
+    app->locator_blocked = false;
 
     // Fresh reading state, and snapshot the target out of the lock.
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -67,7 +65,7 @@ void recon_scene_locator_home_on_enter(void* context) {
 
 bool recon_scene_locator_home_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
-    if(s_blocked) return false; // guard screen: let Back exit
+    if(app->locator_blocked) return false; // guard screen: let Back exit
     if(event.type == SceneManagerEventTypeTick) {
         locator_view_refresh(app->locator_view);
         return true;

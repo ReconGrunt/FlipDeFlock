@@ -19,9 +19,6 @@
 #define WIFI_SCAN_TIMEOUT_MS 9000
 
 // GUI-thread-only scene state (one WiFi-audit scene at a time).
-static int s_state; // 0 = scanning, 1 = results, 2 = timeout
-static uint32_t s_start;
-static bool s_blocked; // companion-only feature opened in Marauder mode
 
 // Action-row labels (static lifetime; the view keeps the pointers).
 static const char* const WIFI_ACTIONS_SCAN[] = {"Rescan"};
@@ -34,7 +31,7 @@ static void wifi_view_ok_cb(void* context, int selected_index) {
     // dependent: scanning/timeout show only [0]=Rescan; results also has [1]=Save.
     // Using the fixed WIFI_ACTION_COUNT put every AP row off by one whenever fewer
     // than two actions were shown.
-    int actions = (s_state == 1) ? 2 : 1; // results state has Save; others don't
+    int actions = (app->wifi_ui_state == 1) ? 2 : 1; // results state has Save; others don't
     uint32_t ev;
     if(selected_index == 0) {
         ev = WIFI_EV_RESCAN;
@@ -135,8 +132,8 @@ static void recon_scene_wifi_trigger(ReconApp* app) {
     app->wifi_scanning = false;
     furi_mutex_release(app->mutex);
     if(app->esp) esp_link_send(app->esp, "wifiscan");
-    s_state = 0;
-    s_start = furi_get_tick();
+    app->wifi_ui_state = 0;
+    app->wifi_scan_start = furi_get_tick();
     recon_scene_wifi_show_scanning(app);
 }
 
@@ -148,13 +145,13 @@ void recon_scene_wifi_on_enter(void* context) {
     // showing a dead screen.
     app->saved_backend = app->settings.backend;
     if(app->settings.backend != EspBackendCompanion) {
-        s_blocked = true;
+        app->wifi_blocked = true;
         scene_show_companion_guard(
             app,
             "WiFi Audit needs the\nFlipDeFlock companion FW.\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
-    s_blocked = false;
+    app->wifi_blocked = false;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_connected = false;
@@ -174,19 +171,19 @@ bool recon_scene_wifi_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     bool consumed = false;
 
-    if(s_blocked) return false; // Marauder mode guard screen; let Back exit
+    if(app->wifi_blocked) return false; // Marauder mode guard screen; let Back exit
 
     if(event.type == SceneManagerEventTypeTick) {
-        if(s_state == 0) {
+        if(app->wifi_ui_state == 0) {
             furi_mutex_acquire(app->mutex, FuriWaitForever);
             bool done = app->wifi_done;
             furi_mutex_release(app->mutex);
             if(done) {
                 recon_scene_wifi_show_results(app);
-                s_state = 1;
-            } else if(furi_get_tick() - s_start > WIFI_SCAN_TIMEOUT_MS) {
+                app->wifi_ui_state = 1;
+            } else if(furi_get_tick() - app->wifi_scan_start > WIFI_SCAN_TIMEOUT_MS) {
                 recon_scene_wifi_show_timeout(app);
-                s_state = 2;
+                app->wifi_ui_state = 2;
             }
         }
         // Keep the live view ticking (bars, selection redraw).

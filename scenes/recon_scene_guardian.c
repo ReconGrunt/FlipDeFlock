@@ -28,9 +28,6 @@ static const struct {
 };
 #define GUARD_PHASE_COUNT (sizeof(GUARD_PHASES) / sizeof(GUARD_PHASES[0]))
 
-static bool s_blocked; // companion-only feature opened in Marauder mode
-static uint32_t s_phase_mark; // tick of the last phase switch
-
 #define GUARDIAN_EV_SUS 100 // short-OK -> open the Suspicious list
 
 static void recon_scene_guardian_ok_cb(void* ctx) {
@@ -44,13 +41,13 @@ void recon_scene_guardian_on_enter(void* context) {
     // The rotating sweep (blescan/wifiscan) needs the companion protocol; in
     // Marauder mode explain and bail (Flock/ALPR Detect still works there).
     if(app->settings.backend != EspBackendCompanion) {
-        s_blocked = true;
+        app->guardian_blocked = true;
         scene_show_companion_guard(
             app,
             "Net Guardian needs the\nFlipDeFlock companion FW\n(it rotates WiFi + BLE).\n\nYou're in Marauder mode\n(Flock detect only).\nFlash via 'ESP32 Firmware'\nor switch Board Mode in\nSettings.");
         return;
     }
-    s_blocked = false;
+    app->guardian_blocked = false;
 
     // Fresh baseline so the guardian starts honestly CLEAR rather than off the
     // tail of a previous scan.
@@ -70,7 +67,7 @@ void recon_scene_guardian_on_enter(void* context) {
     watchscore_init(&app->watch);
     app->guardian_since = furi_get_tick();
     app->guardian_phase = 0;
-    s_phase_mark = app->guardian_since;
+    app->guardian_phase_mark = app->guardian_since;
 
     // ESP first so it claims its UART; GPS only if it's on a different port.
     // scan_session_start keeps the live link across the Sus detail round-trip
@@ -87,7 +84,7 @@ void recon_scene_guardian_on_enter(void* context) {
 
 bool recon_scene_guardian_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
-    if(s_blocked) return false; // Marauder guard screen: let Back exit
+    if(app->guardian_blocked) return false; // Marauder guard screen: let Back exit
 
     if(event.type == SceneManagerEventTypeCustom && event.event == GUARDIAN_EV_SUS) {
         scene_manager_next_scene(app->scene_manager, ReconSceneGuardianSus);
@@ -97,10 +94,10 @@ bool recon_scene_guardian_on_event(void* context, SceneManagerEvent event) {
     if(event.type == SceneManagerEventTypeTick) {
         // Advance the rotating sweep when the current phase's dwell elapses.
         uint32_t now = furi_get_tick();
-        if(now - s_phase_mark >= GUARD_PHASES[app->guardian_phase].dwell_ms) {
+        if(now - app->guardian_phase_mark >= GUARD_PHASES[app->guardian_phase].dwell_ms) {
             app->guardian_phase = (uint8_t)((app->guardian_phase + 1) % GUARD_PHASE_COUNT);
             if(app->esp) esp_link_send(app->esp, GUARD_PHASES[app->guardian_phase].cmd);
-            s_phase_mark = now;
+            app->guardian_phase_mark = now;
         }
 
         // Tick the fused scorer live (this also fires the one-shot haptic/sound

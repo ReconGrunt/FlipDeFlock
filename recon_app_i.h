@@ -251,6 +251,18 @@ typedef struct {
     WatchScore watch; /**< fused "am I being watched?" scorer (C1) */
     uint32_t guardian_since; /**< tick the Net Guardian session started (uptime) */
     uint8_t guardian_phase; /**< current rotating-sweep phase (0=flockcombo,1=ble,2=wifi) */
+    // Scan-scene UI state, moved out of per-scene file-scope statics (R4-tail) so
+    // the scene layer holds no module-global mutable state. Semantics are
+    // identical (ReconApp is single-instance and app-lifetime, like the statics).
+    uint32_t guardian_phase_mark; /**< guardian: tick of the last rotating-sweep phase switch */
+    bool guardian_blocked; /**< guardian: opened in Marauder mode -> guard screen shown */
+    int wifi_ui_state; /**< wifi: 0 scanning / 1 results / 2 timeout */
+    uint32_t wifi_scan_start; /**< wifi: tick the current scan started */
+    bool wifi_blocked; /**< wifi: opened in Marauder mode -> guard screen */
+    bool ble_pending; /**< ble: a blescan is in flight (awaiting BEND) */
+    uint32_t ble_mark; /**< ble: tick of the last state transition */
+    bool ble_blocked; /**< ble: opened in Marauder mode -> guard screen */
+    bool locator_blocked; /**< locator: opened in Marauder mode -> guard screen */
     uint8_t guardian_flip_n; /**< cached nearby-Flipper count for the HUD (set each
                               *   watchscore tick, so the view needn't re-lock). */
     uint8_t guardian_atk_n; /**< cached active-attack count for the HUD. */
