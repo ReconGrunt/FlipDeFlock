@@ -35,36 +35,11 @@ static const uint8_t flock_ouis[][3] = {
  * UNVERIFIED; per precision-over-recall they never upgrade an OUI hit past
  * "possible".
  */
-static const uint8_t (*extra_ouis)[3] = NULL;
-static size_t extra_oui_count = 0;
-static const char* const* extra_ssid_confirmed = NULL;
-static size_t extra_ssid_confirmed_count = 0;
-static const char* const* extra_ssid_likely = NULL;
-static size_t extra_ssid_likely_count = 0;
-static const uint32_t* extra_ie_fps = NULL;
-static size_t extra_ie_fp_count = 0;
+// Single caller-owned extras context (NULL = only the built-ins are consulted).
+static const FlockDbExtras* g_extras = NULL;
 
-void flock_db_set_extra_ouis(const uint8_t (*ouis)[3], size_t count) {
-    // NULL/0 clears the registration; otherwise just hold the caller's pointer.
-    extra_ouis = (ouis && count) ? ouis : NULL;
-    extra_oui_count = (ouis && count) ? count : 0;
-}
-
-void flock_db_set_extra_ssid_patterns(
-    const char* const* confirmed,
-    size_t confirmed_count,
-    const char* const* likely,
-    size_t likely_count) {
-    extra_ssid_confirmed = (confirmed && confirmed_count) ? confirmed : NULL;
-    extra_ssid_confirmed_count = (confirmed && confirmed_count) ? confirmed_count : 0;
-    extra_ssid_likely = (likely && likely_count) ? likely : NULL;
-    extra_ssid_likely_count = (likely && likely_count) ? likely_count : 0;
-}
-
-void flock_db_set_extra_ie_fps(const uint32_t* fps, size_t count) {
-    // NULL/0 clears the registration; otherwise just hold the caller's pointer.
-    extra_ie_fps = (fps && count) ? fps : NULL;
-    extra_ie_fp_count = (fps && count) ? count : 0;
+void flock_db_set_extras(const FlockDbExtras* extras) {
+    g_extras = extras; // atomic single-pointer swap; caller owns the struct + arrays
 }
 
 size_t flock_oui_count(void) {
@@ -85,10 +60,12 @@ bool flock_oui_match(const uint8_t* mac) {
         }
     }
     // Also scan the optional user-supplied extras (merged over the built-ins).
-    for(size_t i = 0; i < extra_oui_count; i++) {
-        if(mac[0] == extra_ouis[i][0] && mac[1] == extra_ouis[i][1] &&
-           mac[2] == extra_ouis[i][2]) {
-            return true;
+    if(g_extras) {
+        for(size_t i = 0; i < g_extras->oui_count; i++) {
+            if(mac[0] == g_extras->ouis[i][0] && mac[1] == g_extras->ouis[i][1] &&
+               mac[2] == g_extras->ouis[i][2]) {
+                return true;
+            }
         }
     }
     return false;
@@ -141,8 +118,10 @@ FlockConfidence flock_ssid_confidence(const char* ssid) {
 
     // Optional user-supplied confirmed needles (already lower-case). Merged
     // over the built-ins: they can only ADD a confirmed match.
-    for(size_t i = 0; i < extra_ssid_confirmed_count; i++) {
-        if(ci_contains(ssid, extra_ssid_confirmed[i])) return FlockConfidenceConfirmed;
+    if(g_extras) {
+        for(size_t i = 0; i < g_extras->ssid_confirmed_count; i++) {
+            if(ci_contains(ssid, g_extras->ssid_confirmed[i])) return FlockConfidenceConfirmed;
+        }
     }
 
     // Weaker substrings -> likely (could be a coincidental network name).
@@ -151,8 +130,10 @@ FlockConfidence flock_ssid_confidence(const char* ssid) {
     }
 
     // Optional user-supplied likely needles (already lower-case).
-    for(size_t i = 0; i < extra_ssid_likely_count; i++) {
-        if(ci_contains(ssid, extra_ssid_likely[i])) return FlockConfidenceLikely;
+    if(g_extras) {
+        for(size_t i = 0; i < g_extras->ssid_likely_count; i++) {
+            if(ci_contains(ssid, g_extras->ssid_likely[i])) return FlockConfidenceLikely;
+        }
     }
 
     return FlockConfidenceNone;
@@ -191,8 +172,10 @@ FlockIeFp flock_ie_fp_match(uint32_t fp) {
     }
     // Then the optional user-supplied extras (UNVERIFIED -> the caller caps these
     // at FlockConfidenceProbeFp; they can only ADD a candidate-class match).
-    for(size_t i = 0; i < extra_ie_fp_count; i++) {
-        if(extra_ie_fps[i] == fp) return FlockIeFpUser;
+    if(g_extras) {
+        for(size_t i = 0; i < g_extras->ie_fp_count; i++) {
+            if(g_extras->ie_fps[i] == fp) return FlockIeFpUser;
+        }
     }
     return FlockIeFpNone;
 }

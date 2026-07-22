@@ -44,28 +44,35 @@ void suite_flock_db(void) {
 
     // --- extra OUIs (user signatures merged OVER the built-ins) --------------
     static const uint8_t extra[][3] = {{0x11, 0x22, 0x33}};
-    flock_db_set_extra_ouis(extra, 1);
+    FlockDbExtras ex_oui = {.ouis = extra, .oui_count = 1};
+    flock_db_set_extras(&ex_oui);
     CHECK(flock_oui_match(unknown)); // now matches via the extra
-    flock_db_set_extra_ouis(NULL, 0);
+    flock_db_set_extras(NULL);
     CHECK(!flock_oui_match(unknown)); // cleared -> built-ins only (fail-safe)
 
     // --- extra SSID patterns (needles are lower-case per the contract) -------
     static const char* const conf[] = {"acme-cam"};
     static const char* const like[] = {"widgetcorp"};
-    flock_db_set_extra_ssid_patterns(conf, 1, like, 1);
+    FlockDbExtras ex_ssid = {
+        .ssid_confirmed = conf,
+        .ssid_confirmed_count = 1,
+        .ssid_likely = like,
+        .ssid_likely_count = 1};
+    flock_db_set_extras(&ex_ssid);
     CHECK_INT_EQ(flock_ssid_confidence("ACME-CAM-07"), FlockConfidenceConfirmed);
     CHECK_INT_EQ(flock_ssid_confidence("WidgetCorp Guest"), FlockConfidenceLikely);
-    flock_db_set_extra_ssid_patterns(NULL, 0, NULL, 0);
+    flock_db_set_extras(NULL);
     CHECK_INT_EQ(flock_ssid_confidence("ACME-CAM-07"), FlockConfidenceNone);
 
     // --- IE-fingerprint match + UNVERIFIED user cap contract ----------------
     CHECK_INT_EQ(flock_ie_fp_match(0), FlockIeFpNone); // 0 = "no fingerprint"
     CHECK_INT_EQ(flock_ie_fp_match(0xdeadbeef), FlockIeFpNone); // built-in table ships empty
     static const uint32_t ufps[] = {0xdeadbeef};
-    flock_db_set_extra_ie_fps(ufps, 1);
+    FlockDbExtras ex_fp = {.ie_fps = ufps, .ie_fp_count = 1};
+    flock_db_set_extras(&ex_fp);
     CHECK_INT_EQ(flock_ie_fp_match(0xdeadbeef), FlockIeFpUser); // user match, never "builtin"
     CHECK_INT_EQ(flock_ie_fp_match(0x12345678), FlockIeFpNone);
-    flock_db_set_extra_ie_fps(NULL, 0);
+    flock_db_set_extras(NULL);
     CHECK_INT_EQ(flock_ie_fp_match(0xdeadbeef), FlockIeFpNone);
 
     // --- flock_score contract ----------------------------------------------

@@ -90,11 +90,12 @@ void suite_esp_parser(void) {
     // A registered UNVERIFIED user fp upgrades to Class? (ProbeFp) + ftype 'F',
     // never Confirmed. This is the fp confidence logic, now unit-testable.
     static const uint32_t ufps[] = {0xdeadbeef};
-    flock_db_set_extra_ie_fps(ufps, 1);
+    FlockDbExtras ex_fp = {.ie_fps = ufps, .ie_fp_count = 1};
+    flock_db_set_extras(&ex_fp);
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,0,,fp=deadbeef"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceProbeFp);
     CHECK_INT_EQ(m.u.flock.ftype, 'F');
-    flock_db_set_extra_ie_fps(NULL, 0);
+    flock_db_set_extras(NULL);
 
     // --- W: WiFi AP ---------------------------------------------------------
     CHECK_INT_EQ(P("W,a1b2c3d4e5f6,-55,11,3,4,4,0,HomeNet"), EspMsgWifiAp);
