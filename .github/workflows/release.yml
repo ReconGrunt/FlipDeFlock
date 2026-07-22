@@ -47,5 +47,10 @@ jobs:
           # "flipdeflock" so the asset is flipdeflock.fap.
           files: ${{ steps.build-app.outputs.fap-artifacts }}
           fail_on_unmatched_files: false
+          # Auto-generate "What's Changed" notes when THIS workflow creates the
+          # release (tag pushed with no release yet). If the maintainer pre-created
+          # the release with hand-written notes, the action just attaches the .fap
+          # and leaves those notes intact.
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
