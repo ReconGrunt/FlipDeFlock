@@ -325,11 +325,15 @@ void esp_link_start(EspLink* esp) {
         Expansion* exp = furi_record_open(RECORD_EXPANSION);
         expansion_enable(exp);
         furi_record_close(RECORD_EXPANSION);
+        // UART acquire failed -- another owner holds it (commonly the GPS port).
+        // Surface it so scenes render "UART busy" instead of a dead "connecting...".
+        recon_app_set_esp_link_state(app, EspLinkPortBusy);
         return;
     }
     furi_hal_serial_init(esp->serial, app->settings.esp_baud);
     furi_hal_serial_async_rx_start(esp->serial, esp_rx_isr, esp, false);
     esp->running = true;
+    recon_app_set_esp_link_state(app, EspLinkRunning);
 
     // Kick the board into reporting.
     if(app->settings.backend == EspBackendCompanion) {
@@ -375,6 +379,7 @@ void esp_link_stop(EspLink* esp) {
         esp->rx_stream = NULL;
     }
     esp->running = false;
+    recon_app_set_esp_link_state(esp->app, EspLinkStopped);
 
     Expansion* expansion = furi_record_open(RECORD_EXPANSION);
     expansion_enable(expansion);

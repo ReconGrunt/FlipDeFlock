@@ -79,6 +79,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     bool proto_mismatch = app->esp_proto_mismatch;
     uint8_t proto_version = app->esp_proto_version;
     uint32_t dropped = app->esp_dropped_lines;
+    bool port_busy = (app->esp_link_state == EspLinkPortBusy);
     bool generic = (app->settings.backend == EspBackendGeneric);
     bool gps_enabled = app->settings.gps_enabled;
     bool gps_valid = app->gps_valid;
@@ -211,7 +212,9 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             44,
             AlignCenter,
             AlignCenter,
-            connected ? "Scanning for ALPR..." : "Connect ESP32...");
+            connected      ? "Scanning for ALPR..." :
+            port_busy      ? "UART busy - check port" :
+                             "Connect ESP32...");
         return;
     }
 

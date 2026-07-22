@@ -75,6 +75,14 @@ typedef enum {
     EspBackendCount,
 } EspBackend;
 
+/** Queryable ESP-link lifecycle state, so scenes can tell "waiting for data" from
+ *  "the UART is busy" (R6) instead of showing a dead "connecting ESP32..." forever. */
+typedef enum {
+    EspLinkStopped = 0, /**< not started (or torn down) */
+    EspLinkRunning, /**< UART acquired + worker running (may not have data yet) */
+    EspLinkPortBusy, /**< UART acquire failed -- another owner holds it (e.g. the GPS port) */
+} EspLinkState;
+
 typedef struct {
     EspBackend backend;
     uint8_t esp_uart; /**< FuriHalSerialId for the ESP32. */
@@ -215,6 +223,7 @@ typedef struct {
     uint8_t esp_proto_version; /**< companion wire-protocol version (FLOCKCO banner; 0 = unknown) */
     bool esp_proto_mismatch; /**< companion speaks a different protocol version than the app */
     uint32_t esp_dropped_lines; /**< overlong RX lines dropped whole (wire-protocol health metric) */
+    uint8_t esp_link_state; /**< EspLinkState: Stopped / Running / PortBusy (R6 error surface) */
 
     // Active attack-tool signature reported by the companion (ATK line): BLE-spam
     // advert flood, beacon-spam (Marauder / Pineapple), or probe-request flood.
@@ -305,6 +314,9 @@ void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch);
 
 /** Update the count of overlong RX lines dropped whole (health metric; thread-safe). */
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
+
+/** Update the queryable ESP-link state (thread-safe). See EspLinkState. */
+void recon_app_set_esp_link_state(ReconApp* app, EspLinkState state);
 
 /** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
 void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);

@@ -44,6 +44,7 @@ static void locator_view_draw_callback(Canvas* canvas, void* _model) {
     // Snapshot everything shared under the lock (same discipline as guardian_view).
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     bool connected = app->esp_connected;
+    bool port_busy = (app->esp_link_state == EspLinkPortBusy);
     bool have = app->locate_have;
     int rssi = app->locate_rssi;
     uint32_t tick = app->locate_tick;
@@ -71,8 +72,9 @@ static void locator_view_draw_callback(Canvas* canvas, void* _model) {
 
     if(!connected) {
         canvas_set_font(canvas, FontSecondary);
-        canvas_draw_str(canvas, 2, 30, "connecting ESP32...");
-        canvas_draw_str(canvas, 2, 42, "hold BOOT, tap RESET");
+        canvas_draw_str(canvas, 2, 30, port_busy ? "UART busy - check port" : "connecting ESP32...");
+        canvas_draw_str(
+            canvas, 2, 42, port_busy ? "free the GPS UART/port" : "hold BOOT, tap RESET");
         return;
     }
 
