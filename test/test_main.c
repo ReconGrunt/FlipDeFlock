@@ -15,6 +15,7 @@ void suite_wifi_audit(void);
 void suite_esp_parser(void);
 void suite_detect_rules(void);
 void suite_report_escape(void);
+void suite_gps_parser(void);
 
 int main(void) {
     printf("FlipDeFlock host unit tests\n");
@@ -24,6 +25,7 @@ int main(void) {
     suite_esp_parser();
     suite_detect_rules();
     suite_report_escape();
+    suite_gps_parser();
 
     printf("\n%d checks, %d failed\n", g_checks, g_fails);
     if(g_fails) {

@@ -2,8 +2,8 @@
 // Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "gps_link.h"
 #include "../recon_app_i.h"
+#include "gps_parser.h"
 
-#include <math.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,48 +27,9 @@ struct GpsLink {
     size_t line_len;
 };
 
-/** One hex nibble 0-15, or -1 if `c` is not a hex digit. */
-static int nmea_hex(char c) {
-    if(c >= '0' && c <= '9') return c - '0';
-    if(c >= 'A' && c <= 'F') return c - 'A' + 10;
-    if(c >= 'a' && c <= 'f') return c - 'a' + 10;
-    return -1;
-}
-
-/** Convert NMEA ddmm.mmmm + hemisphere to signed decimal degrees. */
-static float nmea_to_decimal(const char* field, const char* dir) {
-    if(!field || field[0] == '\0') return NAN;
-    float raw = strtof(field, NULL);
-    int deg = (int)(raw / 100.0f);
-    float minutes = raw - (deg * 100.0f);
-    float dec = deg + minutes / 60.0f;
-    if(dir && (dir[0] == 'S' || dir[0] == 'W')) dec = -dec;
-    return dec;
-}
-
-/** Split `line` in place into up to `max` comma-separated fields. */
-static int nmea_tokenize(char* line, char** fields, int max) {
-    int n = 0;
-    char* p = line;
-    fields[n++] = p;
-    while(*p && n < max) {
-        if(*p == ',') {
-            *p = '\0';
-            fields[n++] = p + 1;
-        }
-        p++;
-    }
-    return n;
-}
-
-/** Reject NaN, out-of-range, and the "null island" (0,0) noise artifact. */
-static bool gps_coord_sane(float lat, float lon) {
-    if(isnan(lat) || isnan(lon)) return false;
-    if(lat < -90.0f || lat > 90.0f || lon < -180.0f || lon > 180.0f) return false;
-    // 0,0 is almost always a partial/garbled sentence, not a real fix.
-    if(lat > -0.0001f && lat < 0.0001f && lon > -0.0001f && lon < 0.0001f) return false;
-    return true;
-}
+// Pure NMEA parsing (nmea_to_decimal / gps_coord_sane / nmea_tokenize /
+// nmea_parse_line) lives in gps_parser.{c,h} so it is host-testable; this file is
+// the thin adapter that applies a parsed NmeaFix to ReconApp under the lock.
 
 static void gps_publish(GpsLink* gps, float lat, float lon, int sats, bool valid) {
     ReconApp* app = gps->app;
@@ -89,52 +50,13 @@ static void gps_publish(GpsLink* gps, float lat, float lon, int sats, bool valid
 }
 
 static void gps_parse_line(GpsLink* gps, char* line) {
-    if(line[0] != '$') return;
-    size_t len = strlen(line);
-    if(len < 7) return;
-
-    // Verify + drop the "*hh" checksum: XOR of everything between '$' and '*'.
-    // Without this, a noise-garbled sentence whose fields happen to land in range
-    // would be accepted as a real fix.
-    char* star = strchr(line, '*');
-    if(star) {
-        uint8_t sum = 0;
-        for(const char* p = line + 1; p < star; p++) sum ^= (uint8_t)*p;
-        int hi = nmea_hex(star[1]);
-        int lo = hi < 0 ? -1 : nmea_hex(star[2]); // only read [2] when [1] is a hex digit
-        if(hi < 0 || lo < 0 || (uint8_t)((hi << 4) | lo) != sum) return; // bad checksum -> drop
-        *star = '\0';
-    }
-
-    const char* type = line + 3; // skip "$GP"/"$GN"/...
-    char* fields[20];
-    int nf = nmea_tokenize(line, fields, 20);
-
-    if(strncmp(type, "RMC", 3) == 0 && nf >= 7) {
-        bool valid = (fields[2][0] == 'A');
-        float lat = nmea_to_decimal(fields[3], fields[4]);
-        float lon = nmea_to_decimal(fields[5], fields[6]);
-        gps_publish(gps, lat, lon, -1, valid);
-        // Course over ground (deg) = RMC field 8.
-        if(valid && nf >= 9 && fields[8][0]) {
-            float course = strtof(fields[8], NULL);
-            furi_mutex_acquire(gps->app->mutex, FuriWaitForever);
-            gps->app->gps_course = course;
-            furi_mutex_release(gps->app->mutex);
-        }
-    } else if(strncmp(type, "GGA", 3) == 0 && nf >= 8) {
-        int fixq = atoi(fields[6]);
-        int sats = atoi(fields[7]);
-        if(sats < 0) sats = 0;
-        if(sats > 64) sats = 64; // clamp: don't let the device drive the count to nonsense
-        float lat = nmea_to_decimal(fields[2], fields[3]);
-        float lon = nmea_to_decimal(fields[4], fields[5]);
-        gps_publish(gps, lat, lon, sats, fixq > 0);
-    } else if(strncmp(type, "GLL", 3) == 0 && nf >= 7) {
-        bool valid = (fields[6][0] == 'A');
-        float lat = nmea_to_decimal(fields[1], fields[2]);
-        float lon = nmea_to_decimal(fields[3], fields[4]);
-        gps_publish(gps, lat, lon, -1, valid);
+    NmeaFix fix;
+    if(!nmea_parse_line(line, &fix)) return; // unknown / malformed / bad checksum
+    gps_publish(gps, fix.lat, fix.lon, fix.sats, fix.valid);
+    if(fix.has_course) {
+        furi_mutex_acquire(gps->app->mutex, FuriWaitForever);
+        gps->app->gps_course = fix.course;
+        furi_mutex_release(gps->app->mutex);
     }
 }
 
