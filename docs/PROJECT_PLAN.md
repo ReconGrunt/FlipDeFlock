@@ -1,3 +1,5 @@
+<!-- visibility: public --><!-- PUBLIC-SAFE: reviewed 2026-07-25 -->
+
 # FlipDeFlock — Project Plan
 
 The public statement of what this project is for, what it commits to, what it is
@@ -172,11 +174,10 @@ payment, and will not.
 Development is presently volunteer-led and unfunded. Ongoing costs are test hardware and
 the time required for field validation — which is precisely the bottleneck described in
 Objective 1. The project is supported by individual donations
-([SUPPORTERS.md](../SUPPORTERS.md)). Other sustainability options being considered —
-pre-assembled companion hardware, and feature development commissioned by organisations
-that need a specific capability — share one property: the resulting software is published
-freely to everyone under the same licence. Funding changes who pays for the work, never
-who is allowed to use it.
+([SUPPORTERS.md](../SUPPORTERS.md)), and is exploring additional ways to sustain the
+work. All of them are constrained by the same rule: whatever funds development, the
+resulting software is published freely to everyone under the same licence. Funding
+changes who pays for the work, never who is allowed to use it.
 
 ## How to judge whether this succeeded
 
