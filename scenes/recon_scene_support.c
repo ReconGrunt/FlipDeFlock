@@ -13,7 +13,10 @@
 //
 // Leave empty to hide the QR entirely; the screen then shows the other funding
 // links instead, so an unconfigured build is harmless.
-#define RECON_BTC_ADDRESS ""
+//
+// Native SegWit (bc1q..., P2WPKH), signed by a Trezor Safe 3 in a dedicated
+// account. Bech32 checksum verified before publishing.
+#define RECON_BTC_ADDRESS "bc1qavy2wdhgpvqturn5he76mxclqr0a3vhg9sj4l8"
 
 // BIP21 scheme prefix, so a scanning wallet treats this as a payment request
 // rather than as plain text.
