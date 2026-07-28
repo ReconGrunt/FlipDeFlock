@@ -17,6 +17,7 @@
 #include <storage/storage.h>
 
 #include "scenes/recon_scene.h"
+#include "helpers/alerts.h"
 #include "helpers/flock_db.h"
 #include "helpers/flock_ble.h"
 #include "helpers/watchscore.h"
@@ -92,6 +93,7 @@ typedef struct {
     uint8_t marauder_cmd; /**< Generic backend: which Marauder sniff command to run. */
     bool gps_enabled;
     bool sound;
+    uint8_t alert_mode; /**< ReconAlertMode: beep/vibro on a new Flock hit (default Vibrate) */
     bool flash_fast; /**< raise the flash (write) baud to 230400 after connect */
     bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
     bool anomaly_flag; /**< Net Guardian: flag unidentified strong/persistent devices (default OFF, higher FP) */
@@ -116,6 +118,7 @@ typedef struct {
     uint32_t first_tick;
     uint32_t last_tick;
     bool marked; /**< user flagged this for the report */
+    bool alerted; /**< the detection alert has already fired for this device (latch) */
 } FlockEntry;
 
 /** One access point seen by the WiFi security scan (companion firmware). */
@@ -201,6 +204,13 @@ typedef struct {
     FlockEntry flock[RECON_FLOCK_MAX];
     size_t flock_count;
     int selected; /**< selected flock index for the detail scene */
+
+    // Detection alert (issue #1). The ESP worker only RAISES alert_pending under
+    // the mutex; the GUI tick clears it and calls notification_message, mirroring
+    // how the WATCHSCORE haptic is deferred off the worker thread.
+    bool alert_pending; /**< a qualifying detection is waiting to be announced */
+    uint32_t alert_last_tick; /**< tick of the last alert fired (any device) */
+    bool alert_have_fired; /**< false until the session's first alert -> cooldown is inert */
 
     bool gps_valid;
     float gps_lat;
@@ -384,6 +394,14 @@ void recon_app_wifi_end(ReconApp* app);
  * notification on the transition INTO ELEVATED. Safe to call from the GUI tick.
  */
 void recon_app_watchscore_tick(ReconApp* app);
+
+/**
+ * Announce any pending detection alert (issue #1). Reads and clears
+ * app->alert_pending under the mutex, then fires the configured beep/vibro
+ * OUTSIDE the lock. Must be called from the GUI thread -- every scan scene's
+ * tick branch does. Cheap and safe to call when nothing is pending.
+ */
+void recon_app_alert_tick(ReconApp* app);
 
 void recon_settings_load(ReconApp* app);
 void recon_settings_save(ReconApp* app);

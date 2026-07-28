@@ -53,6 +53,7 @@ void recon_app_report_flock(
     }
 
     if(entry) {
+        uint8_t prev_conf = (uint8_t)entry->confidence;
         entry->count++;
         entry->last_tick = now;
         if(rssi != 0) entry->rssi = rssi;
@@ -75,9 +76,37 @@ void recon_app_report_flock(
             entry->heading = app->gps_course;
             entry->geotag_rssi = rssi;
         }
+        // Raise the detection alert on the first crossing to Likely-or-better
+        // (issue #1). We only set the flag here -- this runs on the ESP worker
+        // thread, so the actual notification is left to the GUI tick.
+        if(flock_alert_should_fire(
+               prev_conf,
+               (uint8_t)entry->confidence,
+               entry->alerted,
+               now,
+               app->alert_last_tick,
+               app->alert_have_fired)) {
+            entry->alerted = true;
+            app->alert_pending = true;
+            app->alert_last_tick = now;
+            app->alert_have_fired = true;
+        }
     }
 
     furi_mutex_release(app->mutex);
+}
+
+void recon_app_alert_tick(ReconApp* app) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    bool pending = app->alert_pending;
+    app->alert_pending = false;
+    uint8_t mode = app->settings.alert_mode;
+    bool sound = app->settings.sound;
+    furi_mutex_release(app->mutex);
+
+    // Fire outside the lock: notification_message queues work for the
+    // notification service and must not stall the ESP worker behind it.
+    if(pending) recon_alert_fire(app->notifications, mode, sound);
 }
 
 void recon_app_set_esp_status(
@@ -575,6 +604,7 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.marauder_cmd = 0; // sniffprobe
     app->settings.gps_enabled = false; // off by default
     app->settings.sound = true;
+    app->settings.alert_mode = ReconAlertVibro; // haptic-first, like the ELEVATED alert
     app->settings.flash_fast = false; // safe 115200 by default
     app->settings.log_serials = false; // privacy: don't catalogue police asset serials by default
     app->settings.anomaly_flag = false; // off by default: higher false-positive mode
@@ -587,7 +617,7 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\n",
+            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\nalert_mode=%d\n",
             app->settings.backend,
             app->settings.esp_uart,
             app->settings.gps_uart,
@@ -598,7 +628,8 @@ void recon_settings_save(ReconApp* app) {
             app->settings.sound ? 1 : 0,
             app->settings.flash_fast ? 1 : 0,
             app->settings.log_serials ? 1 : 0,
-            app->settings.anomaly_flag ? 1 : 0);
+            app->settings.anomaly_flag ? 1 : 0,
+            app->settings.alert_mode);
         storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
         furi_string_free(s);
     }
@@ -632,6 +663,8 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.log_serials = (val != 0);
     else if(strcmp(key, "anomaly_flag") == 0)
         app->settings.anomaly_flag = (val != 0);
+    else if(strcmp(key, "alert_mode") == 0 && val >= 0 && val < ReconAlertModeCount)
+        app->settings.alert_mode = (uint8_t)val; // corrupt value -> keep the default
 }
 
 void recon_settings_load(ReconApp* app) {
