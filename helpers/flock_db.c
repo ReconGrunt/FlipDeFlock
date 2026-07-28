@@ -43,6 +43,55 @@ static const uint8_t flock_ouis[][3] = {
 #define FLOCK_OUI_COUNT (sizeof(flock_ouis) / sizeof(flock_ouis[0]))
 
 /**
+ * SoundThinking (formerly ShotSpotter) acoustic gunshot sensors.
+ *
+ * A DIFFERENT DEVICE CLASS, not an ALPR: these listen, they do not read plates.
+ * Kept in its own table so a hit can be reported as what it is. Folding it into
+ * flock_ouis[] would have the app announce a camera it never saw, which is the
+ * over-claiming the project rules forbid.
+ *
+ * d4:11:d6 via JakeSwiz/WatchFlock (esp32_marauder/WiFiScan.cpp,
+ * fy_soundthinking_mac_prefixes[]). Like every OUI here it is a vendor prefix,
+ * not proof: an OUI-only hit scores "possible", and there is no known SSID tell
+ * for this hardware, so an acoustic detection can never reach "confirmed".
+ *
+ * DUPLICATED in esp32_companion/flock_companion/flock_companion.ino -- same
+ * hand-sync rule as flock_ouis[] above.
+ */
+static const uint8_t soundthinking_ouis[][3] = {
+    {0xd4, 0x11, 0xd6},
+};
+
+#define SOUNDTHINKING_OUI_COUNT (sizeof(soundthinking_ouis) / sizeof(soundthinking_ouis[0]))
+
+bool soundthinking_oui_match(const uint8_t* mac) {
+    if(!mac) return false;
+    for(size_t i = 0; i < SOUNDTHINKING_OUI_COUNT; i++) {
+        if(mac[0] == soundthinking_ouis[i][0] && mac[1] == soundthinking_ouis[i][1] &&
+           mac[2] == soundthinking_ouis[i][2]) {
+            return true;
+        }
+    }
+    // Deliberately NOT extended by signatures.json: the user schema has no class
+    // field, so a user OUI is always read as ALPR. Adding acoustic prefixes needs
+    // a schema change, not a silent reinterpretation of existing user files.
+    return false;
+}
+
+FlockDevClass flock_class_from_mac(const uint8_t* mac) {
+    return soundthinking_oui_match(mac) ? FlockClassAcoustic : FlockClassAlpr;
+}
+
+const char* flock_class_str(FlockDevClass cls) {
+    return (cls == FlockClassAcoustic) ? "Acoustic" : "ALPR";
+}
+
+const char* flock_class_long_str(FlockDevClass cls) {
+    return (cls == FlockClassAcoustic) ? "SoundThinking (acoustic sensor)" :
+                                         "Flock / ALPR camera";
+}
+
+/**
  * OPTIONAL user-supplied extras, registered at runtime from the SD card by
  * sig_db.c and merged OVER the built-ins (extras can only ADD matches). These
  * default NULL/0 -- the fail-safe state in which only the built-ins above are
@@ -203,7 +252,10 @@ FlockConfidence flock_score(const uint8_t* mac, const char* ssid, bool is_probe_
     FlockConfidence by_ssid = flock_ssid_confidence(ssid);
     if(by_ssid == FlockConfidenceConfirmed) return FlockConfidenceConfirmed;
 
-    bool oui = flock_oui_match(mac);
+    // Either surveillance-vendor table counts. The SSID rules above are
+    // Flock-specific, so in practice an acoustic sensor tops out at "Likely" --
+    // which is right, since no SSID tell for that hardware is known.
+    bool oui = flock_oui_match(mac) || soundthinking_oui_match(mac);
 
     // OUI + the camera's phone-home probe behaviour is a strong combination.
     if(oui && is_probe_req) {

@@ -97,6 +97,38 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(m.u.flock.ftype, 'F');
     flock_db_set_extras(NULL);
 
+    // --- cls=: device class -------------------------------------------------
+    // Absent means ALPR, which is what every line from an older companion is.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAlpr);
+
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name,cls=a"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+
+    // Order-independent, and fp= is still read when cls= precedes it: the two
+    // used to share a loop that stopped at the first match.
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name,cls=a,fp=deadbeef"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name,fp=deadbeef,cls=a"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+
+    // An SSID that literally begins "cls=" must not be read as the class field
+    // -- same trap as the fp= fixture above, same f[7] guard.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,cls=a"), EspMsgFlock);
+    CHECK_STR_EQ(m.u.flock.ssid, "cls=a");
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAlpr);
+
+    // Old companion, no cls= field, but a SoundThinking OUI: the class is still
+    // derived from the MAC rather than defaulting to "camera".
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+
+    // An unknown trailing token is ignored, not treated as an error.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name,zz=9"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+
     // --- W: WiFi AP ---------------------------------------------------------
     CHECK_INT_EQ(P("W,a1b2c3d4e5f6,-55,11,3,4,4,0,HomeNet"), EspMsgWifiAp);
     CHECK(mac_eq(m.u.wifi.bssid, A1F6));

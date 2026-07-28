@@ -152,7 +152,7 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
     int n = snprintf(
         out,
         out_len,
-        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu\n",
+        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u\n",
         mac_s,
         ssid_esc,
         r->rssi,
@@ -165,7 +165,8 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
         head_s,
         (unsigned long)r->count,
         r->marked ? 1u : 0u,
-        (unsigned long)r->epoch);
+        (unsigned long)r->epoch,
+        r->dev_class);
 
     if(n < 0 || (size_t)n >= out_len) {
         if(out_len) out[0] = '\0';
@@ -193,14 +194,17 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
 
     char f[FLOCK_STORE_COLS][ESC_SSID_MAX];
     const char* p = buf;
+    int ncols = 0;
     for(int i = 0; i < FLOCK_STORE_COLS; i++) {
         bool had_comma = false;
         if(!fs_next_field(&p, f[i], sizeof(f[i]), &had_comma)) return false;
-        // Exactly FLOCK_STORE_COLS columns: every field but the last is followed
-        // by a comma, and the last one is not.
-        if(had_comma != (i < FLOCK_STORE_COLS - 1)) return false;
+        ncols++;
+        if(!had_comma) break; // that was the last column
     }
-    if(*p != '\0') return false; // trailing junk after the last column
+    if(*p != '\0') return false; // more columns than the schema allows
+    // Exactly a v2 line, or exactly a v1 line (v2 minus the trailing class).
+    // Any other count is a malformed record, not a version we tolerate.
+    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V1) return false;
 
     if(!fs_parse_mac(f[0], r.mac)) return false;
 
@@ -246,8 +250,20 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
 
     if(!fs_parse_u32(f[12], &r.epoch)) return false;
 
+    // v2 only. A v1 line stops at 13 columns and keeps the memset default of 0
+    // (= FlockClassAlpr), which is what every v1 detection actually was.
+    if(ncols == FLOCK_STORE_COLS) {
+        if(!fs_parse_u32(f[13], &u) || u > 1) return false; // FlockDevClass values
+        r.dev_class = (uint8_t)u;
+    }
+
     *out = r;
     return true;
+}
+
+bool flock_store_schema_supported(const char* line) {
+    if(!line) return false;
+    return strcmp(line, FLOCK_STORE_SCHEMA) == 0 || strcmp(line, FLOCK_STORE_SCHEMA_V1) == 0;
 }
 
 bool flock_store_evict_better(uint8_t conf_a, uint32_t epoch_a, uint8_t conf_b, uint32_t epoch_b) {

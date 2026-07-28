@@ -64,14 +64,22 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     FlockConfidence conf = conf_from_int(atoi(f[5]));
     const char* ssid = (n >= 7) ? f[6] : "";
 
-    // B1: trailing IE-fingerprint field "fp=<hex32>" (probe requests only). Older
-    // firmware omits it. Start at f[7] (AFTER the ssid at f[6]) so an SSID that
-    // literally begins "fp=" can't be misread as the IE-fingerprint.
+    // Trailing key=value fields. Older firmware omits them and newer firmware may
+    // add more, so unknown keys are skipped rather than treated as an error.
+    //   fp=<hex32>  B1 IE-skeleton fingerprint (probe requests only)
+    //   cls=a       device class: acoustic (SoundThinking). Absent means ALPR.
+    // Start at f[7] (AFTER the ssid at f[6]) so an SSID that literally begins
+    // "fp=" or "cls=" can't be misread as one of these fields.
     uint32_t fp = 0;
+    // Default the class from the MAC's own OUI rather than assuming ALPR: that
+    // keeps classification right when an older companion sends no cls= field.
+    // An explicit cls= below still wins.
+    FlockDevClass dev_class = flock_class_from_mac(mac);
     for(int i = 7; i < n; i++) {
         if(strncmp(f[i], "fp=", 3) == 0) {
             fp = (uint32_t)strtoul(f[i] + 3, NULL, 16);
-            break;
+        } else if(strncmp(f[i], "cls=", 4) == 0) {
+            dev_class = (f[i][4] == 'a') ? FlockClassAcoustic : FlockClassAlpr;
         }
     }
     FlockIeFp fp_src = flock_ie_fp_match(fp);
@@ -97,6 +105,7 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     out->u.flock.ftype = ftype;
     out->u.flock.conf = conf;
     out->u.flock.fp = fp; // raw fp passed through for the detail screen (seeding)
+    out->u.flock.dev_class = dev_class;
     return EspMsgFlock;
 }
 
@@ -237,9 +246,13 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
         return out->type;
     }
     if(line[0] == 'D' && line[1] == ',') {
-        // D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>]
-        char* f[8];
-        int n = esp_split_fields(line, f, 8);
+        // D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>][,cls=a]
+        // 9 slots = 7 base fields + BOTH optional trailers. esp_split_fields
+        // stops splitting once it hits `max`, so a short array does not drop the
+        // extra token -- it silently glues it onto the previous one, where the
+        // key= prefix check then misses it. Grow this in step with the trailers.
+        char* f[9];
+        int n = esp_split_fields(line, f, 9);
         return (out->type = parse_flock(f, n, out));
     }
     return out->type; // EspMsgIgnore

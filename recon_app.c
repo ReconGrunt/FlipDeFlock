@@ -28,7 +28,8 @@ void recon_app_report_flock(
     uint8_t channel,
     char ftype,
     FlockConfidence confidence,
-    uint32_t ie_fp) {
+    uint32_t ie_fp,
+    FlockDevClass dev_class) {
     if(confidence == FlockConfidenceNone) return;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -90,6 +91,11 @@ void recon_app_report_flock(
         // Keep the probe fingerprint so the detail screen can show it (for
         // seeding). Don't let a later fp-less sighting (BLE/beacon) wipe it.
         if(ie_fp != 0) entry->ie_fp = ie_fp;
+        // Same sticky rule for the device class: ALPR is the default/absent
+        // value, so only a positive acoustic identification writes it. A later
+        // sighting that carries no class must not silently relabel a known
+        // SoundThinking sensor as a camera.
+        if(dev_class != FlockClassAlpr) entry->dev_class = (uint8_t)dev_class;
         if(ssid && ssid[0] && entry->ssid[0] == '\0') {
             strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
             entry->ssid[RECON_SSID_LEN - 1] = '\0';
@@ -306,7 +312,11 @@ void recon_app_ble_add(
     // gets geotagged, and lands in reports. (Done after releasing the mutex;
     // recon_app_report_flock takes it itself.)
     if(cat == BleCatFlock) {
-        recon_app_report_flock(app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed, 0);
+        // Always ALPR-class: every BLE tell we match (0x09C8 battery, Penguin
+        // naming, Raven GATT) belongs to the Flock ecosystem. SoundThinking is a
+        // WiFi-side OUI match only -- no BLE signature for it is known.
+        recon_app_report_flock(
+            app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed, 0, FlockClassAlpr);
     }
 }
 
@@ -754,6 +764,7 @@ static void recon_hits_rec_from_entry(FlockStoreRec* r, const FlockEntry* e) {
     r->channel = e->channel;
     r->ftype = e->ftype;
     r->conf = (uint8_t)e->confidence;
+    r->dev_class = e->dev_class;
     r->ie_fp = e->ie_fp;
     r->lat = e->lat;
     r->lon = e->lon;
@@ -814,6 +825,7 @@ static void recon_hits_add(ReconApp* app, const FlockStoreRec* r) {
     e->channel = r->channel;
     e->ftype = r->ftype;
     e->confidence = (FlockConfidence)r->conf;
+    e->dev_class = r->dev_class;
     e->ie_fp = r->ie_fp;
     e->lat = r->lat;
     e->lon = r->lon;
@@ -872,8 +884,9 @@ void recon_hits_load(ReconApp* app) {
 
                 if(!schema_seen) {
                     // An unrecognised first line means "ignore this file", never
-                    // "parse it anyway and get the columns wrong".
-                    if(strcmp(line, FLOCK_STORE_SCHEMA) != 0) {
+                    // "parse it anyway and get the columns wrong". v1 and v2 are
+                    // both readable; anything newer is not.
+                    if(!flock_store_schema_supported(line)) {
                         abort = true;
                         break;
                     }

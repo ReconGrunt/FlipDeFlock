@@ -132,8 +132,8 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
         "Generated: %s (device RTC)\n\n"
         "Detection by OUI + probe behaviour + SSID naming. 'Possible' = OUI only\n"
         "(generic vendor prefix); treat as a lead, verify visually.\n\n"
-        "| # | Conf | MAC | SSID | RSSI | Ch | Seen | Lat | Lon |\n"
-        "|---|------|-----|------|------|----|------|-----|-----|\n",
+        "| # | Conf | Class | MAC | SSID | RSSI | Ch | Seen | Lat | Lon |\n"
+        "|---|------|-------|-----|------|------|----|------|-----|-----|\n",
         ts);
 
     rfile_puts(
@@ -169,9 +169,10 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len) {
         rfile_printf(
             &md,
             line,
-            "| %d | %s | %s | %s | %d | %u | %lu | %s | %s |\n",
+            "| %d | %s | %s | %s | %s | %d | %u | %lu | %s | %s |\n",
             marked,
             flock_confidence_str(e->confidence),
+            flock_class_str((FlockDevClass)e->dev_class),
             mac_s,
             ssid_md,
             e->rssi,

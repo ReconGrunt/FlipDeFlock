@@ -45,6 +45,7 @@ static char confidence_char(FlockConfidence c) {
 // render pass can run entirely unlocked.
 typedef struct {
     char conf_ch;
+    bool acoustic; /**< SoundThinking sensor, not an ALPR -> "ST" tag on the row */
     char ssid[RECON_SSID_LEN];
     uint8_t mac[6];
     int8_t rssi;
@@ -148,6 +149,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             FlockEntry* e = &app->flock[idx];
             FlockRowSnap* r = &rows[nrows++];
             r->conf_ch = confidence_char(e->confidence);
+            r->acoustic = (e->dev_class == FlockClassAcoustic);
             strncpy(r->ssid, e->ssid, RECON_SSID_LEN - 1);
             r->ssid[RECON_SSID_LEN - 1] = '\0';
             memcpy(r->mac, e->mac, 6);
@@ -260,15 +262,21 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             canvas_set_color(canvas, ColorBlack);
         }
 
+        // "ST " marks a SoundThinking acoustic sensor. Untagged rows are ALPR
+        // cameras -- the common case stays as terse as it was, and the list never
+        // silently presents a gunshot sensor as a camera.
+        const char* cls = r->acoustic ? "ST " : "";
+
         char line[48];
         if(r->ssid[0] != '\0') {
-            snprintf(line, sizeof(line), "%c %s", r->conf_ch, r->ssid);
+            snprintf(line, sizeof(line), "%c %s%s", r->conf_ch, cls, r->ssid);
         } else {
             snprintf(
                 line,
                 sizeof(line),
-                "%c %02X:%02X:%02X:%02X:%02X:%02X",
+                "%c %s%02X:%02X:%02X:%02X:%02X:%02X",
                 r->conf_ch,
+                cls,
                 r->mac[0],
                 r->mac[1],
                 r->mac[2],

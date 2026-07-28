@@ -82,6 +82,51 @@ void suite_flock_db(void) {
     CHECK_INT_EQ(flock_score(known, NULL, false), FlockConfidencePossible); // OUI only
     CHECK_INT_EQ(flock_score(nomac, NULL, true), FlockConfidenceNone); // nothing matched
 
+    // --- SoundThinking: a SEPARATE device class -----------------------------
+    // The two tables must stay disjoint. If a prefix ever appeared in both, a
+    // gunshot sensor would be reported as a camera (or vice versa) depending on
+    // which matcher ran first, which is exactly the over-claim we forbid.
+    const uint8_t st[6] = {0xd4, 0x11, 0xd6, 0x01, 0x02, 0x03};
+    CHECK(soundthinking_oui_match(st));
+    CHECK(!flock_oui_match(st));
+    CHECK(!soundthinking_oui_match(known));
+    CHECK(!soundthinking_oui_match(nomac));
+    CHECK(!soundthinking_oui_match(NULL));
+    for(size_t i = 0; i < flock_oui_count(); i++) {
+        const uint8_t* p = flock_oui_get(i);
+        uint8_t probe[6] = {p[0], p[1], p[2], 0, 0, 0};
+        CHECK(!soundthinking_oui_match(probe));
+    }
+
+    // Class is derived from the OUI and defaults to ALPR for anything unknown.
+    CHECK_INT_EQ(flock_class_from_mac(st), FlockClassAcoustic);
+    CHECK_INT_EQ(flock_class_from_mac(known), FlockClassAlpr);
+    CHECK_INT_EQ(flock_class_from_mac(nomac), FlockClassAlpr);
+
+    // Same ladder as the ALPR side -- and with no known SSID tell for this
+    // hardware, an acoustic sensor tops out at Likely and never reaches
+    // Confirmed on its own behaviour.
+    CHECK_INT_EQ(flock_score(st, NULL, false), FlockConfidencePossible);
+    CHECK_INT_EQ(flock_score(st, NULL, true), FlockConfidenceLikely);
+    CHECK_INT_EQ(flock_score(st, "linksys", true), FlockConfidenceLikely);
+
+    // A user signature file cannot smuggle in an acoustic prefix: its schema has
+    // no class field, so an extra OUI is always read as ALPR.
+    static const uint8_t uext[][3] = {{0xaa, 0xbb, 0xcc}};
+    FlockDbExtras ex_cls = {.ouis = uext, .oui_count = 1};
+    flock_db_set_extras(&ex_cls);
+    const uint8_t umac[6] = {0xaa, 0xbb, 0xcc, 0, 0, 1};
+    CHECK(flock_oui_match(umac));
+    CHECK(!soundthinking_oui_match(umac));
+    CHECK_INT_EQ(flock_class_from_mac(umac), FlockClassAlpr);
+    flock_db_set_extras(NULL);
+
+    // --- class label strings ------------------------------------------------
+    CHECK_STR_EQ(flock_class_str(FlockClassAlpr), "ALPR");
+    CHECK_STR_EQ(flock_class_str(FlockClassAcoustic), "Acoustic");
+    CHECK_STR_CONTAINS(flock_class_long_str(FlockClassAcoustic), "SoundThinking");
+    CHECK_STR_CONTAINS(flock_class_long_str(FlockClassAlpr), "ALPR");
+
     // --- confidence label strings ------------------------------------------
     CHECK_STR_EQ(flock_confidence_str(FlockConfidenceConfirmed), "CONFIRMED");
     CHECK_STR_EQ(flock_confidence_str(FlockConfidenceProbeFp), "Class?");

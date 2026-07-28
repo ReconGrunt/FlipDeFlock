@@ -22,14 +22,31 @@
 /** Schema marker written as the file's first line. A future format change bumps
  *  the version; a line the loader does not recognise means "ignore this file",
  *  never "parse it anyway and get the columns wrong". */
-#define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v1"
+#define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v2"
+
+/** The v1 marker, still accepted on READ. v2 only appends a `class` column, so a
+ *  v1 record is a complete v2 record minus its last field -- and the value that
+ *  field would have held is the class every v1 detection had, ALPR. Rejecting
+ *  the file instead would silently bin a user's whole detection history on
+ *  upgrade, which is a worse outcome than carrying one compatibility branch. */
+#define FLOCK_STORE_SCHEMA_V1 "# FlipDeFlock hits v1"
 
 /** Column header, written as the second line for anyone opening the file. */
 #define FLOCK_STORE_HEADER \
-    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch"
+    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class"
 
-/** Number of comma-separated columns in a record line. */
-#define FLOCK_STORE_COLS 13
+/** Number of comma-separated columns in a v2 record line. */
+#define FLOCK_STORE_COLS 14
+
+/** Columns in a v1 record line (v2 minus the trailing `class`). */
+#define FLOCK_STORE_COLS_V1 13
+
+/**
+ * True if `line` is a schema marker this build can read (v1 or v2). Anything
+ * else -- including a NEWER marker -- must make the caller ignore the file
+ * whole, since a future format may reuse or reorder columns.
+ */
+bool flock_store_schema_supported(const char* line);
 
 /** Matches RECON_SSID_LEN; kept independent so this module stays firmware-free. */
 #define FLOCK_STORE_SSID_LEN 33
@@ -55,6 +72,8 @@ typedef struct {
     uint32_t epoch; /**< RTC Unix seconds at the last sighting. NOT a furi tick:
                       *  ticks are uptime-relative and meaningless after the
                       *  reboot this file exists to survive. */
+    uint8_t dev_class; /**< FlockDevClass rung (0 = ALPR). Absent in a v1 file,
+                         *  which is exactly the 0 default. */
 } FlockStoreRec;
 
 /**

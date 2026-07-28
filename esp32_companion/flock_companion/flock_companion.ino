@@ -85,6 +85,16 @@ static const uint8_t FLOCK_OUIS[][3] = {
 };
 static const size_t FLOCK_OUI_COUNT = sizeof(FLOCK_OUIS) / sizeof(FLOCK_OUIS[0]);
 
+// ---- SoundThinking / ShotSpotter acoustic sensors (1) --------------------
+// A DIFFERENT DEVICE CLASS from the ALPRs above: these listen, they do not read
+// plates. Matches are tagged `cls=a` on the wire so the Flipper can say which it
+// found. MUST stay byte-identical to soundthinking_ouis[] in helpers/flock_db.c.
+static const uint8_t SOUNDTHINKING_OUIS[][3] = {
+    {0xd4, 0x11, 0xd6},
+};
+static const size_t SOUNDTHINKING_OUI_COUNT =
+    sizeof(SOUNDTHINKING_OUIS) / sizeof(SOUNDTHINKING_OUIS[0]);
+
 // ---- State ---------------------------------------------------------------
 static volatile bool g_scanning = true;
 static volatile uint32_t g_frames = 0;
@@ -169,13 +179,28 @@ static uint32_t g_phase_start = 0;
 #define COMBO_WIFI_MS 9000 // ~3 channel sweeps before a BLE scan (WiFi-biased)
 #define COMBO_BLE_SEC 3 // BLE scan seconds (BLE adverts repeat fast)
 
-static bool oui_match(const uint8_t* mac) {
+static bool flock_oui_match(const uint8_t* mac) {
     for(size_t i = 0; i < FLOCK_OUI_COUNT; i++) {
         if(mac[0] == FLOCK_OUIS[i][0] && mac[1] == FLOCK_OUIS[i][1] &&
            mac[2] == FLOCK_OUIS[i][2])
             return true;
     }
     return false;
+}
+
+static bool st_oui_match(const uint8_t* mac) {
+    for(size_t i = 0; i < SOUNDTHINKING_OUI_COUNT; i++) {
+        if(mac[0] == SOUNDTHINKING_OUIS[i][0] && mac[1] == SOUNDTHINKING_OUIS[i][1] &&
+           mac[2] == SOUNDTHINKING_OUIS[i][2])
+            return true;
+    }
+    return false;
+}
+
+// Any known surveillance-vendor prefix, either class. Scoring is class-agnostic;
+// the class itself rides along in the `cls=` field.
+static bool oui_match(const uint8_t* mac) {
+    return flock_oui_match(mac) || st_oui_match(mac);
 }
 
 static char lc(char c) {
@@ -430,6 +455,10 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     // B1: trailing IE-fingerprint field (probe requests only). Older parsers
     // ignore it; the Flipper matches it against a curated Flock IE-fp table.
     if(ie_fp != 0) pos += snprintf(line + pos, sizeof(line) - pos, ",fp=%08x", ie_fp);
+    // Device class. Only emitted for the non-default (acoustic) case: absent
+    // means ALPR, so the wire stays unchanged for every existing detection and
+    // an older Flipper build just ignores the token.
+    if(st_oui_match(mac)) pos += snprintf(line + pos, sizeof(line) - pos, ",cls=a");
     if(pos > sizeof(line) - 1) pos = sizeof(line) - 1;
     line[pos++] = '\n';
     Serial.write((const uint8_t*)line, pos);

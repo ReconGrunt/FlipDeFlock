@@ -60,11 +60,15 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
     furi_string_printf(
         s,
         "%s  %s\n"
+        "%s\n"
         "%02X:%02X:%02X:%02X:%02X:%02X\n"
         "SSID: %s\n"
         "%s %d  Ch %u  Seen %lu  via %s",
         flock_confidence_str(e.confidence),
         e.marked ? "(MARKED)" : "",
+        // What it is, spelled out: the confidence rung above says how sure we
+        // are, not which kind of device this is.
+        flock_class_long_str((FlockDevClass)e.dev_class),
         e.mac[0],
         e.mac[1],
         e.mac[2],

@@ -110,6 +110,8 @@ typedef struct {
     uint8_t channel;
     char ftype; /**< P/B/R/O/F/L */
     FlockConfidence confidence;
+    uint8_t dev_class; /**< FlockDevClass: ALPR camera vs SoundThinking acoustic
+                         *   sensor. What it is, as opposed to how sure we are. */
     uint32_t ie_fp; /**< probe IE-skeleton fingerprint of this detection (0=none);
                       *   shown on the detail screen so it can be seeded into
                       *   signatures.json to catch MAC-randomized siblings. */
@@ -312,6 +314,10 @@ typedef struct {
 /**
  * Record/merge a Flock detection. Thread-safe (takes app->mutex internally).
  * Called from the ESP worker thread; geotags with the latest GPS fix.
+ *
+ * `dev_class` is what the device IS (ALPR camera vs acoustic sensor), separate
+ * from `confidence`, which is how sure we are. FlockClassAlpr is the default;
+ * only a positive acoustic identification overwrites a stored class.
  */
 void recon_app_report_flock(
     ReconApp* app,
@@ -321,7 +327,8 @@ void recon_app_report_flock(
     uint8_t channel,
     char ftype,
     FlockConfidence confidence,
-    uint32_t ie_fp);
+    uint32_t ie_fp,
+    FlockDevClass dev_class);
 
 /** Update the cached ESP status line (thread-safe). */
 void recon_app_set_esp_status(
