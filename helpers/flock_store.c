@@ -152,7 +152,7 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
     int n = snprintf(
         out,
         out_len,
-        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u\n",
+        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u,%u\n",
         mac_s,
         ssid_esc,
         r->rssi,
@@ -166,7 +166,8 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
         (unsigned long)r->count,
         r->marked ? 1u : 0u,
         (unsigned long)r->epoch,
-        r->dev_class);
+        r->dev_class,
+        r->hidden ? 1u : 0u);
 
     if(n < 0 || (size_t)n >= out_len) {
         if(out_len) out[0] = '\0';
@@ -250,11 +251,14 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
 
     if(!fs_parse_u32(f[12], &r.epoch)) return false;
 
-    // v2 only. A v1 line stops at 13 columns and keeps the memset default of 0
-    // (= FlockClassAlpr), which is what every v1 detection actually was.
+    // v2 only. A v1 line stops at 13 columns and keeps the memset defaults of 0
+    // -- FlockClassAlpr and hidden-never-observed, which is what every v1
+    // detection actually was.
     if(ncols == FLOCK_STORE_COLS) {
         if(!fs_parse_u32(f[13], &u) || u > 1) return false; // FlockDevClass values
         r.dev_class = (uint8_t)u;
+        if(!fs_parse_u32(f[14], &u) || u > 1) return false;
+        r.hidden = (u != 0);
     }
 
     *out = r;

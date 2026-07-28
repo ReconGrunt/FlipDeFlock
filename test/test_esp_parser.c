@@ -129,6 +129,39 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name,zz=9"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
 
+    // --- hid=: hidden-SSID attribute ---------------------------------------
+    // Absent means "not observed hiding", which is every line from an older
+    // companion -- not a claim that the AP broadcasts its name.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.hidden, false);
+
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,,hid=1"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.hidden, true);
+    // ...and it must NOT move the confidence rung. This is the whole point of
+    // the attribute-not-score decision: a hidden SSID is common on consumer
+    // routers, so scoring it would promote every hidden ESP32 AP in range.
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidencePossible);
+
+    // All three trailers together, in any order, all survive. This is what the
+    // 8-slot field array used to break by gluing tokens onto each other.
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,B,1,,fp=deadbeef,cls=a,hid=1"), EspMsgFlock);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+    CHECK_INT_EQ(m.u.flock.hidden, true);
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,B,1,,hid=1,cls=a,fp=deadbeef"), EspMsgFlock);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+    CHECK_INT_EQ(m.u.flock.hidden, true);
+
+    // An SSID that literally begins "hid=" is an SSID, not the attribute.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,hid=1"), EspMsgFlock);
+    CHECK_STR_EQ(m.u.flock.ssid, "hid=1");
+    CHECK_INT_EQ(m.u.flock.hidden, false);
+
+    // Anything but "1" is not an assertion of hiding.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,,hid=0"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.hidden, false);
+
     // --- W: WiFi AP ---------------------------------------------------------
     CHECK_INT_EQ(P("W,a1b2c3d4e5f6,-55,11,3,4,4,0,HomeNet"), EspMsgWifiAp);
     CHECK(mac_eq(m.u.wifi.bssid, A1F6));

@@ -75,7 +75,9 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
         e.mac[3],
         e.mac[4],
         e.mac[5],
-        e.ssid[0] ? e.ssid : "(hidden)",
+        // "(hidden)" here has always meant "we have no name for it". Only say the
+        // AP is actively withholding one when we watched it beacon without a name.
+        e.ssid[0] ? e.ssid : (e.hidden ? "(withheld by AP)" : "(none seen)"),
         rssi_label,
         e.rssi,
         e.channel,
@@ -101,6 +103,13 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
         furi_string_cat_printf(s, "\nGPS %.5f, %.5f", (double)e.lat, (double)e.lon);
     } else {
         furi_string_cat(s, "\nGPS: no fix");
+    }
+
+    // Hidden-SSID beaconing. An OBSERVATION, not a score: it did not raise the
+    // confidence rung above, and the wording must not imply that it did. Flock
+    // moved to hidden SSIDs, but so do plenty of ordinary home routers.
+    if(e.hidden) {
+        furi_string_cat(s, "\nHidden SSID: beacons, no name (not scored)");
     }
 
     // Show the probe IE-fingerprint when present: a confirmed unit's fp can be

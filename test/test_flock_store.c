@@ -53,6 +53,7 @@ static void check_roundtrip(const FlockStoreRec* in) {
     CHECK_INT_EQ(out.marked, in->marked);
     CHECK_INT_EQ(out.epoch, in->epoch);
     CHECK_INT_EQ(out.dev_class, in->dev_class);
+    CHECK_INT_EQ(out.hidden, in->hidden);
 
     // Coordinates are written at 6 dp, so compare within that.
     if(isnan(in->lat)) {
@@ -187,27 +188,34 @@ void suite_flock_store(void) {
         CHECK(!flock_store_parse_line(FLOCK_STORE_HEADER, &junk));
     }
 
-    // ---- v2 `class` column, and the v1 file that predates it ----------------
-    // The class must survive the round trip like any other field...
+    // ---- v2 `class` + `hidden` columns, and the v1 file that predates them ---
+    // Both must survive the round trip like any other field...
     {
         FlockStoreRec acoustic = sample();
         acoustic.dev_class = 1; // FlockClassAcoustic
+        acoustic.hidden = true;
         check_roundtrip(&acoustic);
 
         char line[FLOCK_STORE_LINE_MAX];
         CHECK(flock_store_fmt_line(line, sizeof(line), &acoustic) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,1\n"); // written as the last column
+        CHECK_STR_CONTAINS(line, ",1785000000,1,1\n"); // epoch,class,hidden
+
+        FlockStoreRec alpr = sample();
+        check_roundtrip(&alpr); // both default to 0
+        CHECK(flock_store_fmt_line(line, sizeof(line), &alpr) > 0);
+        CHECK_STR_CONTAINS(line, ",1785000000,0,0\n");
     }
 
-    // ...and a v1 record (13 columns, no class) must still load, defaulting to
-    // ALPR rather than being rejected -- otherwise upgrading bins the user's
-    // whole saved history.
+    // ...and a v1 record (13 columns, neither field) must still load with both
+    // defaulted rather than being rejected -- otherwise upgrading bins the
+    // user's whole saved history.
     {
         FlockStoreRec v1;
         memset(&v1, 0xAA, sizeof(v1));
         CHECK(flock_store_parse_line(
             "E0:0A:F6:12:34:AB,Flock-A1B2C3,-67,11,P,4,deadbeef,,,,42,1,1785000000", &v1));
         CHECK_INT_EQ(v1.dev_class, 0); // FlockClassAlpr
+        CHECK_INT_EQ(v1.hidden, false); // "not observed hiding", not "broadcasts"
         CHECK_INT_EQ(v1.conf, 4);
         CHECK_INT_EQ(v1.epoch, 1785000000u);
         CHECK(isnan(v1.lat)); // empty coord fields still mean "no fix", not 0,0
@@ -220,12 +228,18 @@ void suite_flock_store(void) {
         // 12 columns (v1 minus epoch)
         CHECK(!flock_store_parse_line(
             "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1", &junk));
-        // 15 columns (v2 plus one)
+        // 14 columns: a half-v2 line, class but no hidden
         CHECK(!flock_store_parse_line(
-            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,9", &junk));
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0", &junk));
+        // 16 columns (v2 plus one)
+        CHECK(!flock_store_parse_line(
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,0,9", &junk));
         // class outside the known enum
         CHECK(!flock_store_parse_line(
-            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,7", &junk));
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,7,0", &junk));
+        // hidden outside 0/1
+        CHECK(!flock_store_parse_line(
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,5", &junk));
     }
 
     // Schema gate: this build reads v1 and v2 and nothing else. A NEWER marker

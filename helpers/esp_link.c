@@ -112,7 +112,8 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             m->u.flock.ftype,
             m->u.flock.conf,
             m->u.flock.fp,
-            m->u.flock.dev_class);
+            m->u.flock.dev_class,
+            m->u.flock.hidden);
         break;
     case EspMsgDeauthTarget:
         recon_app_add_deauth_target(app, m->u.deauth.bssid, m->u.deauth.channel);
@@ -221,7 +222,16 @@ static void esp_parse_generic(EspLink* esp, char* line) {
         }
 
         recon_app_report_flock(
-            esp->app, mac, ssid ? ssid : "", 0, 0, 'O', conf, 0, flock_class_from_mac(mac));
+            esp->app,
+            mac,
+            ssid ? ssid : "",
+            0,
+            0,
+            'O',
+            conf,
+            0,
+            flock_class_from_mac(mac),
+            false); // Marauder's scraped text carries no hidden-SSID signal
     }
 }
 

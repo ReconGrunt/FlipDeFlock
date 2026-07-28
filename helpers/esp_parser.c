@@ -68,9 +68,11 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     // add more, so unknown keys are skipped rather than treated as an error.
     //   fp=<hex32>  B1 IE-skeleton fingerprint (probe requests only)
     //   cls=a       device class: acoustic (SoundThinking). Absent means ALPR.
+    //   hid=1       the AP beacons but withholds its SSID.
     // Start at f[7] (AFTER the ssid at f[6]) so an SSID that literally begins
     // "fp=" or "cls=" can't be misread as one of these fields.
     uint32_t fp = 0;
+    bool hidden = false;
     // Default the class from the MAC's own OUI rather than assuming ALPR: that
     // keeps classification right when an older companion sends no cls= field.
     // An explicit cls= below still wins.
@@ -80,8 +82,19 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
             fp = (uint32_t)strtoul(f[i] + 3, NULL, 16);
         } else if(strncmp(f[i], "cls=", 4) == 0) {
             dev_class = (f[i][4] == 'a') ? FlockClassAcoustic : FlockClassAlpr;
+        } else if(strncmp(f[i], "hid=", 4) == 0) {
+            hidden = (f[i][4] == '1');
         }
     }
+
+    // DELIBERATELY NOT SCORED. A hidden SSID is WatchFlock's headline finding --
+    // Flock moved their cameras to hidden SSIDs and probe requests, which is why
+    // scanning for a broadcast name stopped working. But hiding an SSID is also
+    // ordinary consumer-router behaviour, and our OUI tables are shared
+    // silicon-vendor prefixes, so "Flock OUI + hidden -> Likely" would promote
+    // every hidden ESP32-based AP in range. Precision over recall: report the
+    // attribute, let the operator weigh it, and revisit the scoring rule only
+    // once bench/field captures justify one.
     FlockIeFp fp_src = flock_ie_fp_match(fp);
     if(fp_src == FlockIeFpBuiltin) {
         // Verified compiled-in class fp. + Flock OUI -> CONFIRMED; otherwise (e.g. a
@@ -106,6 +119,7 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     out->u.flock.conf = conf;
     out->u.flock.fp = fp; // raw fp passed through for the detail screen (seeding)
     out->u.flock.dev_class = dev_class;
+    out->u.flock.hidden = hidden;
     return EspMsgFlock;
 }
 
@@ -246,13 +260,13 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
         return out->type;
     }
     if(line[0] == 'D' && line[1] == ',') {
-        // D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>][,cls=a]
-        // 9 slots = 7 base fields + BOTH optional trailers. esp_split_fields
+        // D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>][,cls=a][,hid=1]
+        // 10 slots = 7 base fields + ALL optional trailers. esp_split_fields
         // stops splitting once it hits `max`, so a short array does not drop the
         // extra token -- it silently glues it onto the previous one, where the
         // key= prefix check then misses it. Grow this in step with the trailers.
-        char* f[9];
-        int n = esp_split_fields(line, f, 9);
+        char* f[10];
+        int n = esp_split_fields(line, f, 10);
         return (out->type = parse_flock(f, n, out));
     }
     return out->type; // EspMsgIgnore

@@ -112,6 +112,8 @@ typedef struct {
     FlockConfidence confidence;
     uint8_t dev_class; /**< FlockDevClass: ALPR camera vs SoundThinking acoustic
                          *   sensor. What it is, as opposed to how sure we are. */
+    bool hidden; /**< beacons but withholds its SSID. An OBSERVATION shown to the
+                   *   operator, never a confidence input -- see esp_parser.c. */
     uint32_t ie_fp; /**< probe IE-skeleton fingerprint of this detection (0=none);
                       *   shown on the detail screen so it can be seeded into
                       *   signatures.json to catch MAC-randomized siblings. */
@@ -328,7 +330,8 @@ void recon_app_report_flock(
     char ftype,
     FlockConfidence confidence,
     uint32_t ie_fp,
-    FlockDevClass dev_class);
+    FlockDevClass dev_class,
+    bool hidden);
 
 /** Update the cached ESP status line (thread-safe). */
 void recon_app_set_esp_status(

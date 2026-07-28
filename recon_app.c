@@ -29,7 +29,8 @@ void recon_app_report_flock(
     char ftype,
     FlockConfidence confidence,
     uint32_t ie_fp,
-    FlockDevClass dev_class) {
+    FlockDevClass dev_class,
+    bool hidden) {
     if(confidence == FlockConfidenceNone) return;
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -96,6 +97,10 @@ void recon_app_report_flock(
         // sighting that carries no class must not silently relabel a known
         // SoundThinking sensor as a camera.
         if(dev_class != FlockClassAlpr) entry->dev_class = (uint8_t)dev_class;
+        // Likewise sticky: we saw this AP hide its name once, and a later probe
+        // request from the same MAC (which carries no hidden flag at all) must
+        // not erase that observation.
+        if(hidden) entry->hidden = true;
         if(ssid && ssid[0] && entry->ssid[0] == '\0') {
             strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
             entry->ssid[RECON_SSID_LEN - 1] = '\0';
@@ -316,7 +321,7 @@ void recon_app_ble_add(
         // naming, Raven GATT) belongs to the Flock ecosystem. SoundThinking is a
         // WiFi-side OUI match only -- no BLE signature for it is known.
         recon_app_report_flock(
-            app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed, 0, FlockClassAlpr);
+            app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed, 0, FlockClassAlpr, false);
     }
 }
 
@@ -765,6 +770,7 @@ static void recon_hits_rec_from_entry(FlockStoreRec* r, const FlockEntry* e) {
     r->ftype = e->ftype;
     r->conf = (uint8_t)e->confidence;
     r->dev_class = e->dev_class;
+    r->hidden = e->hidden;
     r->ie_fp = e->ie_fp;
     r->lat = e->lat;
     r->lon = e->lon;
@@ -826,6 +832,7 @@ static void recon_hits_add(ReconApp* app, const FlockStoreRec* r) {
     e->ftype = r->ftype;
     e->confidence = (FlockConfidence)r->conf;
     e->dev_class = r->dev_class;
+    e->hidden = r->hidden;
     e->ie_fp = r->ie_fp;
     e->lat = r->lat;
     e->lon = r->lon;

@@ -4,7 +4,7 @@
  *
  * Runs on ANY ESP32 board exposed to the Flipper UART (Marauder hardware,
  * ReksLab Tri-Board, bare WROVER/WROOM, Xiao ESP32-S3, DevKitC, ...).
- * Puts the radio in promiscuous monitor mode, hops channels 1-11, and reports
+ * Puts the radio in promiscuous monitor mode, hops channels 1-13, and reports
  * frames that look like Flock Safety / ALPR surveillance gear (by OUI, by
  * phone-home probe behaviour, and by SSID naming) over the serial link in a
  * simple line protocol the Flipper parses.
@@ -20,16 +20,25 @@
  * Line protocol (newline-terminated, ASCII), TX to Flipper:
  *   FLOCKCO,1                              banner / version on boot and on "ver"
  *   S,<frames>,<hits>,<ch>,<deauth_rate>   status, ~1 Hz (deauth/disassoc per interval)
- *   D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>]   detection
+ *   D,<mac>,<rssi>,<ch>,<type>,<conf>,<ssid>[,fp=<hex32>][,cls=a][,hid=1]  detection
  *       mac : aabbccddeeff (lower hex, no separators)
  *       rssi: signed dBm
- *       ch  : 1-11
+ *       ch  : 1-13
  *       type: P=probe-req  B=beacon  R=probe-resp  O=other
  *       conf: 1=possible 2=likely 3=confirmed (ESP-side score)
  *       ssid: raw SSID with ',' and control chars stripped (may be empty)
  *       fp  : FNV-1a uint32 (8 lower-hex) of the probe's IE skeleton (B1) --
  *             a MAC-independent device-CLASS fingerprint; trailing field,
  *             older parsers ignore it. Only emitted for probe requests.
+ *       cls : device class. 'a' = SoundThinking acoustic sensor. Absent means
+ *             ALPR camera, so the common case adds no bytes. Trailing.
+ *       hid : the AP beaconed WITHOUT an SSID (zero-length or all-NUL IE).
+ *             Beacons/probe-responses only. An observation the Flipper reports
+ *             but does NOT score -- hiding an SSID is also ordinary consumer
+ *             router behaviour. Trailing, only emitted when true.
+ *
+ *       All three trailing key=value fields are optional and order-independent.
+ *       Add one and you must also grow the field array in esp_parser.c.
  *   BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1]   BLE device
  *       cat   : 0 unknown 1 Flock/Raven 2 AirTag 3 Tile 4 SmartTag 5 FMDN
  *       mfghex: raw mfg-data hex (Flock 0x09C8 only) for serial decode; pure
@@ -102,6 +111,8 @@ static volatile uint32_t g_hits = 0;
 static volatile uint32_t g_deauths = 0; // deauth + disassoc frames seen (attack indicator)
 static uint8_t g_channel = 1;
 static uint8_t g_lock_channel = 0; // 0 = hop
+/** Highest 2.4 GHz channel the hopper visits. See the hop block in loop(). */
+#define MAX_HOP_CHANNEL 13
 static uint32_t g_last_status = 0;
 static uint32_t g_last_hop = 0;
 static uint32_t g_deauths_last = 0; // for per-interval deauth rate
@@ -382,12 +393,33 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
         ftype = 'R';
         tag_off = 36;
     }
+    bool ssid_ie_found = false;
     if(tag_off >= 0 && tag_off + 2 <= len && p[tag_off] == 0x00) {
+        ssid_ie_found = true;
         ssid_len = p[tag_off + 1];
         if(tag_off + 2 + ssid_len <= len) {
             ssid = (const char*)(p + tag_off + 2);
         } else {
             ssid_len = 0;
+        }
+    }
+
+    // Hidden-SSID beaconing: an AP that advertises but withholds its name. Two
+    // encodings are legal and both appear in the wild -- a zero-length SSID IE,
+    // and a length-N IE of all NULs -- so test for both.
+    //
+    // Only meaningful for beacons and probe RESPONSES: those identify an AP. A
+    // probe REQUEST with no SSID is an ordinary wildcard scan from a client and
+    // says nothing about hiding. And we only claim "hidden" when the SSID IE was
+    // actually located: a parse miss is not evidence of concealment.
+    bool hidden = false;
+    if(ssid_ie_found && (subtype == 0x08 || subtype == 0x05)) {
+        hidden = true;
+        for(int i = 0; i < ssid_len; i++) {
+            if(ssid[i] != '\0') {
+                hidden = false;
+                break;
+            }
         }
     }
 
@@ -459,6 +491,10 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     // means ALPR, so the wire stays unchanged for every existing detection and
     // an older Flipper build just ignores the token.
     if(st_oui_match(mac)) pos += snprintf(line + pos, sizeof(line) - pos, ",cls=a");
+    // Hidden-SSID attribute. Rides on a line we were already sending, so it adds
+    // no UART traffic and needs no per-BSSID dedup of its own. Reported, NOT
+    // scored: see the note in helpers/esp_parser.c.
+    if(hidden) pos += snprintf(line + pos, sizeof(line) - pos, ",hid=1");
     if(pos > sizeof(line) - 1) pos = sizeof(line) - 1;
     line[pos++] = '\n';
     Serial.write((const uint8_t*)line, pos);
@@ -833,10 +869,18 @@ void loop() {
     if(!g_scanning) return;
 
     // Channel hop every 300 ms unless locked.
+    //
+    // 1-13, not 1-11. 12 and 13 are unusable for APs in the US, so the old bound
+    // cost nothing there -- but they are ordinary channels across most of the
+    // rest of the world, and a probe REQUEST is not bound by the same rule
+    // anywhere. The price is ~18% less dwell per channel.
+    //
+    // 14 stays out: it is Japan-only, DSSS-only, and would burn dwell almost
+    // everywhere to cover almost nothing.
     if(g_lock_channel == 0 && now - g_last_hop >= 300) {
         g_last_hop = now;
         uint8_t ch = g_channel + 1;
-        if(ch > 11) ch = 1;
+        if(ch > MAX_HOP_CHANNEL) ch = 1;
         set_channel(ch);
     }
 

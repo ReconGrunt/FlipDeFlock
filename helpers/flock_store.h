@@ -24,21 +24,22 @@
  *  never "parse it anyway and get the columns wrong". */
 #define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v2"
 
-/** The v1 marker, still accepted on READ. v2 only appends a `class` column, so a
- *  v1 record is a complete v2 record minus its last field -- and the value that
- *  field would have held is the class every v1 detection had, ALPR. Rejecting
- *  the file instead would silently bin a user's whole detection history on
- *  upgrade, which is a worse outcome than carrying one compatibility branch. */
+/** The v1 marker, still accepted on READ. v2 only APPENDS columns (`class`,
+ *  `hidden`) and reorders nothing, so a v1 record is a complete v2 record minus
+ *  its last two fields -- and 0/0 is exactly what those fields held for every v1
+ *  detection: an ALPR, hidden-SSID never observed. Rejecting the file instead
+ *  would silently bin a user's whole detection history on upgrade, which is a
+ *  worse outcome than carrying one compatibility branch. */
 #define FLOCK_STORE_SCHEMA_V1 "# FlipDeFlock hits v1"
 
 /** Column header, written as the second line for anyone opening the file. */
 #define FLOCK_STORE_HEADER \
-    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class"
+    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class,hidden"
 
 /** Number of comma-separated columns in a v2 record line. */
-#define FLOCK_STORE_COLS 14
+#define FLOCK_STORE_COLS 15
 
-/** Columns in a v1 record line (v2 minus the trailing `class`). */
+/** Columns in a v1 record line (v2 minus the trailing `class` and `hidden`). */
 #define FLOCK_STORE_COLS_V1 13
 
 /**
@@ -74,6 +75,8 @@ typedef struct {
                       *  reboot this file exists to survive. */
     uint8_t dev_class; /**< FlockDevClass rung (0 = ALPR). Absent in a v1 file,
                          *  which is exactly the 0 default. */
+    bool hidden; /**< the AP beacons but withholds its SSID. Absent in a v1
+                   *  file, where the 0 default reads as "not observed". */
 } FlockStoreRec;
 
 /**

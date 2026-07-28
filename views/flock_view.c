@@ -46,6 +46,7 @@ static char confidence_char(FlockConfidence c) {
 typedef struct {
     char conf_ch;
     bool acoustic; /**< SoundThinking sensor, not an ALPR -> "ST" tag on the row */
+    bool hidden; /**< beacons with no SSID -> "[hid]" instead of a blank name */
     char ssid[RECON_SSID_LEN];
     uint8_t mac[6];
     int8_t rssi;
@@ -150,6 +151,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             FlockRowSnap* r = &rows[nrows++];
             r->conf_ch = confidence_char(e->confidence);
             r->acoustic = (e->dev_class == FlockClassAcoustic);
+            r->hidden = e->hidden;
             strncpy(r->ssid, e->ssid, RECON_SSID_LEN - 1);
             r->ssid[RECON_SSID_LEN - 1] = '\0';
             memcpy(r->mac, e->mac, 6);
@@ -270,6 +272,19 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         char line[48];
         if(r->ssid[0] != '\0') {
             snprintf(line, sizeof(line), "%c %s%s", r->conf_ch, cls, r->ssid);
+        } else if(r->hidden) {
+            // We watched this one beacon without a name. Worth surfacing, but it
+            // is an observation only -- the conf char is unchanged by it. Drops
+            // the MAC to its last 3 bytes to make room for the tag.
+            snprintf(
+                line,
+                sizeof(line),
+                "%c %s[hid] %02X:%02X:%02X",
+                r->conf_ch,
+                cls,
+                r->mac[3],
+                r->mac[4],
+                r->mac[5]);
         } else {
             snprintf(
                 line,
