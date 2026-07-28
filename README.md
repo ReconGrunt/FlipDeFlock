@@ -308,6 +308,14 @@ The detection method and Flock OUI prefixes build on
 the [DeFlock](https://deflock.org) community. The GPS NMEA approach is based on the
 Momentum Sub-GHz GPS helper.
 
+Candidate OUI prefixes, the SoundThinking prefix, and the hidden-SSID observation
+come from [JakeSwiz/WatchFlock](https://github.com/JakeSwiz/WatchFlock) by Jake /
+Swiz Security, itself built on
+[justcallmekoko/ESP32Marauder](https://github.com/justcallmekoko/ESP32Marauder).
+No code was taken — the signatures and the finding are, with thanks. Which prefixes
+were and weren't imported, and why, is recorded in
+[docs/signatures.md](docs/signatures.md).
+
 ## License
 
 **GPL-3.0-or-later** — see [LICENSE](LICENSE). Copyright (c) 2026 ReconGrunt and

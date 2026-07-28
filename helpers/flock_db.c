@@ -128,6 +128,9 @@ FlockConfidence flock_ssid_confidence(const char* ssid) {
     // exactly ("Flock-" + 6 hex): an unanchored "flock-" substring wrongly
     // confirmed benign names like "Flock-Guest" or the Flock Freight / chat SSIDs.
     // Those still fall through to the "likely" contains-check below.
+    //
+    // "test_flck" is the hard-coded development SSID disclosed as CVE-2025-59409;
+    // on the air it is close to self-identifying, hence Confirmed on substring.
     if(is_flock_provisioning_ssid(ssid) || ci_contains(ssid, "test_flck")) {
         return FlockConfidenceConfirmed;
     }
