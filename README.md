@@ -247,6 +247,14 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.46** — Detects **SoundThinking / ShotSpotter acoustic sensors** as a separate
+device class (tagged `ST`, never folded into the camera list), and reports
+**hidden-SSID beaconing** — the behaviour Flock moved to when broadcast-SSID
+scanning stopped working. Hidden is shown as an observation, not scored: consumer
+routers hide SSIDs too. Also six more candidate OUIs in the unverified seed file,
+channel hop extended to 1-13, and a bench emitter that exercises every confidence
+rung so changes stop being verified by compiler alone.
+
 **v0.44** — Signature quality. The OUI list now tracks a curated upstream table with
 per-prefix status instead of a flat one that couldn't record doubt: `f8:a2:d6` is
 dropped (upstream retracted it after a false hit on a Sony media player), and two

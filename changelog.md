@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.46
+A targeted harvest from [JakeSwiz/WatchFlock](https://github.com/JakeSwiz/WatchFlock),
+whose research surfaced that Flock moved their Falcon V2 cameras to hidden SSIDs and
+probe requests. No code was taken — the signatures and the finding were.
+- **A second device class: SoundThinking (formerly ShotSpotter) acoustic gunshot
+  sensors**, via OUI `d4:11:d6`. Deliberately *not* folded into the Flock OUI list.
+  A gunshot sensor is not a licence-plate reader, and adding it to that table would
+  have the app announce a camera it never saw. It gets its own table, its own `ST`
+  tag in the list, and its own line on the detail screen — "detections are
+  indicators" applies to *what* a thing is, not just how sure we are.
+- **The same ladder and the same caps.** An acoustic OUI scores Possible alone and
+  Likely with probe behaviour. There is no known SSID tell for that hardware, so it
+  can never reach Confirmed.
+- **Hidden-SSID beaconing is now reported.** The companion flags a beacon or
+  probe-response whose SSID IE is zero-length or all-NUL; the list shows `[hid]`, and
+  the detail screen, the report and `hits.csv` all carry it. The SSID column now
+  distinguishes "(SSID withheld)" from "(none seen)".
+- **It is reported, not scored — on purpose.** This is WatchFlock's headline finding
+  and it would have been easy to promote a hidden Flock-OUI AP to Likely. But hiding
+  an SSID is also ordinary consumer-router behaviour, and the OUI tables are shared
+  silicon-vendor prefixes, so that rule would flag every hidden ESP32-based AP in
+  range. Precision over recall: surface the observation, leave the rung alone, and
+  revisit when there is bench or field evidence to justify a change.
+- **Six more candidate OUIs**, in `docs/signatures.seed.json` rather than the
+  built-ins — WatchFlock's list is flat and states no corroboration, so none of them
+  meets the built-in table's bar. `cc:cc:cc` and `f8:a2:d6` were **not** imported
+  even though it still lists them: both are our own retractions, and a statusless
+  upstream list cannot express a retraction.
+- **Channel hop 1-11 → 1-13.** 12 and 13 are unusable for APs in the US so the old
+  bound cost nothing there, but they are ordinary channels across most of the world,
+  and probe requests are not restricted the same way anywhere.
+- **A bench emitter** (`tools/flock_emitter/`) that impersonates every rung of the
+  ladder in rotation — including the ones that must *not* fire, like `Flock-Guest`
+  staying Likely. Everything since v0.20 has been compile-verified and never put in
+  front of a radio; this is the rig that closes that. It transmits, so it lives
+  outside the app and is never flashed to a Flipper. The app itself remains passive.
+- **`test_flck` is now attributed** to CVE-2025-59409 in the code and the docs. It
+  was always matched; nothing said what it was.
+- Host tests 458 → 613 checks. `hits.csv` moves to schema v2 (new `class` and
+  `hidden` columns); v1 files still load rather than being discarded on upgrade.
+- Fixes a latent wire-protocol bug found by the new tests: the detection line's
+  field array held 8 slots, so a line carrying two trailing `key=value` fields glued
+  the second onto the first and the IE fingerprint silently parsed as 0.
+
 ## v0.45
 The first release driven by outside field reports. Both features come from
 issues filed by [@h00die](https://github.com/h00die) after testing FlipDeFlock
