@@ -91,7 +91,10 @@ firmware; in Marauder mode they explain what's missing.
   for a report. Each row carries a confidence tag (see
   [Detection confidence](#detection-confidence)) and shows its source — probe,
   beacon, or BLE — in the detail view. A `!DEAUTH ch<n> <bssid>` banner appears
-  while a deauth/disassoc flood is active and clears when it stops.
+  while a deauth/disassoc flood is active and clears when it stops. Set **Alert on
+  hit** in Settings (Vibrate / Beep / both) to be told about a camera you aren't
+  watching the screen for — it fires once per device, and never for an OUI-only
+  "Possible" lead.
 - **Flock Map** — a live map around your GPS position: you're at center, cameras
   are plotted by bearing and distance, dot size is confidence, with a heading tick
   and a scale bar. Left/Right zoom, OK re-fits. Needs a GPS fix; ungeotagged
@@ -137,6 +140,12 @@ firmware; in Marauder mode they explain what's missing.
   DeFlock-compatible GeoJSON, KML, plain CSV, and WiGLE CSV (Wi-Fi and BLE) for
   wardriving uploads. Reports stream row-by-row to SD, so a large scan won't run
   the Flipper out of memory. Pull them with qFlipper or a card reader.
+- **Save hits** *(Settings, off by default)* — keeps your detections across app
+  restarts in `apps_data/flipdeflock/hits.csv`, so closing the app doesn't throw
+  a scan away. Restored hits come back in the list and on the map, showing the age
+  of the stored sighting instead of a live signal reading. It is **off by default
+  on purpose**: a hit log is a durable record of where you have been. Turning it
+  back off deletes the file, and *Reports → Clear Saved Hits* erases it any time.
 - **Share to DeFlock** — renders a QR per marked, geotagged camera that opens
   [DeFlock](https://deflock.org) at that location on your phone, so you submit
   through the official app's review flow. The Flipper and ESP never touch a

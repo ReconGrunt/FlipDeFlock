@@ -24,6 +24,8 @@ Any failed check prints a `FAIL file:line` line and the runner exits non-zero
 | `test_flock_db.c`   | `helpers/flock_db.c`   | Confidence truth table; **B6** strict `^Flock-[0-9A-Fa-f]{6}$` anchoring; OUI-only never confirms; UNVERIFIED user IE-fp cap |
 | `test_watchscore.c` | `helpers/watchscore.c` | The ≥2-independent-radio ELEVATED gate; **B16** CLEAR→WATCHFUL→ELEVATED (no single-tick jump); decay |
 | `test_wifi_audit.c` | `helpers/wifi_audit.c` | **B15** unknown-but-modern auth mode grades Ok, not Info |
+| `test_detect_rules.c` | `helpers/detect_rules.c` | Geotag hysteresis; the anti-stalking waypoint/span track and follow-gate; the **issue #1** alert gate — one alert per device, nothing below "Likely", cooldown |
+| `test_flock_store.c` | `helpers/flock_store.c` | **issue #2** hit-record round trip: SSIDs with commas/quotes/control chars; "no fix" stays distinct from a real 0,0; malformed lines rejected, not half-parsed; eviction ordering |
 
 `helpers/wifi_audit.c` pulls in `<core/string.h>` (FuriString) for its `reasons`
 output; `mocks/` provides a minimal host FuriString, selected ahead of the SDK

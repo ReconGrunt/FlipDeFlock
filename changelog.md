@@ -1,5 +1,61 @@
 # Changelog
 
+## v0.45
+The first release driven by outside field reports. Both features come from
+issues filed by [@h00die](https://github.com/h00die) after testing FlipDeFlock
+with a Marauder dev board around two known cameras.
+- **A detection can now announce itself (issue #1).** Both cameras were
+  detected — and neither was noticed until several blocks later, because a hit
+  was silent: a new row on a screen you had to be looking at. New **"Alert on
+  hit"** setting: OFF / Vibrate / Beep / Beep+Vibe, defaulting to **Vibrate**.
+  Haptic-first is deliberate; reading a surveillance-detection screen in public
+  is itself a personal-safety exposure, so the discreet option is the default
+  rather than the one you have to go find. Every mode also raises the backlight,
+  which is what makes a hit noticeable on a device in a pocket or a cupholder.
+- **It fires once per camera, not once per frame.** The alert triggers on a
+  device's first crossing to **Likely or better** — so a unit first seen as
+  "Possible" and later confirmed alerts exactly once, and a camera you are
+  parked next to never buzzes again. OUI-only "Possible" leads are deliberately
+  excluded: generic vendor prefixes turn up on unrelated hardware, and precision
+  over recall applies to the alert exactly as it does to the display. A 3 s
+  cross-device cooldown keeps a MAC-randomising unit, or driving into a dense
+  deployment, from machine-gunning the vibro motor.
+- **`Sound = OFF` still mutes the tone** while the vibro fires, so one global
+  mute switch stays honest instead of two settings disagreeing.
+- **Hits can survive closing the app (issue #2).** Two detections, back out to
+  the Flipper menu, reopen — both gone. New **"Save hits"** setting persists the
+  detection table to `apps_data/flipdeflock/hits.csv` and restores it at startup.
+  Restored hits reappear in the Flock list *and* on the Flock Map, which is the
+  "show someone what the hits look like" case from the report.
+- **Off by default, and off means erased.** A hit log is a durable record of
+  where you have been — the sort of trail a tool for people evading surveillance
+  should not create unless asked. Turning the setting back off **deletes**
+  `hits.csv`; a privacy toggle that leaves the old file on the card reads as
+  "off" while the record is still sitting there. *Reports → Clear Saved Hits*
+  erases it at any time, and drops the restored entries from the screen too.
+- **A restored hit never poses as a live one.** Its stored RSSI is from an
+  earlier run, so the list shows the **age** of that sighting (`5m`, `3h`, `2d`)
+  where the signal bars would be, and the detail screen says `Last RSSI` and adds
+  a `Saved: <date time>` line. Detections are indicators, not proof — and a
+  stale reading dressed up as a live one is exactly that rule being broken.
+- **Two traps found while building it, both fixed before shipping.**
+  A restored entry has no meaningful tick timestamp, so WATCHSCORE's freshness
+  test `(now - last_tick) > 60 s` would have reduced to `now > 60 s` — **false
+  for the first minute after a reboot**, making a hit from days ago read as a
+  camera watching you *right now*, in exactly the window a user is most likely
+  to open the app. WATCHSCORE now skips archived entries by flag, never by tick
+  arithmetic. Separately, the detection table is capped at 64 and used to drop
+  new hits once full, so a full `hits.csv` would have blocked every live
+  detection for the rest of the session; a new hit now reclaims the least
+  valuable *archived* slot (weakest evidence first, oldest breaking a tie) and
+  never evicts a live one.
+- **Host tests: 291 → 458 checks.** The alert gate and the whole record format
+  are pure and covered: round trips through SSIDs containing commas, quotes and
+  control characters; "no fix" staying distinct from a real 0,0; and malformed
+  lines (wrong column count, bad MAC, unterminated quote, out-of-range enum)
+  being rejected outright rather than half-parsed into a plausible-looking wrong
+  detection.
+
 ## v0.44
 A signature-quality release — no new detection capability, one fewer way to be
 wrong.
