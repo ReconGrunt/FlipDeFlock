@@ -76,4 +76,34 @@ void suite_detect_rules(void) {
     CHECK_INT_EQ(tr.waypoints, 4);
     CHECK(tr.max_span_m >= FOLLOW_MIN_SPAN_M);
     CHECK(ble_following_gate(4, 90000, tr.waypoints, tr.max_span_m)); // now "following"
+
+    // --- flock_alert_should_fire (issue #1 alert gate) ----------------------
+    // Confidence rungs: 0 None, 1 Possible, 2 Likely, 3 ProbeFp, 4 Confirmed.
+
+    // A brand-new device (prev 0) at Likely or better fires; below that, never.
+    CHECK(flock_alert_should_fire(0, 2, false, 1000, 0, false)); // Likely
+    CHECK(flock_alert_should_fire(0, 4, false, 1000, 0, false)); // Confirmed
+    CHECK(!flock_alert_should_fire(0, 1, false, 1000, 0, false)); // OUI-only "Possible"
+    CHECK(!flock_alert_should_fire(0, 0, false, 1000, 0, false)); // None
+
+    // The per-entry latch stops a camera re-alerting every time it's seen again.
+    CHECK(!flock_alert_should_fire(0, 4, true, 1000, 0, false));
+    CHECK(!flock_alert_should_fire(2, 4, true, 100000, 1000, true));
+
+    // Possible -> Confirmed is a crossing and fires exactly once; a device that
+    // already qualified does not re-fire when it climbs further.
+    CHECK(flock_alert_should_fire(1, 4, false, 100000, 1000, true));
+    CHECK(!flock_alert_should_fire(2, 4, false, 100000, 1000, true)); // already >= Likely
+    CHECK(!flock_alert_should_fire(4, 4, false, 100000, 1000, true)); // no change at all
+
+    // Cooldown: a second device inside ALERT_COOLDOWN_MS is suppressed, and the
+    // same device is allowed once the window has passed.
+    CHECK(!flock_alert_should_fire(0, 4, false, 1000 + ALERT_COOLDOWN_MS - 1, 1000, true));
+    CHECK(flock_alert_should_fire(0, 4, false, 1000 + ALERT_COOLDOWN_MS, 1000, true));
+
+    // The FIRST alert of a session must not be swallowed by the cooldown: with
+    // last_alert_tick still 0 and a small tick, the elapsed test would otherwise
+    // read as "an alert 12 ms ago". have_alerted_before is what prevents that.
+    CHECK(flock_alert_should_fire(0, 4, false, 12, 0, false));
+    CHECK(!flock_alert_should_fire(0, 4, false, 12, 0, true)); // genuinely 12 ms ago
 }
