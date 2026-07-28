@@ -50,7 +50,32 @@ typedef struct {
     int8_t rssi;
     bool marked;
     bool selected;
+    bool archived; /**< restored from hits.csv, not seen yet this session */
+    uint32_t seen_epoch; /**< RTC seconds of that stored sighting (archived only) */
 } FlockRowSnap;
+
+/**
+ * Compact age of a stored sighting: "5m", "3h", "2d", or "old" past 99 days.
+ * Shown in place of the signal bars for an archived row -- a saved RSSI is not
+ * a live reading, and drawing bars for it would claim the device is in range
+ * right now.
+ */
+static void flock_age_str(char* out, size_t out_len, uint32_t now_epoch, uint32_t seen_epoch) {
+    if(!seen_epoch || now_epoch < seen_epoch) {
+        snprintf(out, out_len, "--");
+        return;
+    }
+    uint32_t s = now_epoch - seen_epoch;
+    if(s < 3600u) {
+        snprintf(out, out_len, "%lum", (unsigned long)(s / 60u));
+    } else if(s < 86400u) {
+        snprintf(out, out_len, "%luh", (unsigned long)(s / 3600u));
+    } else if(s < 86400u * 100u) {
+        snprintf(out, out_len, "%lud", (unsigned long)(s / 86400u));
+    } else {
+        snprintf(out, out_len, "old");
+    }
+}
 
 static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     FlockViewModel* model = _model;
@@ -129,10 +154,16 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             r->rssi = e->rssi;
             r->marked = e->marked;
             r->selected = (idx == model->selected);
+            r->archived = e->archived;
+            r->seen_epoch = e->seen_epoch;
         }
     }
 
     furi_mutex_release(app->mutex);
+
+    // Wall clock for the archived rows' age column. Read outside the lock (it is
+    // an RTC register read, not shared app state).
+    uint32_t now_epoch = furi_hal_rtc_get_timestamp();
 
     // ---- render from the snapshot (no mutex held) --------------------------
     // Header / status bar. A real deauth flood takes over the header. Compact
@@ -251,8 +282,18 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         // Right edge: RSSI as signal bars (replaces the raw "-33dB"). The bars
         // helper hardcodes ColorBlack, so on the inverted (selected) row it
         // would be invisible -> show the exact dB as white text there instead.
-        if(r->selected) {
-            char meta[18];
+        //
+        // An ARCHIVED row shows the age of the stored sighting instead. Its RSSI
+        // was recorded on some earlier run, so bars (or a live-looking "-67dB")
+        // would assert the device is in range right now -- exactly the kind of
+        // over-claim the detections-are-indicators rule exists to prevent.
+        char meta[18];
+        if(r->archived) {
+            char age[8];
+            flock_age_str(age, sizeof(age), now_epoch, r->seen_epoch);
+            snprintf(meta, sizeof(meta), "%s%s", r->marked ? "*" : "", age);
+            canvas_draw_str_aligned(canvas, 126, y + 8, AlignRight, AlignBottom, meta);
+        } else if(r->selected) {
             if(r->marked) {
                 snprintf(meta, sizeof(meta), "*%ddB", r->rssi);
             } else {

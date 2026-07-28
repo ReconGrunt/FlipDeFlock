@@ -52,13 +52,17 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
         break;
     }
 
+    // An archived entry's RSSI/channel were recorded on an earlier run, so label
+    // them as last-known rather than presenting a stored reading as a live one.
+    const char* rssi_label = e.archived ? "Last RSSI" : "RSSI";
+
     FuriString* s = furi_string_alloc();
     furi_string_printf(
         s,
         "%s  %s\n"
         "%02X:%02X:%02X:%02X:%02X:%02X\n"
         "SSID: %s\n"
-        "RSSI %d  Ch %u  Seen %lu  via %s",
+        "%s %d  Ch %u  Seen %lu  via %s",
         flock_confidence_str(e.confidence),
         e.marked ? "(MARKED)" : "",
         e.mac[0],
@@ -68,10 +72,26 @@ static void recon_scene_flock_detail_render(ReconApp* app) {
         e.mac[4],
         e.mac[5],
         e.ssid[0] ? e.ssid : "(hidden)",
+        rssi_label,
         e.rssi,
         e.channel,
         (unsigned long)e.count,
         src);
+
+    // Where a stored hit came from, in wall-clock terms. Only meaningful for an
+    // archived entry: a live one's seen_epoch is "moments ago" by definition.
+    if(e.archived && e.seen_epoch) {
+        DateTime dt;
+        datetime_timestamp_to_datetime(e.seen_epoch, &dt);
+        furi_string_cat_printf(
+            s,
+            "\nSaved: %04u-%02u-%02u %02u:%02u",
+            dt.year,
+            dt.month,
+            dt.day,
+            dt.hour,
+            dt.minute);
+    }
 
     if(!isnan(e.lat) && !isnan(e.lon)) {
         furi_string_cat_printf(s, "\nGPS %.5f, %.5f", (double)e.lat, (double)e.lon);
