@@ -35,6 +35,17 @@ jobs:
             --output-dir build_esp \
             esp32_companion/flock_companion
 
+      # Bench-only test target (tools/flock_emitter). Compile-checked here so it
+      # cannot rot silently against the signature tables it impersonates, but
+      # deliberately NOT merged or attached to a release: it transmits, and
+      # nothing about FlipDeFlock should make it easy to flash by accident.
+      - name: Compile bench emitter (not released)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32:PartitionScheme=huge_app \
+            --output-dir build_emitter \
+            tools/flock_emitter
+
       - name: Merge into a single flashable image
         run: |
           python -m pip install --quiet esptool
