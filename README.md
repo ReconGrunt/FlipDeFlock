@@ -237,6 +237,12 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.44** — Signature quality. The OUI list now tracks a curated upstream table with
+per-prefix status instead of a flat one that couldn't record doubt: `f8:a2:d6` is
+dropped (upstream retracted it after a false hit on a Sony media player), and two
+uncorroborated candidates ship in a new `docs/signatures.seed.json` rather than the
+trusted built-ins. A 1,200-prefix bulk scrape was reviewed and rejected.
+
 **v0.43** — Precision, correctness, and a test safety net; no new screens. Only the
 real `Flock-` + 6-hex provisioning name Confirms now, and an OUI + broadcast-probe
 match caps at Likely. Fixes across NFC (verdict binds to the card actually

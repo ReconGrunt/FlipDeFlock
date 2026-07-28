@@ -10,8 +10,14 @@ apps_data/flipdeflock/signatures.json
 
 It's **load-only** (read once at app start, never written, never networked) and
 **fail-safe**: if the file is missing, empty, malformed, or oversized, the app
-silently falls back to the built-ins — a bad file can't break detection. A ready
-starter is in [`signatures.example.json`](signatures.example.json).
+silently falls back to the built-ins — a bad file can't break detection.
+
+Two files ship in this folder, and they are not the same thing:
+
+| File | What it is |
+|------|------------|
+| [`signatures.example.json`](signatures.example.json) | A **placeholder template**. Its values (`aa:bb:cc`, `deadbeef`, …) match nothing real — copy it and replace them with your own captures. |
+| [`signatures.seed.json`](signatures.seed.json) | **Real but unverified** candidate prefixes, tracked upstream and not yet corroborated in the field. See [Seed signatures](#seed-signatures) below before you use it. |
 
 ## Schema
 
@@ -38,6 +44,37 @@ weaken a built-in. Because user signatures are **unverified**, they are delibera
 capped: an OUI never scores above *Possible*, and an IE fingerprint never above the
 candidate *"Class?"* rung — **never *Confirmed*, even alongside a Flock OUI**. This
 is the precision-over-recall rule: a false "Flock" is worse than a missed one.
+
+## Seed signatures
+
+[`signatures.seed.json`](signatures.seed.json) carries prefixes that are **tracked
+upstream but not corroborated** — real candidates, not placeholders, and not proof.
+Merge them into your own `signatures.json` if you want the extra recall; leave them
+out if you'd rather not chase false positives.
+
+| Prefix | Upstream status | Why it's still unverified |
+|--------|-----------------|---------------------------|
+| `e0:0a:f6` | Listed *Active*, but with **no confidence note** | Never independently corroborated |
+| `14:b5:cd` | *"New finding testing"* (April 2026) | Still under test upstream |
+
+Source: [`nitekry/nite-oui-collection` → `groups/flockers/my_tested_flock.md`](https://github.com/nitekry/nite-oui-collection/blob/main/groups/flockers/my_tested_flock.md),
+a per-prefix table with `Confidence` and `Status` columns.
+
+**Why they aren't compiled in.** The built-in OUI table is a claim that a prefix was
+*observed in a fielded Flock deployment*. Neither of these meets that bar, so putting
+them there would overstate what's known. This file is the honest home for them. The
+schema is a flat array of strings and the parser takes no per-entry metadata, so
+there is nowhere in the JSON itself to mark an entry unverified — **this page is that
+record.**
+
+Either way the scoring is the same: an OUI hit from a user file caps at **Possible**,
+exactly as a built-in OUI hit does. Nothing here can manufacture a *Confirmed*.
+
+**Removed from the built-ins:** `f8:a2:d6` was dropped in v0.44. Upstream marks it
+**Removed** — "low confidence; hit on a Sony Media Player." Don't add it back through
+a user file either. Same for `6c:cd:d6` (Netgear), `94:2a:6f` and `f4:e2:c6`
+(Ubiquiti), `cc:cc:cc` (no hits), and `00:0c:e7` (possible false positive) — all
+retracted upstream, none ever shipped here.
 
 ## Capturing an IE fingerprint (`ie_fps`)
 

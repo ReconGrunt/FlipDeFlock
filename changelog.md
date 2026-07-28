@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.44
+A signature-quality release — no new detection capability, one fewer way to be
+wrong.
+- **Better source for the OUI list.** The built-in Flock OUI table was imported
+  from a **flat list with no status column** (`colonelpanichacks/flock-you` →
+  `datasets/NitekryDPaul_wifi_ouis.md`). Once a prefix landed in it, nothing
+  recorded that it was later doubted. The same researcher now keeps a **curated
+  per-prefix table with `Confidence` and `Status` columns**
+  (`nitekry/nite-oui-collection` → `groups/flockers/my_tested_flock.md`), and
+  that is now the source of truth. Re-checking the shipped list against it
+  surfaced a retraction FlipDeFlock had never learned about.
+- **Dropped `f8:a2:d6` (32 prefixes → 31).** Upstream marks it *Removed*: "low
+  confidence; hit on a Sony Media Player." Removing it can only *lose*
+  detections, never gain them — but the loss is bounded (it only ever scored
+  "Possible" on its own) and the project's rule is that a false positive is
+  worse than a missed detection. The reason is now recorded in the source, so
+  re-importing the old flat list can't silently undo it.
+- **Two new candidate prefixes — as *user* signatures, not built-ins.**
+  `e0:0a:f6` (upstream *Active*, but carrying no confidence note) and
+  `14:b5:cd` ("new finding testing") ship in a new
+  **`docs/signatures.seed.json`**, giving the SD-card signature file its first
+  real content. They are deliberately *not* compiled in: the built-in table is a
+  claim of field corroboration, and neither prefix has that yet. Scoring is
+  unaffected either way — an OUI hit caps at "Possible" whatever its source.
+  `signatures.example.json` stays a pure placeholder template; the unverified
+  status the JSON schema can't express is documented in `docs/signatures.md`.
+- **Reviewed and rejected: the 1,200-prefix bulk list.** The same upstream repo
+  carries a "Nationwide OUIs" dump scraped from wigle.net with no confidence
+  column, no dates, and no vetting. It was evaluated and **not** imported — it
+  would blow the 64-entry signature cap many times over, and a scrape for
+  networks *named* "Flock-something" collects whatever hardware happened to be
+  nearby, not Flock hardware.
+
 ## v0.43
 A precision, correctness & reliability release — a full internal audit turned
 into fixes and a real test safety net. No new screens; the app just lies to you
