@@ -53,6 +53,7 @@ typedef enum {
 #define RECON_APP_FOLDER    EXT_PATH("apps_data/flipdeflock")
 #define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
 #define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
+#define RECON_HITS_PATH     RECON_APP_FOLDER "/hits.csv"
 
 /** ViewDispatcher view indexes. */
 typedef enum {
@@ -95,6 +96,8 @@ typedef struct {
     bool sound;
     uint8_t alert_mode; /**< ReconAlertMode: beep/vibro on a new Flock hit (default Vibrate) */
     bool flash_fast; /**< raise the flash (write) baud to 230400 after connect */
+    bool save_hits; /**< persist detections to hits.csv across app restarts (default OFF:
+                      *   it is a durable record of where you have been) */
     bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
     bool anomaly_flag; /**< Net Guardian: flag unidentified strong/persistent devices (default OFF, higher FP) */
 } ReconSettings;
@@ -119,6 +122,10 @@ typedef struct {
     uint32_t last_tick;
     bool marked; /**< user flagged this for the report */
     bool alerted; /**< the detection alert has already fired for this device (latch) */
+    bool archived; /**< restored from hits.csv, not seen yet this session. first_tick/
+                     *   last_tick are 0 and MEANINGLESS -- never age-test an archived
+                     *   entry with tick arithmetic (see recon_app_watchscore_tick). */
+    uint32_t seen_epoch; /**< RTC Unix seconds at the last sighting, 0 if never stored */
 } FlockEntry;
 
 /** One access point seen by the WiFi security scan (companion firmware). */
@@ -405,3 +412,15 @@ void recon_app_alert_tick(ReconApp* app);
 
 void recon_settings_load(ReconApp* app);
 void recon_settings_save(ReconApp* app);
+
+/**
+ * Persisted detections (issue #2), gated on settings.save_hits.
+ *
+ * Save is called from scan_session_stop(), i.e. every scan scene's on_exit, so
+ * hits survive backing out of the app. Load runs once at startup and marks every
+ * restored entry `archived`. Clear removes the file AND the archived entries, so
+ * turning the setting off actually erases the trail rather than just hiding it.
+ */
+void recon_hits_load(ReconApp* app);
+void recon_hits_save(ReconApp* app);
+void recon_hits_clear(ReconApp* app);
