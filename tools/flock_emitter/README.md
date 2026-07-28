@@ -41,17 +41,26 @@ that is a real bug worth chasing.
 | 3 | SSID `test_flck` | `!` CONFIRMED — the CVE-2025-59409 dev SSID |
 | 4 | SSID `Flock-Guest` | `L` Likely — **must never be CONFIRMED** |
 | 5 | SoundThinking OUI `d4:11:d6` | `ST` tag, acoustic class |
-| 6 | Flock OUI, beacon, zero-length SSID IE | `[hid]` tag, confidence rung unchanged |
+| 6 | Flock OUI, beacon, **zero-length** SSID IE | `[hid]` tag, confidence rung unchanged |
+| 7 | Flock OUI, beacon, **all-NUL** SSID IE | `[hid]` tag, confidence rung unchanged |
 
-**Identity 4 is the one to watch.** An unanchored `flock-` substring used to
-confirm benign names like `Flock-Guest` and the Flock Freight corporate SSIDs.
-`flock_db.c` anchors on `^Flock-[0-9A-Fa-f]{6}$` to stop that, and
-`test_flock_db.c` locks it in on the host. If the bench ever shows `Flock-Guest`
-as CONFIRMED, the anchoring regressed somewhere between the two.
+**Identity 4 is the one to watch, and it is not hypothetical.** Through v0.46 the
+companion substring-matched `flock-`, the Flipper took its score verbatim, and
+`Flock-Guest` really did display as CONFIRMED. v0.47 anchors both sides on
+`^flock-[0-9a-f]{6}$` *and* has the Flipper re-derive any claimed CONFIRMED from
+the SSID it was sent. If the bench ever shows `Flock-Guest` as CONFIRMED again,
+one of those two guards regressed.
 
-**Identity 6** must raise the `[hid]` tag *without* moving the rung. Hidden-SSID
-beaconing is reported as an observation, never scored — see the note in
-`helpers/esp_parser.c` for why.
+That bug shipped with green host tests, because `test_flock_db.c` was exercising a
+function no companion-path code called. **This rig would have caught it on the
+first run.** It is the argument for actually running it.
+
+**Identities 6 and 7** must raise the `[hid]` tag *without* moving the rung.
+Hidden-SSID beaconing is reported as an observation, never scored — see the note
+in `helpers/esp_parser.c` for why. They use the two different legal encodings
+because the companion detects them on **different code paths** (a zero length
+versus a byte scan). The host tests cover the `hid=1` token, not the detection,
+so this sketch is the only thing that ever runs either branch.
 
 ### BLE (rotates every 1.5 s)
 
@@ -86,7 +95,7 @@ can watch the two sides side by side:
 2. Power the Flipper with its own companion board and open **Flock / ALPR
    Detect**. Keep the two boards a metre or so apart — right on top of each
    other saturates the receiver.
-3. Let it cycle for a couple of minutes. All seven Wi-Fi identities and all
+3. Let it cycle for a couple of minutes. All eight Wi-Fi identities and all
    three BLE ones should appear as separate rows.
 4. Check each row against the Expect column, then open the detail screen for
    the SoundThinking and hidden-SSID rows and confirm the labels.

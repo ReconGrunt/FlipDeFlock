@@ -64,6 +64,28 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     FlockConfidence conf = conf_from_int(atoi(f[5]));
     const char* ssid = (n >= 7) ? f[6] : "";
 
+    // The companion scores SSIDs with a LOOSER matcher than flock_db.c: it
+    // substring-matches "flock-", we anchor on ^flock-[0-9a-f]{6}$. Never take
+    // its word for a CONFIRMED -- re-derive from the SSID we were sent and keep
+    // the stricter answer. Lower rungs still come from the ESP, which knows
+    // things this line does not (probe behaviour, the silent receiver's OUI).
+    //
+    // This is a TRUST BOUNDARY, not a redundant check. Companion firmware is
+    // flashed separately and can lag the app by releases -- that drift is why
+    // the proto version handshake exists -- so the Flipper must not inherit an
+    // over-claim from a build it did not ship with. Before this guard existed,
+    // a v0.46 companion reported "Flock-Guest" as CONFIRMED and the app printed
+    // it verbatim; flock_score() has no production caller, so nothing else in
+    // the pipeline was ever going to catch that.
+    //
+    // Guarded on a non-empty SSID: our firmware cannot emit conf=3 without one
+    // (its ssid_score needs len > 0), so an empty SSID here means a corrupted
+    // line, and we have no basis to overrule the ESP's OUI/probe reasoning.
+    if(conf == FlockConfidenceConfirmed && ssid[0] != '\0') {
+        FlockConfidence by_ssid = flock_ssid_confidence(ssid);
+        if(by_ssid < conf) conf = by_ssid;
+    }
+
     // Trailing key=value fields. Older firmware omits them and newer firmware may
     // add more, so unknown keys are skipped rather than treated as an error.
     //   fp=<hex32>  B1 IE-skeleton fingerprint (probe requests only)

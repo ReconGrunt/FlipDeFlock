@@ -23,6 +23,14 @@ void suite_flock_db(void) {
 
     // B6 regression: benign names that merely CONTAIN "flock-" must NOT confirm.
     // They fall through to "Likely" (still contain the "flock" substring).
+    //
+    // These checks were DECORATIVE until v0.47. flock_score() has no production
+    // caller and flock_ssid_confidence() was reached only from the Marauder
+    // scraper, so on the default (companion) backend nothing consulted this rule
+    // -- the app printed the ESP's looser verdict and "Flock-Guest" really did
+    // show as CONFIRMED. esp_parser.c now re-derives any claimed Confirmed
+    // through this function, so these rows finally back a live guard. The
+    // companion-path versions live in test_esp_parser.c; keep both.
     CHECK_INT_EQ(flock_ssid_confidence("Flock-Guest"), FlockConfidenceLikely);
     CHECK_INT_EQ(flock_ssid_confidence("Flock Freight WiFi"), FlockConfidenceLikely);
     CHECK_INT_EQ(flock_ssid_confidence("Flock-12345"), FlockConfidenceLikely); // 5 hex: too short

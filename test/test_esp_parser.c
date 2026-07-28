@@ -52,12 +52,15 @@ void suite_esp_parser(void) {
     }
 
     // --- D: Flock detection -------------------------------------------------
+    // NOTE: this fixture used to assert Confirmed for "MyFlock" and so pinned the
+    // over-confirm bug as expected behaviour. "MyFlock" merely contains "flock",
+    // which is a Likely, and the parser now re-derives that itself.
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,MyFlock"), EspMsgFlock);
     CHECK(mac_eq(m.u.flock.mac, A1F6));
     CHECK_INT_EQ(m.u.flock.rssi, -40);
     CHECK_INT_EQ(m.u.flock.channel, 6);
     CHECK_INT_EQ(m.u.flock.ftype, 'P');
-    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
     CHECK_STR_EQ(m.u.flock.ssid, "MyFlock");
     CHECK_INT_EQ(m.u.flock.fp, 0);
 
@@ -70,6 +73,44 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(m.u.flock.ftype, 'O');
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
 
+    // --- companion CONFIRMED is capped by our own SSID rule -----------------
+    // The bug this pins: through v0.46 the companion substring-matched "flock-",
+    // the Flipper took its conf verbatim (flock_score() has no production
+    // caller), and benign names shipped to the screen as CONFIRMED. The parser
+    // now re-derives any claimed Confirmed from the SSID it was handed.
+    //
+    // Every one of these arrives as conf=3 and must come back Likely.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,Flock-Guest"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,Flock-Safety-Corp"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,Flock-12345"), EspMsgFlock); // 5 hex, too short
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,Flock-1234567"), EspMsgFlock); // 7 hex, too long
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,Flock-GHIJKL"), EspMsgFlock); // not hex
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+
+    // ...and the cap must NOT over-correct: real Flock names still Confirm.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,Flock-A1B2C3"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,flock-a1b2c3"), EspMsgFlock); // case-insensitive
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,test_flck"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+
+    // The cap only ever lowers. A companion reporting a WEAKER rung than the
+    // SSID would justify is left alone -- it knows things this line does not.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,Flock-A1B2C3"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidencePossible);
+
+    // Empty SSID + conf=3 is a corrupted line (our firmware needs len>0 to score
+    // 3 at all), so there is no basis to overrule the ESP's OUI/probe reasoning.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3"), EspMsgFlock); // no ssid field at all
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+
     CHECK_INT_EQ(P("D,zzzz,-40,6,P,3,x"), EspMsgIgnore); // bad hex mac
     CHECK_INT_EQ(P("D,a1b2,-40,6,P,3,x"), EspMsgIgnore); // mac too short (<12)
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P"), EspMsgIgnore); // too few fields (n<6)
@@ -79,6 +120,10 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,fp=1234"), EspMsgFlock);
     CHECK_STR_EQ(m.u.flock.ssid, "fp=1234");
     CHECK_INT_EQ(m.u.flock.fp, 0);
+    // ...and since "fp=1234" carries no flock token at all, a conf=3 claim over
+    // it is uncorroborated and collapses to None. Our firmware cannot emit that
+    // combination, so the line is corrupt; recon_app_report_flock drops None.
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceNone);
 
     // Real trailing fp=, no table match (built-in table ships empty): fp passes
     // through, confidence/type unchanged.
@@ -93,6 +138,14 @@ void suite_esp_parser(void) {
     FlockDbExtras ex_fp = {.ie_fps = ufps, .ie_fp_count = 1};
     flock_db_set_extras(&ex_fp);
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,0,,fp=deadbeef"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceProbeFp);
+    CHECK_INT_EQ(m.u.flock.ftype, 'F');
+
+    // ORDERING: the SSID cap runs BEFORE the fp upgrade, so a fingerprint can
+    // still raise a rung the cap just lowered. Here conf=3 over "Flock-Guest" is
+    // capped to Likely, then the user fp lifts it to Class?. If the two ran the
+    // other way round the cap would silently undo a legitimate fp match.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,Flock-Guest,fp=deadbeef"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceProbeFp);
     CHECK_INT_EQ(m.u.flock.ftype, 'F');
     flock_db_set_extras(NULL);

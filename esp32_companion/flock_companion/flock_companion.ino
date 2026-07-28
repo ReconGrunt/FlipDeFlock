@@ -218,14 +218,39 @@ static char lc(char c) {
     return (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
 }
 
-// Returns: 0 none, 2 likely (flock/flck substring), 3 confirmed (flock-/test_flck)
+/**
+ * True if `s` is EXACTLY "flock-" + 6 hex digits: the provisioning-AP name.
+ *
+ * Mirrors is_flock_provisioning_ssid() in helpers/flock_db.c -- keep the two in
+ * step, same hand-sync rule as the OUI tables above.
+ *
+ * ANCHORED on purpose. This used to be a bare strstr(buf, "flock-"), which
+ * confirmed every benign name that merely contained the substring:
+ * "Flock-Guest", "Flock-Safety-Corp", "Flock-12345". The Flipper takes the
+ * companion's conf verbatim on this path, so that went straight to the screen
+ * as CONFIRMED. Those now fall through to the "likely" check below.
+ *
+ * `s` is already lower-cased by the caller, so only a-f need testing.
+ */
+static bool is_flock_provisioning_ssid(const char* s) {
+    if(strncmp(s, "flock-", 6) != 0) return false;
+    for(int i = 6; i < 12; i++) {
+        char c = s[i]; // '\0' on a short SSID is not hex -> correctly rejected
+        bool hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+        if(!hex) return false;
+    }
+    return s[12] == '\0'; // nothing may follow the 6 hex digits
+}
+
+// Returns: 0 none, 2 likely (flock/flck substring), 3 confirmed
+// (^flock-[0-9a-f]{6}$ or the test_flck dev SSID, CVE-2025-59409)
 static int ssid_score(const char* s, int len) {
     if(len <= 0) return 0;
     char buf[64];
     int n = len < 63 ? len : 63;
     for(int i = 0; i < n; i++) buf[i] = lc(s[i]);
     buf[n] = 0;
-    if(strstr(buf, "flock-") || strstr(buf, "test_flck")) return 3;
+    if(is_flock_provisioning_ssid(buf) || strstr(buf, "test_flck")) return 3;
     if(strstr(buf, "flock") || strstr(buf, "flck")) return 2;
     return 0;
 }

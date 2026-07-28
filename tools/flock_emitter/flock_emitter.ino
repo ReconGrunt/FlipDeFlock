@@ -34,15 +34,20 @@
  *   3 SSID "test_flck"                   ! CONFIRMED  (CVE-2025-59409 dev SSID)
  *   4 SSID "Flock-Guest"                 L Likely, NEVER Confirmed  <-- B6 guard
  *   5 SoundThinking OUI d4:11:d6         "ST" tag, Possible/Likely
- *   6 Flock OUI, beacon, NO SSID IE      "[hid]" tag, rung unchanged
+ *   6 Flock OUI, beacon, zero-length IE  "[hid]" tag, rung unchanged
+ *   7 Flock OUI, beacon, all-NUL IE      "[hid]" tag, rung unchanged
  *
- * Identity 4 is the important one. An unanchored "flock-" substring used to
- * confirm benign names like Flock-Guest and the Flock Freight corporate SSIDs;
- * flock_db.c anchors on ^Flock-[0-9A-Fa-f]{6}$ to stop that. If the bench shows
- * Flock-Guest as CONFIRMED, the anchoring regressed somewhere on the path.
+ * Identity 4 is the important one, and it is not hypothetical: through v0.46 the
+ * companion substring-matched "flock-", the Flipper took its score verbatim, and
+ * Flock-Guest really did display as CONFIRMED. Both sides now anchor on
+ * ^flock-[0-9a-f]{6}$ and the Flipper re-derives any claimed CONFIRMED from the
+ * SSID it was sent. If the bench ever shows Flock-Guest as CONFIRMED again,
+ * one of those two guards regressed.
  *
- * Identity 6 emits a zero-length SSID IE. The all-NUL encoding is the other
- * legal form and is covered by the host tests; both are handled in promisc_cb.
+ * Identities 6 and 7 are the two legal hidden-SSID encodings, and the companion
+ * detects them on DIFFERENT code paths (a zero length versus a byte scan for
+ * all-NUL). The host tests cover the `hid=1` token, not the detection, so this
+ * sketch is the only thing that ever exercises either branch.
  *
  * ---------------------------------------------------------------------------
  * BLE identities (rotates every BLE_ROTATE_MS)
@@ -93,9 +98,24 @@ typedef enum {
     EmitProbe, /**< scan, producing probe requests from this MAC */
 } EmitKind;
 
+/**
+ * How to encode the SSID information element.
+ *
+ * Two DIFFERENT encodings both mean "hidden network", both appear in the wild,
+ * and the companion has a separate code path for each (`ssid_len == 0` versus
+ * the all-NUL scan in promisc_cb). Emitting only one leaves the other branch
+ * untested, so both get an identity.
+ */
+typedef enum {
+    SsidNamed = 0, /**< tag 0, length N, the name in `ssid` */
+    SsidZeroLen, /**< tag 0, length 0 */
+    SsidAllNul, /**< tag 0, length N, every byte NUL */
+} SsidEnc;
+
 typedef struct {
     uint8_t mac[6];
-    const char* ssid; /**< NULL = omit the SSID IE entirely (hidden beacon) */
+    const char* ssid; /**< the name, for SsidNamed. Ignored otherwise. */
+    SsidEnc enc;
     EmitKind kind;
     const char* expect; /**< what the Flipper should show; printed to serial */
 } WifiIdentity;
@@ -104,18 +124,51 @@ typedef struct {
 // Both are in the compiled-in tables, so these exercise the real matchers
 // rather than a test-only backdoor (there isn't one, by design).
 static const WifiIdentity WIFI_IDS[] = {
-    {{0xb4, 0x1e, 0x52, 0x00, 0x00, 0x01}, "bench-net-1", EmitBeacon, "p Possible (OUI only)"},
-    {{0xb4, 0x1e, 0x52, 0x00, 0x00, 0x02}, NULL, EmitProbe, "L Likely (OUI + probe)"},
-    {{0x70, 0xc9, 0x4e, 0x00, 0x00, 0x03}, "Flock-A1B2C3", EmitBeacon, "! CONFIRMED (anchored)"},
-    {{0x3c, 0x91, 0x80, 0x00, 0x00, 0x04}, "test_flck", EmitBeacon, "! CONFIRMED (CVE dev SSID)"},
+    {{0xb4, 0x1e, 0x52, 0x00, 0x00, 0x01},
+     "bench-net-1",
+     SsidNamed,
+     EmitBeacon,
+     "p Possible (OUI only)"},
+    {{0xb4, 0x1e, 0x52, 0x00, 0x00, 0x02},
+     NULL,
+     SsidZeroLen,
+     EmitProbe,
+     "L Likely (OUI + probe)"},
+    {{0x70, 0xc9, 0x4e, 0x00, 0x00, 0x03},
+     "Flock-A1B2C3",
+     SsidNamed,
+     EmitBeacon,
+     "! CONFIRMED (anchored)"},
+    {{0x3c, 0x91, 0x80, 0x00, 0x00, 0x04},
+     "test_flck",
+     SsidNamed,
+     EmitBeacon,
+     "! CONFIRMED (CVE dev SSID)"},
     {{0x80, 0x30, 0x49, 0x00, 0x00, 0x05},
      "Flock-Guest",
+     SsidNamed,
      EmitBeacon,
      "L Likely -- MUST NOT be CONFIRMED (B6)"},
-    {{0xd4, 0x11, 0xd6, 0x00, 0x00, 0x06}, "bench-net-2", EmitBeacon, "ST tag, acoustic class"},
-    {{0x14, 0x5a, 0xfc, 0x00, 0x00, 0x07}, NULL, EmitBeacon, "[hid] tag, rung unchanged"},
+    {{0xd4, 0x11, 0xd6, 0x00, 0x00, 0x06},
+     "bench-net-2",
+     SsidNamed,
+     EmitBeacon,
+     "ST tag, acoustic class"},
+    {{0x14, 0x5a, 0xfc, 0x00, 0x00, 0x07},
+     NULL,
+     SsidZeroLen,
+     EmitBeacon,
+     "[hid] tag, rung unchanged (zero-len IE)"},
+    {{0x08, 0x3a, 0x88, 0x00, 0x00, 0x08},
+     NULL,
+     SsidAllNul,
+     EmitBeacon,
+     "[hid] tag, rung unchanged (all-NUL IE)"},
 };
 #define WIFI_ID_COUNT (sizeof(WIFI_IDS) / sizeof(WIFI_IDS[0]))
+
+/** Length of the all-NUL SSID IE emitted by SsidAllNul identities. */
+#define ALLNUL_SSID_LEN 6
 
 // ---- BLE identities --------------------------------------------------------
 
@@ -180,20 +233,27 @@ static void send_beacon(const WifiIdentity* id) {
     frame[n++] = 0x01; // capability: ESS
     frame[n++] = 0x00;
 
-    // SSID IE (tag 0). A NULL ssid emits the IE with length 0, which is the
-    // canonical "hidden network" encoding and what the companion tests for. The
-    // other legal form (a length-N run of NULs) is covered by the host tests in
-    // test_esp_parser.c; both paths meet in promisc_cb's all-zero scan.
+    // SSID IE (tag 0). Both hidden encodings are emitted, by separate
+    // identities, because the companion detects them on separate code paths:
+    // SsidZeroLen exercises its `ssid_len == 0` case and SsidAllNul exercises
+    // the byte scan. Neither is reachable from the host tests -- those cover
+    // the `hid=1` TOKEN, not the ESP's detection of the frame -- so this sketch
+    // is the only thing that ever runs either branch.
     //
-    // Note the companion only claims hid=1 when it FINDS the IE and it is empty.
-    // Omitting the IE altogether would be a parse miss, not evidence of hiding,
-    // so we deliberately still emit it here.
-    if(id->ssid) {
+    // The IE is always present. The companion only claims hid=1 when it FINDS
+    // the IE and finds it empty; omitting the IE entirely is a parse miss, not
+    // evidence of hiding, and must not be reported as such.
+    if(id->enc == SsidNamed) {
         size_t len = strlen(id->ssid);
         frame[n++] = 0x00;
         frame[n++] = (uint8_t)len;
         memcpy(frame + n, id->ssid, len);
         n += len;
+    } else if(id->enc == SsidAllNul) {
+        frame[n++] = 0x00; // tag 0
+        frame[n++] = ALLNUL_SSID_LEN; // length N...
+        memset(frame + n, 0, ALLNUL_SSID_LEN); // ...of nothing but NULs
+        n += ALLNUL_SSID_LEN;
     } else {
         frame[n++] = 0x00; // tag 0
         frame[n++] = 0x00; // length 0 -> hidden
@@ -248,7 +308,9 @@ static void apply_wifi_identity(int idx) {
         id->mac[3],
         id->mac[4],
         id->mac[5],
-        id->ssid ? id->ssid : "<none>",
+        id->enc == SsidNamed  ? id->ssid :
+        id->enc == SsidAllNul ? "<all-NUL>" :
+                                "<zero-len>",
         id->expect);
 }
 

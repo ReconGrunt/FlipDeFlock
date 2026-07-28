@@ -247,6 +247,13 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.47** — False-positive fix; **upgrade if you're on v0.46**. Networks whose name
+merely contains `flock-` (`Flock-Guest`, `Flock-Safety-Corp`, `Flock-12345`) were
+shown as CONFIRMED — the anchored SSID rule existed and was tested, but nothing on
+the default code path called it. Now fixed on both sides: the companion's matcher is
+anchored, and the app re-derives any claimed CONFIRMED itself, so an already-flashed
+companion is corrected without a reflash.
+
 **v0.46** — Detects **SoundThinking / ShotSpotter acoustic sensors** as a separate
 device class (tagged `ST`, never folded into the camera list), and reports
 **hidden-SSID beaconing** — the behaviour Flock moved to when broadcast-SSID

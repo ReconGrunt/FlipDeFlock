@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.47
+A false-positive fix. **If you are on v0.46, upgrade.**
+- **Benign networks whose name merely contains `flock-` were shown as CONFIRMED.**
+  `Flock-Guest`, `Flock-Safety-Corp`, `Flock-12345`, `MyFlock-Net` — anything with
+  that substring that is not `Flock-` followed by exactly 6 hex digits. The real
+  provisioning-AP name (`Flock-A1B2C3`) and the `test_flck` dev SSID are unaffected
+  and still Confirm; the affected names now score **Likely**, which is what they
+  always should have been.
+- **Why it happened.** The strict, anchored SSID rule lived in `flock_db.c` and was
+  regression-tested there, but nothing on the default (companion) code path ever
+  called it — the app took the companion's own looser verdict verbatim and printed
+  it. The host tests were green the whole time, because they were testing a function
+  that path never reached.
+- **Fixed on both sides, deliberately.** The companion's matcher is now anchored the
+  same way, *and* the app re-derives any claimed CONFIRMED from the SSID it was sent
+  rather than trusting it. The second half is what matters if you don't reflash:
+  companion firmware is flashed separately and can lag the app by releases, so an
+  already-flashed board gets the correct rung with no reflash. A weaker rung from the
+  companion is still trusted — it knows things the app cannot see from one line, like
+  probe behaviour and the silent receiver's OUI.
+- **Pinned where it actually broke.** New tests drive the real companion wire
+  protocol, not the helper in isolation, and were verified to fail without the fix.
+  The bench emitter grows an eighth identity so both hidden-SSID encodings
+  (zero-length and all-NUL) are exercised — the all-NUL branch had no coverage at
+  all. Host tests 613 → 639 checks.
+
 ## v0.46
 A targeted harvest from [JakeSwiz/WatchFlock](https://github.com/JakeSwiz/WatchFlock),
 whose research surfaced that Flock moved their Falcon V2 cameras to hidden SSIDs and
