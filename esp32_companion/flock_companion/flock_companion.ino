@@ -65,6 +65,7 @@
  */
 
 #include <Arduino.h>
+#include <stdarg.h> // buf_appendf()
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
@@ -105,11 +106,28 @@ static const size_t SOUNDTHINKING_OUI_COUNT =
     sizeof(SOUNDTHINKING_OUIS) / sizeof(SOUNDTHINKING_OUIS[0]);
 
 // ---- State ---------------------------------------------------------------
+//
+// THREADING. promisc_cb() runs in the WiFi driver task (usually core 0) and
+// loop()/handle_command() run in the Arduino task (core 1), so everything they
+// share needs `volatile` at minimum, and a critical section wherever a read and
+// a write must agree with each other.
+//
+// g_mux guards the two places where a torn read is not merely inaccurate but
+// unsafe or wrong: the beacon ring (whose count BOUNDS an array write) and the
+// Locator target (a 6-byte MAC that must be swapped atomically or promisc_cb
+// homes on a half-old, half-new address for a few frames).
+//
+// The frame counters below are deliberately NOT protected. `volatile` does not
+// make `++` atomic, so they can lose the odd increment under contention -- but
+// they are display-only rate indicators reset every interval, and taking a lock
+// per frame inside the WiFi callback would cost more than the drift.
+static portMUX_TYPE g_mux = portMUX_INITIALIZER_UNLOCKED;
+
 static volatile bool g_scanning = true;
 static volatile uint32_t g_frames = 0;
 static volatile uint32_t g_hits = 0;
 static volatile uint32_t g_deauths = 0; // deauth + disassoc frames seen (attack indicator)
-static uint8_t g_channel = 1;
+static volatile uint8_t g_channel = 1;
 static uint8_t g_lock_channel = 0; // 0 = hop
 /** Highest 2.4 GHz channel the hopper visits. See the hop block in loop(). */
 #define MAX_HOP_CHANNEL 13
@@ -143,13 +161,21 @@ static void note_beacon_bssid(const uint8_t* bssid) {
         h ^= bssid[i];
         h *= 16777619u;
     }
+    // The scan and the append must see the SAME g_beacon_ring_n: it is both the
+    // dedup bound and the write index, and loop() zeroes it from the other core
+    // every status interval. Hash outside the lock, hold it only for the ring.
+    portENTER_CRITICAL(&g_mux);
     for(uint8_t i = 0; i < g_beacon_ring_n; i++) {
-        if(g_beacon_ring[i] == h) return; // already counted this interval
+        if(g_beacon_ring[i] == h) { // already counted this interval
+            portEXIT_CRITICAL(&g_mux);
+            return;
+        }
     }
     if(g_beacon_ring_n < BEACON_RING) {
         g_beacon_ring[g_beacon_ring_n++] = h;
         g_beacon_distinct++;
     }
+    portEXIT_CRITICAL(&g_mux);
 }
 
 // ---- Locator: stream live RSSI for one target so the app can home in on it ---
@@ -157,7 +183,9 @@ static void note_beacon_bssid(const uint8_t* bssid) {
 // (match the addr in a repeating scan). MAC kept BOTH as bytes (Wi-Fi, compared
 // to raw frame bytes) and as the lowercase hex string (BLE, compared to the
 // same toString() form the BLE line is built from -- avoids byte-order traps).
-static char g_locate_kind = 0; // 0 none / 'w' / 'b'
+// volatile: promisc_cb (WiFi task) reads g_locate_kind as the fast gate before
+// touching the target. The target bytes themselves are swapped under g_mux.
+static volatile char g_locate_kind = 0; // 0 none / 'w' / 'b'
 static uint8_t g_locate_mac[6];
 static char g_locate_macs[13]; // lowercase hex, no separators
 static uint8_t g_locate_ch = 0;
@@ -266,6 +294,26 @@ static void buf_append_escaped(char* buf, size_t bufsz, size_t* pos, const char*
         if(c == ',' || c == '\r' || c == '\n' || (uint8_t)c < 0x20) c = '.';
         buf[(*pos)++] = c;
     }
+}
+
+/**
+ * Append a printf-formatted field at buf[*pos], clamping to the buffer.
+ *
+ * snprintf() returns what it WOULD have written, so the natural-looking
+ * `pos += snprintf(buf + pos, sizeof(buf) - pos, ...)` overshoots `pos` past the
+ * buffer on truncation. The NEXT call then computes `sizeof(buf) - pos` as a
+ * size_t UNDERFLOW -- a huge length against an out-of-bounds pointer. Chained
+ * appends must never accumulate the raw return value; this clamps instead.
+ */
+static void buf_appendf(char* buf, size_t bufsz, size_t* pos, const char* fmt, ...) {
+    if(*pos + 1 >= bufsz) return; // no room for even one byte + NUL
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf + *pos, bufsz - *pos, fmt, ap);
+    va_end(ap);
+    if(n < 0) return; // encoding error
+    size_t avail = bufsz - *pos - 1;
+    *pos += ((size_t)n > avail) ? avail : (size_t)n;
 }
 
 // ---- B1: probe IE-fingerprint + sequence-number coalescer ----------------
@@ -425,6 +473,13 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
         if(tag_off + 2 + ssid_len <= len) {
             ssid = (const char*)(p + tag_off + 2);
         } else {
+            // The IE claims more bytes than the frame holds -- a truncated or
+            // malformed capture. Retract the whole finding, don't just zero the
+            // length: leaving ssid_ie_found set made the all-NUL scan below pass
+            // vacuously (zero bytes to disagree with it) and every truncated
+            // frame got reported as a hidden network. A parse miss is not
+            // evidence of concealment.
+            ssid_ie_found = false;
             ssid_len = 0;
         }
     }
@@ -511,15 +566,15 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     if(ssid && ssid_len > 0) buf_append_escaped(line, sizeof(line), &pos, ssid, ssid_len, 48);
     // B1: trailing IE-fingerprint field (probe requests only). Older parsers
     // ignore it; the Flipper matches it against a curated Flock IE-fp table.
-    if(ie_fp != 0) pos += snprintf(line + pos, sizeof(line) - pos, ",fp=%08x", ie_fp);
+    if(ie_fp != 0) buf_appendf(line, sizeof(line), &pos, ",fp=%08x", ie_fp);
     // Device class. Only emitted for the non-default (acoustic) case: absent
     // means ALPR, so the wire stays unchanged for every existing detection and
     // an older Flipper build just ignores the token.
-    if(st_oui_match(mac)) pos += snprintf(line + pos, sizeof(line) - pos, ",cls=a");
+    if(st_oui_match(mac)) buf_appendf(line, sizeof(line), &pos, ",cls=a");
     // Hidden-SSID attribute. Rides on a line we were already sending, so it adds
     // no UART traffic and needs no per-BSSID dedup of its own. Reported, NOT
     // scored: see the note in helpers/esp_parser.c.
-    if(hidden) pos += snprintf(line + pos, sizeof(line) - pos, ",hid=1");
+    if(hidden) buf_appendf(line, sizeof(line), &pos, ",hid=1");
     if(pos > sizeof(line) - 1) pos = sizeof(line) - 1;
     line[pos++] = '\n';
     Serial.write((const uint8_t*)line, pos);
@@ -705,7 +760,7 @@ static void ble_do_scan(int seconds) {
             std::string md = d.getManufacturerData();
             if(pos + 1 < sizeof(line)) line[pos++] = ',';
             for(size_t j = 0; j < md.length() && j < 31 && pos + 2 < sizeof(line); j++) {
-                pos += snprintf(line + pos, sizeof(line) - pos, "%02x", (uint8_t)md[j]);
+                buf_appendf(line, sizeof(line), &pos, "%02x", (uint8_t)md[j]);
             }
         }
         // Raven GATT flag, emitted LAST so it follows the optional mfghex field.
@@ -835,14 +890,22 @@ static void handle_command(String cmd) {
                 macs.toLowerCase();
                 uint8_t mac[6];
                 if(macs.length() >= 12 && parse_hexmac(macs.c_str(), mac)) {
+                    // promisc_cb() memcmp's g_locate_mac from the WiFi task, so a
+                    // plain memcpy here can be observed half-applied and the
+                    // Locator homes on a spliced old/new address. Swap the target
+                    // and arm g_locate_kind together, under the lock -- kind is
+                    // what gates the compare, so publishing it last inside the
+                    // same section makes the whole target visible atomically.
+                    portENTER_CRITICAL(&g_mux);
                     memcpy(g_locate_mac, mac, 6);
                     strncpy(g_locate_macs, macs.c_str(), 12);
                     g_locate_macs[12] = 0;
+                    g_locate_kind = (kind == 'b') ? 'b' : 'w';
+                    portEXIT_CRITICAL(&g_mux);
                     g_locate_ch = (s3 > s2) ? (uint8_t)cmd.substring(s3 + 1).toInt() : 0;
                     g_locate_best = -127;
                     g_scanning = false; // Locator dedicates the radio to one target
                     g_combo = false;
-                    g_locate_kind = (kind == 'b') ? 'b' : 'w';
                     if(g_locate_kind == 'w') {
                         esp_wifi_set_promiscuous(true);
                         if(g_locate_ch >= 1 && g_locate_ch <= 14) {
@@ -919,11 +982,18 @@ void loop() {
         Serial.printf("S,%u,%u,%u,%u\n", g_frames, g_hits, g_channel, deauth_rate);
 
         // Active attack-tool signatures for this interval, then reset the windows.
-        if(g_probe_reqs >= PROBE_FLOOD_MIN) Serial.printf("ATK,probeflood,%u\n", g_probe_reqs);
-        if(g_beacon_distinct >= BEACON_FLOOD_MIN)
-            Serial.printf("ATK,beaconflood,%u\n", g_beacon_distinct);
-        g_probe_reqs = 0;
+        // Snapshot and reset the beacon ring under the lock: note_beacon_bssid()
+        // appends from the WiFi task using g_beacon_ring_n as its write bound, so
+        // zeroing it outside the lock can race a half-finished append.
+        portENTER_CRITICAL(&g_mux);
+        uint32_t beacon_distinct = g_beacon_distinct;
         g_beacon_distinct = 0;
         g_beacon_ring_n = 0;
+        portEXIT_CRITICAL(&g_mux);
+
+        if(g_probe_reqs >= PROBE_FLOOD_MIN) Serial.printf("ATK,probeflood,%u\n", g_probe_reqs);
+        if(beacon_distinct >= BEACON_FLOOD_MIN)
+            Serial.printf("ATK,beaconflood,%u\n", beacon_distinct);
+        g_probe_reqs = 0;
     }
 }
