@@ -158,15 +158,20 @@ jobs:
       # full 4 MB flash size for ~1.4 MB of firmware, and the Flipper's flasher
       # writes every byte of it (no skip-blank), so the padding is pure UART time
       # for anyone flashing from the Flipper.
+      # --build-path is load-bearing, not tidiness: the core writes flash_args
+      # into the BUILD directory, and --output-dir receives only a subset of the
+      # build products (flash_args is not among them on Linux). Pinning the build
+      # path is what makes the offsets readable at all.
       - name: Compile ESP32-C5 (dual-band, UNVERIFIED on hardware)
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:esp32c5:PartitionScheme=huge_app \
+            --build-path "$PWD/build_c5_raw" \
             --output-dir build_c5 \
             esp32_companion/flock_companion
           python -m pip install --quiet esptool
           python tools/merge_esp_image.py \
-            build_c5 esp32c5 build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+            build_c5_raw esp32c5 build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
 
       - name: Upload C5 firmware (experimental)
         uses: actions/upload-artifact@v4

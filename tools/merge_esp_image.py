@@ -72,9 +72,15 @@ def read_flash_args(build_dir: Path):
     """Parse the core's flash_args into [(offset:int, path:Path), ...]."""
     fa = build_dir / "flash_args"
     if not fa.exists():
-        sys.exit(f"ERROR: {fa} not found. The core emits it next to the build "
-                 f"output; without it the flash offsets are unknown and this "
-                 f"script will not guess them.")
+        sys.exit(
+            f"ERROR: {fa} not found, so the flash offsets are unknown and this "
+            f"script will not guess them.\n"
+            f"  The core writes flash_args into the BUILD directory, and "
+            f"arduino-cli's --output-dir receives only a subset of the build "
+            f"products (flash_args is not among them on Linux). Point this "
+            f"script at the path given to --build-path, not --output-dir.\n"
+            f"  Also note flash_args is a core 3.x output: it does not exist on "
+            f"2.0.x at all.")
 
     chunks = []
     for line in fa.read_text().splitlines():
