@@ -30,8 +30,8 @@ App(
     fap_author="@ReconGrunt",
     fap_version="0.50",
     fap_description="FlipDeFlock: detect Flock/ALPR surveillance cameras via any "
-    "ESP32 (Marauder or companion FW), with NFC/RFID credential audit, GPS "
-    "geotagging and DeFlock-compatible reports.",
+    "ESP32 (Marauder or companion FW), with GPS geotagging and "
+    "DeFlock-compatible reports.",
     fap_private_libs=[
         # Espressif esp-serial-flasher (Apache-2.0), vendored under
         # lib/esp-serial-flasher. Our port/worker/UI is original (GPL-3.0-or-later).
