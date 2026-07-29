@@ -1,6 +1,6 @@
 # Donation links shown as a "Sponsor" button on the repo.
-# All entries removed while funding channels are reconfigured. Crypto
-# addresses in README.md / SUPPORTERS.md are the current channel.
+# All entries removed. Crypto addresses in README.md / SUPPORTERS.md are
+# the current channel.
 #
 # NOTE: removing `github:` here stops it appearing in this dropdown, but if
 # the GitHub Sponsors profile itself is still active at the account level,

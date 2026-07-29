@@ -388,8 +388,7 @@ costs of mapping surveillance hardware), crypto (BTC, ETH, LTC, BCH) is accepted
 addresses are near the top of this README and in [SUPPORTERS.md](SUPPORTERS.md).
 Donations never gate a feature.
 
-GitHub Sponsors is temporarily unavailable while its payout configuration is
-updated. It will return once that's resolved.
+GitHub Sponsors is temporarily unavailable.
 
 What supporters get — recognition and early access to release candidates, never
 functionality — is spelled out in [SUPPORTERS.md](SUPPORTERS.md).
