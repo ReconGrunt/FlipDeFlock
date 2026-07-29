@@ -29,7 +29,6 @@
 #include "views/wifi_list_view.h"
 #include "views/locator_view.h"
 
-#define RECON_TAG "ReconSurvey"
 
 #define RECON_FLOCK_MAX  64
 #define RECON_WIFI_MAX   48

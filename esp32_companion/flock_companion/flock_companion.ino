@@ -218,7 +218,43 @@ static uint32_t g_phase_start = 0;
 #define COMBO_WIFI_MS 9000 // ~3 channel sweeps before a BLE scan (WiFi-biased)
 #define COMBO_BLE_SEC 3 // BLE scan seconds (BLE adverts repeat fast)
 
+/**
+ * First-byte rejection bitmap for the OUI tables.
+ *
+ * promisc_cb() tests TWO addresses on EVERY management frame, and each test used
+ * to walk all 31 Flock prefixes plus the SoundThinking one -- up to 64 three-byte
+ * comparisons per frame, inside the WiFi driver callback, before any filtering.
+ * The overwhelming majority of frames match nothing.
+ *
+ * 256 bits (32 bytes) say whether ANY table entry starts with a given byte, so
+ * the common no-match case costs one array index and one bit test. Built once at
+ * boot by oui_index_init(); the tables are const, so it can never go stale.
+ */
+// Built during C++ static initialisation, i.e. before setup() and before any
+// frame can arrive. Deliberately NOT an init function called from setup():
+// forgetting that call would make every OUI test return false and silently kill
+// all detection, which is the worst possible failure mode for this app. Deriving
+// the index from the tables in a constructor makes that unrepresentable.
+static const struct OuiFirstIndex {
+    uint8_t bits[32]; // bit b set => some prefix starts with byte b
+    OuiFirstIndex() : bits{} {
+        for(size_t i = 0; i < FLOCK_OUI_COUNT; i++) {
+            uint8_t b = FLOCK_OUIS[i][0];
+            bits[b >> 3] |= (uint8_t)(1u << (b & 7));
+        }
+        for(size_t i = 0; i < SOUNDTHINKING_OUI_COUNT; i++) {
+            uint8_t b = SOUNDTHINKING_OUIS[i][0];
+            bits[b >> 3] |= (uint8_t)(1u << (b & 7));
+        }
+    }
+} g_oui_index;
+
+static inline bool oui_first_possible(uint8_t b) {
+    return (g_oui_index.bits[b >> 3] >> (b & 7)) & 1;
+}
+
 static bool flock_oui_match(const uint8_t* mac) {
+    if(!oui_first_possible(mac[0])) return false; // fast reject, no table walk
     for(size_t i = 0; i < FLOCK_OUI_COUNT; i++) {
         if(mac[0] == FLOCK_OUIS[i][0] && mac[1] == FLOCK_OUIS[i][1] &&
            mac[2] == FLOCK_OUIS[i][2])
@@ -228,6 +264,7 @@ static bool flock_oui_match(const uint8_t* mac) {
 }
 
 static bool st_oui_match(const uint8_t* mac) {
+    if(!oui_first_possible(mac[0])) return false; // fast reject, no table walk
     for(size_t i = 0; i < SOUNDTHINKING_OUI_COUNT; i++) {
         if(mac[0] == SOUNDTHINKING_OUIS[i][0] && mac[1] == SOUNDTHINKING_OUIS[i][1] &&
            mac[2] == SOUNDTHINKING_OUIS[i][2])

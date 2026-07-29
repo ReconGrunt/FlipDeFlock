@@ -55,7 +55,12 @@ typedef struct {
     int mac_count;
     MarauderHit hits[MARAUDER_MAX_HITS];
     int hit_count;
-    /** Hits that did not fit in `hits` (MARAUDER_MAX_HITS exceeded). */
+    /**
+     * MAC tokens past MARAUDER_MAX_HITS that were never scored at all. Counted
+     * rather than ignored so a pathological line is visible instead of looking
+     * like a clean partial result. Note this counts CANDIDATES skipped, not
+     * confirmed hits -- some of them might not have scored anyway.
+     */
     int dropped;
 } MarauderScan;
 

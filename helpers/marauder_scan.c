@@ -59,22 +59,37 @@ void marauder_scan_line(const char* line, MarauderScan* out) {
     size_t len = strlen(line);
     if(len < 17) return; // can't hold even one "hh:hh:hh:hh:hh:hh"
 
-    // Count MAC tokens FIRST. A line-wide SSID match can only be safely
-    // attributed to a specific MAC when the line names exactly one; otherwise an
-    // unrelated "flock" substring would promote every MAC on a multi-record line.
-    for(size_t i = 0; i + 17 <= len; i++) {
-        uint8_t mac[6];
-        if(parse_mac_colon(line + i, mac)) {
-            out->mac_count++;
-            i += 16;
-        }
-    }
-    bool single = (out->mac_count == 1);
-
+    // ONE pass over the line. The single-MAC attribution rule needs the total MAC
+    // count before any hit can be scored, which used to mean scanning the whole
+    // line twice -- and each scan attempts a 17-byte parse at EVERY byte offset,
+    // on every line the board prints. Instead, collect the candidates as we go
+    // and score them afterwards: mac_count is still exact, and the expensive
+    // walk happens once.
+    //
+    // Only MARAUDER_MAX_HITS candidates are retained (a real line names one or
+    // two); mac_count keeps counting past that so the attribution rule stays
+    // correct, and the surplus is reported via `dropped`.
+    uint8_t cand[MARAUDER_MAX_HITS][6];
+    int cand_n = 0;
     for(size_t i = 0; i + 17 <= len; i++) {
         uint8_t mac[6];
         if(!parse_mac_colon(line + i, mac)) continue;
+        out->mac_count++;
+        if(cand_n < MARAUDER_MAX_HITS) {
+            memcpy(cand[cand_n++], mac, 6);
+        } else {
+            out->dropped++;
+        }
         i += 16;
+    }
+
+    // A line-wide SSID match can only be safely attributed to a specific MAC when
+    // the line names exactly one; otherwise an unrelated "flock" substring would
+    // promote every MAC on a multi-record log line.
+    bool single = (out->mac_count == 1);
+
+    for(int c = 0; c < cand_n; c++) {
+        const uint8_t* mac = cand[c];
 
         // Either surveillance-vendor table; the class is derived from the OUI.
         bool oui = flock_oui_match(mac) || soundthinking_oui_match(mac);
@@ -91,10 +106,6 @@ void marauder_scan_line(const char* line, MarauderScan* out) {
             continue;
         }
 
-        if(out->hit_count >= MARAUDER_MAX_HITS) {
-            out->dropped++;
-            continue;
-        }
         MarauderHit* h = &out->hits[out->hit_count++];
         memcpy(h->mac, mac, 6);
         h->conf = conf;

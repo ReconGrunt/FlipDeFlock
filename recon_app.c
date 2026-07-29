@@ -604,35 +604,31 @@ void recon_app_watchscore_tick(ReconApp* app) {
 
     // (6) A Flipper Zero advertising nearby (BLE name "Flipper ..."), seen this
     // sweep's freshness window. A recon multitool -> WATCHFUL on its own.
-    for(size_t i = 0; i < app->ble_count; i++) {
-        if(app->ble[i].cat == BleCatFlipper &&
-           (now - app->ble[i].last_tick) <= WATCH_BLE_FRESH_MS) {
-            in.flipper_near = true;
-            break;
-        }
-    }
-
     // (7) Opt-in anomaly: an unnamed, unidentified (no mfg id, no recognized
     // category), strong, repeatedly-seen BLE device -- "something is on you and
     // won't identify itself." Off by default; deliberately strict to limit FPs.
-    if(app->settings.anomaly_flag) {
-        for(size_t i = 0; i < app->ble_count; i++) {
-            if(recon_ble_is_anomaly(&app->ble[i], now)) {
-                in.anomaly = true;
-                break;
-            }
+    //
+    // Plus the Guardian HUD's Flipper tally, cached under this same lock so
+    // guardian_view can read its own snapshot instead of re-acquiring the mutex
+    // and re-walking this array twice per frame. Mirrors recon_app_flipper_count.
+    //
+    // All THREE used to walk ble[] separately while holding the mutex, which
+    // blocks the ESP worker and the GUI for the duration. Same results, one pass.
+    // Note flipper_near and flip_n share a predicate: flip_n > 0 IS flipper_near,
+    // so deriving one from the other also removes a chance for them to disagree.
+    uint8_t flip_n = 0;
+    bool check_anomaly = app->settings.anomaly_flag;
+    for(size_t i = 0; i < app->ble_count; i++) {
+        const BleDevice* d = &app->ble[i];
+        if(d->cat == BleCatFlipper && (now - d->last_tick) <= WATCH_BLE_FRESH_MS) {
+            if(flip_n < UINT8_MAX) flip_n++;
+        }
+        if(check_anomaly && !in.anomaly && recon_ble_is_anomaly(d, now)) {
+            in.anomaly = true;
         }
     }
+    in.flipper_near = (flip_n > 0);
 
-    // Cache the Guardian HUD tallies under this same lock so guardian_view can
-    // read them from its own snapshot instead of re-acquiring the mutex (and
-    // re-walking these arrays) twice per frame. Mirrors recon_app_flipper_count /
-    // recon_app_attacks_detected exactly.
-    uint8_t flip_n = 0;
-    for(size_t i = 0; i < app->ble_count; i++) {
-        if(app->ble[i].cat == BleCatFlipper && (now - app->ble[i].last_tick) <= WATCH_BLE_FRESH_MS)
-            flip_n++;
-    }
     uint8_t atk_n = 0;
     for(size_t i = 0; i < app->deauth_count; i++) {
         if(app->deauth[i].count >= WATCH_DEAUTH_FLOOD_MIN) atk_n++;

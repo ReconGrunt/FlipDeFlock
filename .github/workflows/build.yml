@@ -107,3 +107,12 @@ jobs:
 
       - name: Build + run host tests
         run: make -C test
+
+      # The OUI tables are compiled into BOTH the .fap and the ESP sketch, from
+      # two files, with no shared header (an Arduino sketch cannot include the
+      # app's headers). Both carry a "keep in step by hand" comment and nothing
+      # enforced it -- editing one side alone silently desyncs ESP-side scoring
+      # from the Flipper's. Required, not advisory: a drift is a real detection
+      # bug, and it is invisible at runtime.
+      - name: OUI table parity (app vs ESP companion)
+        run: python tools/check_oui_parity.py
