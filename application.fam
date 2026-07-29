@@ -52,6 +52,12 @@ App(
                 "SERIAL_FLASHER_INTERFACE_UART=1",
                 "MD5_ENABLED=1",
                 "SERIAL_FLASHER_WRITE_BLOCK_RETRIES=10",
+                # Match esptool's ERASE_REGION_TIMEOUT_PER_MB (30 s/MB) instead of
+                # the library's 10. A ReksLab Tri-Board erases a 1.45 MB region
+                # slower than the 14.8 s that 10 s/MB allowed, so every flash
+                # failed at esp_loader_flash_start() with a timeout, before a
+                # single byte was written. This only extends how long we wait.
+                "ERASE_FLASH_TIMEOUT_PER_MB=30000",
             ],
             cflags=["-Wno-sign-compare"],
         ),
