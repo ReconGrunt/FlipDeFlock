@@ -83,12 +83,11 @@ void suite_flock_db(void) {
     flock_db_set_extras(NULL);
     CHECK_INT_EQ(flock_ie_fp_match(0xdeadbeef), FlockIeFpNone);
 
-    // --- flock_score contract ----------------------------------------------
+    // NOTE: the combined-ladder assertions that used to sit here tested
+    // flock_score(), which had no production caller. They now live in
+    // test_esp_parser.c against esp_parse_companion_line(), the boundary the
+    // product actually uses. Do not re-add a scorer here to test.
     const uint8_t nomac[6] = {0, 0, 0, 0, 0, 0};
-    CHECK_INT_EQ(flock_score(known, "Flock-A1B2C3", false), FlockConfidenceConfirmed); // ssid wins
-    CHECK_INT_EQ(flock_score(known, NULL, true), FlockConfidenceLikely); // OUI + probe
-    CHECK_INT_EQ(flock_score(known, NULL, false), FlockConfidencePossible); // OUI only
-    CHECK_INT_EQ(flock_score(nomac, NULL, true), FlockConfidenceNone); // nothing matched
 
     // --- SoundThinking: a SEPARATE device class -----------------------------
     // The two tables must stay disjoint. If a prefix ever appeared in both, a
@@ -111,12 +110,10 @@ void suite_flock_db(void) {
     CHECK_INT_EQ(flock_class_from_mac(known), FlockClassAlpr);
     CHECK_INT_EQ(flock_class_from_mac(nomac), FlockClassAlpr);
 
-    // Same ladder as the ALPR side -- and with no known SSID tell for this
-    // hardware, an acoustic sensor tops out at Likely and never reaches
-    // Confirmed on its own behaviour.
-    CHECK_INT_EQ(flock_score(st, NULL, false), FlockConfidencePossible);
-    CHECK_INT_EQ(flock_score(st, NULL, true), FlockConfidenceLikely);
-    CHECK_INT_EQ(flock_score(st, "linksys", true), FlockConfidenceLikely);
+    // An acoustic sensor has no known SSID tell, so it can never reach Confirmed
+    // on its own behaviour. Asserted here at the level this file owns -- the
+    // rung it actually reaches is pinned in test_esp_parser.c.
+    CHECK_INT_EQ(flock_ssid_confidence("linksys"), FlockConfidenceNone);
 
     // A user signature file cannot smuggle in an acoustic prefix: its schema has
     // no class field, so an extra OUI is always read as ALPR.

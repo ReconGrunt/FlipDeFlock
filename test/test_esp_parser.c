@@ -115,6 +115,40 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,a1b2,-40,6,P,3,x"), EspMsgIgnore); // mac too short (<12)
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P"), EspMsgIgnore); // too few fields (n<6)
 
+    // --- combined ladder, at the boundary the product actually uses ----------
+    // These assertions moved here from test_flock_db.c in v0.48, where they
+    // tested flock_score() -- a function with no production caller. Pinning them
+    // to esp_parse_companion_line() is the difference between testing the ladder
+    // and testing a lookalike of it.
+    //
+    // The contract this encodes: the app RE-DERIVES a claimed Confirmed from the
+    // SSID (a companion can be older than the app and over-claim), but it TRUSTS
+    // the companion for every rung below Confirmed, because those depend on
+    // probe behaviour and the silent receiver's OUI -- things the D-line does not
+    // carry and this side genuinely cannot recompute.
+    {
+        // 70:c9:4e is a real entry in flock_ouis[]. Even so, the OUI alone does
+        // not move the rung on this side: whatever the companion scored stands.
+        CHECK_INT_EQ(P("D,70c94e010203,-40,6,B,1,homewifi"), EspMsgFlock);
+        CHECK_INT_EQ(m.u.flock.conf, FlockConfidencePossible); // OUI only
+        CHECK_INT_EQ(P("D,70c94e010203,-40,6,P,2,homewifi"), EspMsgFlock);
+        CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely); // OUI + probe
+        CHECK_INT_EQ(P("D,70c94e010203,-40,6,B,0,homewifi"), EspMsgFlock);
+        CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceNone); // nothing matched
+
+        // A genuine provisioning-AP name survives the cap and reaches Confirmed,
+        // with or without a Flock OUI behind it.
+        CHECK_INT_EQ(P("D,70c94e010203,-40,6,B,3,Flock-A1B2C3"), EspMsgFlock);
+        CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+        CHECK_INT_EQ(P("D,001122334455,-40,6,B,3,Flock-A1B2C3"), EspMsgFlock);
+        CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+
+        // ...and an unknown OUI cannot manufacture a rung the companion did not
+        // claim, which is what keeps an OUI-only hit off the top of the ladder.
+        CHECK_INT_EQ(P("D,001122334455,-40,6,B,1,homewifi"), EspMsgFlock);
+        CHECK_INT_EQ(m.u.flock.conf, FlockConfidencePossible);
+    }
+
     // SSID that literally begins "fp=" must NOT be read as the IE-fingerprint
     // (the scan starts at f[7], after the ssid at f[6]).
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,fp=1234"), EspMsgFlock);

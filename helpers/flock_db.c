@@ -248,25 +248,25 @@ FlockIeFp flock_ie_fp_match(uint32_t fp) {
     return FlockIeFpNone;
 }
 
-FlockConfidence flock_score(const uint8_t* mac, const char* ssid, bool is_probe_req) {
-    FlockConfidence by_ssid = flock_ssid_confidence(ssid);
-    if(by_ssid == FlockConfidenceConfirmed) return FlockConfidenceConfirmed;
-
-    // Either surveillance-vendor table counts. The SSID rules above are
-    // Flock-specific, so in practice an acoustic sensor tops out at "Likely" --
-    // which is right, since no SSID tell for that hardware is known.
-    bool oui = flock_oui_match(mac) || soundthinking_oui_match(mac);
-
-    // OUI + the camera's phone-home probe behaviour is a strong combination.
-    if(oui && is_probe_req) {
-        return FlockConfidenceLikely > by_ssid ? FlockConfidenceLikely : by_ssid;
-    }
-    if(oui) {
-        return FlockConfidencePossible > by_ssid ? FlockConfidencePossible : by_ssid;
-    }
-
-    return by_ssid;
-}
+/*
+ * flock_score() USED TO LIVE HERE and was deleted in v0.48.
+ *
+ * It read like the canonical scorer and had a full test suite, but it had ZERO
+ * production callers -- nothing on the device ever ran it. The shipped
+ * combination logic is parse_flock() in helpers/esp_parser.c (companion backend)
+ * and the inline block in esp_parse_generic() (Marauder backend), and those are
+ * different code. So the tests that "covered scoring" were guarding a function
+ * the product did not use, while the code that WAS used had no such guard.
+ *
+ * That is not hypothetical: it is exactly how v0.46 shipped "Flock-Guest" as
+ * CONFIRMED with every test green. Rather than leave a second, diverging ladder
+ * around to be maintained and mistaken for the real one, the assertions moved to
+ * esp_parse_companion_line() in test/test_esp_parser.c, where they exercise the
+ * boundary the product actually uses.
+ *
+ * Do not reintroduce a standalone scorer here. If you need combination logic,
+ * put it where the caller is, and test it through the wire protocol.
+ */
 
 const char* flock_confidence_str(FlockConfidence confidence) {
     switch(confidence) {
