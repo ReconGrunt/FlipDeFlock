@@ -249,6 +249,15 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.50** — Finishes a v0.49 fix that only landed on one of the three scanner
+screens. **No detection logic changed.** The WiFi Audit and BLE / Tracker lists were
+still swapping the signal bars for raw `-70dB` text on the selected row, above a
+comment describing the very behaviour v0.49 had removed — so the mixed-notation
+problem [#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5) reported outlived
+the release meant to fix it, and v0.49's claim that *every* list was corrected was
+wrong. Both lists now draw bars on every row; the exact dBm is still on each detail
+screen. README screenshots are also refreshed for the v0.49 UI.
+
 **v0.49** — A UI pass over the Flock/ALPR screens, entirely from a field report by
 [@h00die](https://github.com/h00die) on an ESP32-C5 card. **No detection logic
 changed** — this is about reading and acting on a hit. The detail screen now answers

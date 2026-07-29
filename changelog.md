@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.50
+Finishes a v0.49 fix that only landed on one of the three scanner screens. **No
+detection logic changed.**
+
+- **The WiFi Audit and BLE / Tracker lists still fell back to raw `-70dB` text on
+  the selected row.** v0.49 stopped the signal-bar helper forcing black — the
+  reason bars vanished on an inverted row — and updated the Flock list to draw
+  them on every row. These two screens kept their old "selected? print dB
+  instead" branch, above a comment describing the exact behaviour that had just
+  been removed. So the two-notations-for-one-column mismatch
+  [#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5) reported outlived the
+  release meant to fix it, on two screens out of three, and v0.49's own note
+  claiming *every* list was corrected was wrong. Both now draw bars on every row,
+  selected or not. The exact dBm is unchanged and still on each detail screen.
+- README screenshots refreshed for the v0.49 UI.
+
 ## v0.49
 A UI pass over the Flock/ALPR screens, all of it from a field report by
 [@h00die](https://github.com/h00die) running an ESP32-C5 card (issues
