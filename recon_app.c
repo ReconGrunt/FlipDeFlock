@@ -669,6 +669,8 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.gps_baud = 9600;
     app->settings.marauder_cmd = 0; // sniffprobe
     app->settings.gps_enabled = false; // off by default
+    app->settings.gps_source = ReconGpsSourceFlipper; // the wiring the docs describe
+    app->settings.esp_gps_pin = 16; // a common GPS RX on ESP32 carrier boards
     app->settings.sound = true;
     app->settings.alert_mode = ReconAlertVibro; // haptic-first, like the ELEVATED alert
     app->settings.alert_min_conf = AlertConfLikely; // precision over recall stays the default
@@ -685,7 +687,7 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\nalert_mode=%d\nalert_min_conf=%d\nsave_hits=%d\n",
+            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\ngps_source=%d\nesp_gps_pin=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\nalert_mode=%d\nalert_min_conf=%d\nsave_hits=%d\n",
             app->settings.backend,
             app->settings.esp_uart,
             app->settings.gps_uart,
@@ -693,6 +695,8 @@ void recon_settings_save(ReconApp* app) {
             (unsigned long)app->settings.gps_baud,
             app->settings.marauder_cmd,
             app->settings.gps_enabled ? 1 : 0,
+            app->settings.gps_source,
+            app->settings.esp_gps_pin,
             app->settings.sound ? 1 : 0,
             app->settings.flash_fast ? 1 : 0,
             app->settings.log_serials ? 1 : 0,
@@ -725,6 +729,10 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.marauder_cmd = (uint8_t)val;
     else if(strcmp(key, "gps_enabled") == 0)
         app->settings.gps_enabled = (val != 0);
+    else if(strcmp(key, "gps_source") == 0 && val >= 0 && val < ReconGpsSourceCount)
+        app->settings.gps_source = (uint8_t)val; // corrupt value -> keep the default
+    else if(strcmp(key, "esp_gps_pin") == 0 && val > 1 && val != 3 && val < 48)
+        app->settings.esp_gps_pin = (uint8_t)val; // same range the companion accepts
     else if(strcmp(key, "sound") == 0)
         app->settings.sound = (val != 0);
     else if(strcmp(key, "flash_fast") == 0)

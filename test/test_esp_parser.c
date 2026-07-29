@@ -319,6 +319,32 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("LOC,-42"), EspMsgLocate);
     CHECK_INT_EQ(m.u.locate.rssi, -42);
 
+    // --- G: NMEA relayed from a GPS on the ESP board (issue #5) -------------
+    // The payload is handed through VERBATIM for gps_parser.c to decode, so the
+    // only contract here is "everything from the '$' onward, unmodified".
+    // Commas inside the sentence must NOT be treated as protocol field
+    // separators -- that is the whole reason this is pass-through and not a
+    // parsed record.
+    CHECK_INT_EQ(
+        P("G,$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,,*6A"), EspMsgGpsNmea);
+    CHECK_STR_EQ(m.u.gps.nmea, "$GPRMC,123519,A,4807.038,N,01131.000,E,022.4,084.4,230394,,*6A");
+    CHECK_INT_EQ(
+        P("G,$GPGGA,092750.000,5321.6802,N,00630.3372,W,1,8,1.03,61.7,M,55.2,M,,*76"),
+        EspMsgGpsNmea);
+    CHECK_STR_EQ(
+        m.u.gps.nmea, "$GPGGA,092750.000,5321.6802,N,00630.3372,W,1,8,1.03,61.7,M,55.2,M,,*76");
+    // Talker prefix is not our business either (GN/GL/GA multi-constellation).
+    CHECK_INT_EQ(P("G,$GNRMC,,V,,,,,,,,,,N,V*37"), EspMsgGpsNmea);
+    CHECK_STR_EQ(m.u.gps.nmea, "$GNRMC,,V,,,,,,,,,,N,V*37");
+
+    // Rejected: no payload, or a payload that cannot be a sentence. Forwarding
+    // these would only push the rejection one layer deeper into the NMEA parser.
+    CHECK_INT_EQ(P("G,"), EspMsgIgnore); // empty
+    CHECK_INT_EQ(P("G,GPRMC,1,2"), EspMsgIgnore); // no leading '$'
+    CHECK_INT_EQ(P("G"), EspMsgIgnore); // bare prefix, no comma
+    // Must not shadow a real Flock detection line or any other prefix.
+    CHECK_INT_EQ(P("GPS,1,2"), EspMsgIgnore);
+
     // --- banners / batch markers / junk ------------------------------------
     CHECK_INT_EQ(P("FLOCKCO,1"), EspMsgBanner);
     CHECK_INT_EQ(m.u.banner.version, 1); // wire-protocol version parsed from the banner

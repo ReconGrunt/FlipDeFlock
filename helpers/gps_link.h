@@ -33,3 +33,19 @@ void gps_link_stop(GpsLink* gps);
  * other link.
  */
 bool gps_link_port_busy(GpsLink* gps);
+
+/**
+ * Decode one NMEA sentence and publish the fix into the app, under its mutex.
+ *
+ * Shared by BOTH gps sources -- the GPS wired to the Flipper's own UART, and the
+ * one relayed by the companion as `G,<nmea>` for boards that wire their GPS to
+ * the ESP32 instead (issue #5). Deliberately one function: the lock-loss rule
+ * (an explicit RMC 'V' / GGA fixq 0 clears the fix; a garbled-but-"valid"
+ * sentence is ignored and keeps the last one) is subtle enough that two copies
+ * would drift, and a stale fix silently geotags detections with the wrong place.
+ *
+ * @param app   ReconApp* (void* to avoid a header cycle).
+ * @param line  a single sentence starting at '$'. Tokenized IN PLACE, so it must
+ *              be mutable and is not usable afterwards.
+ */
+void gps_apply_nmea(void* app, char* line);

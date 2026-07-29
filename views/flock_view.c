@@ -124,8 +124,12 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // Either way the old UI showed a hollow "searching" badge forever. A user on
     // issue #5 pointed GPS at pins 13/14 (the ESP's own USART), got no feedback
     // at all, and reasonably concluded GPS was broken.
-    bool gps_busy = (app->settings.gps_uart == app->settings.esp_uart) ||
-                    gps_link_port_busy(app->gps);
+    // Only the Flipper-UART source can hit either of these: the companion source
+    // has no second port to clash over or fail to acquire, so with it selected a
+    // missing fix genuinely is "searching" (or the companion isn't relaying).
+    bool gps_busy =
+        app->settings.gps_source == ReconGpsSourceFlipper &&
+        ((app->settings.gps_uart == app->settings.esp_uart) || gps_link_port_busy(app->gps));
 
     // Most-attacked BSSID + channel for the deauth header attribution.
     bool have_attr = false;

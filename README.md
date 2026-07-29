@@ -67,6 +67,12 @@ Both run at once. Ports and bauds are configurable in **Settings** for boards wi
 nonstandard pinouts. Turn **GPS** on in Settings to geotag detections. Settings
 persist.
 
+**GPS on the ESP board instead?** Some carrier boards wire their GPS module to the
+ESP32 rather than to the Flipper header, so the Flipper cannot see it on any pin. Set
+**GPS From** to `ESP32` and **ESP GPS Pin** to the ESP GPIO the module's TX is on; the
+companion firmware then relays each NMEA sentence over the link it already has. Needs
+companion firmware v0.52+. Default is `Flipper`, i.e. the pin table above.
+
 ### Board Mode
 
 Set **Board Mode** in Settings to match your ESP32 firmware:

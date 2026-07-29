@@ -40,10 +40,18 @@ move the GPS to the other port (LPUART, pins 15/16 by default) and leave the ESP
 USART (13/14).
 
 If your GPS is a module **on the ESP32 board itself** rather than wired to the Flipper's
-header, no pin setting will help: the Flipper cannot see it at all, because the NMEA
-never reaches the Flipper's GPIO. That needs the companion firmware to relay the fix
-over the existing ESP link, which is not implemented yet — track it on
-[#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5).
+header, no pin setting will help: the Flipper cannot see it at all, because the NMEA never
+reaches the Flipper's GPIO. Use the companion relay instead — set **Settings → GPS From**
+to `ESP32` and **ESP GPS Pin** to the pin your board wires the GPS TX to. The companion
+then forwards each sentence over the link it already has.
+
+Notes on the relay:
+- It needs **companion firmware v0.52 or newer**. With older firmware nothing is relayed
+  and the badge just stays on `GPS` (searching).
+- The pin is the ESP GPIO that the GPS module's **TX** connects to. There is no standard,
+  so check your board's schematic or silkscreen. To confirm from a serial terminal, send
+  `gps` to the companion and it replies `GPSCFG,<on>,<pin>,<baud>`.
+- **GPS Baud** applies to both sources; most modules are 9600.
 
 **Flock/ALPR Detect finds nothing at all.** Check in order:
 

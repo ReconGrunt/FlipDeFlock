@@ -35,8 +35,7 @@ struct GpsLink {
 // nmea_parse_line) lives in gps_parser.{c,h} so it is host-testable; this file is
 // the thin adapter that applies a parsed NmeaFix to ReconApp under the lock.
 
-static void gps_publish(GpsLink* gps, float lat, float lon, int sats, bool valid) {
-    ReconApp* app = gps->app;
+static void gps_publish(ReconApp* app, float lat, float lon, int sats, bool valid) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     if(valid && gps_coord_sane(lat, lon)) {
         app->gps_lat = lat;
@@ -53,15 +52,22 @@ static void gps_publish(GpsLink* gps, float lat, float lon, int sats, bool valid
     furi_mutex_release(app->mutex);
 }
 
-static void gps_parse_line(GpsLink* gps, char* line) {
+// Public: the single decode+publish path, shared with the companion relay.
+void gps_apply_nmea(void* _app, char* line) {
+    ReconApp* app = _app;
+    if(!app || !line) return;
     NmeaFix fix;
     if(!nmea_parse_line(line, &fix)) return; // unknown / malformed / bad checksum
-    gps_publish(gps, fix.lat, fix.lon, fix.sats, fix.valid);
+    gps_publish(app, fix.lat, fix.lon, fix.sats, fix.valid);
     if(fix.has_course) {
-        furi_mutex_acquire(gps->app->mutex, FuriWaitForever);
-        gps->app->gps_course = fix.course;
-        furi_mutex_release(gps->app->mutex);
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        app->gps_course = fix.course;
+        furi_mutex_release(app->mutex);
     }
+}
+
+static void gps_parse_line(GpsLink* gps, char* line) {
+    gps_apply_nmea(gps->app, line);
 }
 
 static void gps_rx_isr(FuriHalSerialHandle* handle, FuriHalSerialRxEvent event, void* context) {
