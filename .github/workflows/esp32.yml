@@ -56,17 +56,34 @@ jobs:
             --output-dir build_emitter \
             tools/flock_emitter
 
+      # Single image flashable whole at 0x0 -- what FlipDeFlock's in-app flasher
+      # writes.
+      #
+      # Offsets are explicit here rather than read from the core's flash_args
+      # (as the C5 step does) because THIS job pins core 2.0.17, and flash_args
+      # is a 3.x-only output -- verified absent from 2.0.x platform.txt. These
+      # values are the classic-ESP32 layout and have shipped since v0.44.
       - name: Merge into a single flashable image
         run: |
           python -m pip install --quiet esptool
           BOOT0=$(find "$HOME/.arduino15" -name boot_app0.bin | head -n1)
-          # Full image starting at 0x0 -- this is what FlipDeFlock's in-app
-          # flasher writes (it always flashes a single file at offset 0x0).
           python -m esptool --chip esp32 merge_bin -o build_esp/flipdeflock_companion_esp32wroom.bin \
             0x1000  build_esp/flock_companion.ino.bootloader.bin \
             0x8000  build_esp/flock_companion.ino.partitions.bin \
             0xe000  "$BOOT0" \
             0x10000 build_esp/flock_companion.ino.bin
+          # esptool's merge_bin spans lowest offset -> end of last chunk without
+          # --pad-to-size, so this image is already unpadded. Assert it, so a
+          # future esptool default change cannot silently reintroduce 4 MB of
+          # 0xFF that the Flipper would dutifully write over UART.
+          python - <<'PY'
+          import sys, pathlib
+          p = pathlib.Path("build_esp/flipdeflock_companion_esp32wroom.bin")
+          d = p.read_bytes()
+          assert d[0x1000] == 0xE9, f"bootloader magic missing at 0x1000 (got {d[0x1000]:#04x})"
+          assert len(d) < 3_000_000, f"image looks padded to flash size: {len(d):,} bytes"
+          print(f"WROOM image OK: {len(d):,} bytes, bootloader magic at 0x1000")
+          PY
 
       - name: Upload firmware binaries
         uses: actions/upload-artifact@v4
@@ -132,18 +149,24 @@ jobs:
             --fqbn esp32:esp32:esp32:PartitionScheme=huge_app \
             tools/flock_emitter
 
-      # ESP32-C5: the dual-band target. NOTE the bootloader offset differs
-      # (0x2000, not the classic 0x1000) -- the core's own generated
-      # *.merged.bin already uses the right per-chip offsets, which is why we
-      # publish that rather than hand-merging with fixed offsets.
+      # ESP32-C5: the dual-band target. The bootloader offset differs (0x2000,
+      # not the classic 0x1000), so the merge is driven by the core's flash_args
+      # rather than hardcoded numbers -- a wrong offset does not fail loudly, it
+      # boot-loops the board with `invalid header`.
+      #
+      # Deliberately NOT the core's own *.merged.bin: that is padded out to the
+      # full 4 MB flash size for ~1.4 MB of firmware, and the Flipper's flasher
+      # writes every byte of it (no skip-blank), so the padding is pure UART time
+      # for anyone flashing from the Flipper.
       - name: Compile ESP32-C5 (dual-band, UNVERIFIED on hardware)
         run: |
           arduino-cli compile \
             --fqbn esp32:esp32:esp32c5:PartitionScheme=huge_app \
             --output-dir build_c5 \
             esp32_companion/flock_companion
-          cp build_c5/flock_companion.ino.merged.bin \
-             build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+          python -m pip install --quiet esptool
+          python tools/merge_esp_image.py \
+            build_c5 esp32c5 build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
 
       - name: Upload C5 firmware (experimental)
         uses: actions/upload-artifact@v4
