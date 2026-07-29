@@ -974,6 +974,20 @@ static bool recon_back_event_callback(void* context) {
 
 static void recon_tick_event_callback(void* context) {
     ReconApp* app = context;
+    // Announce a pending detection alert here, ONCE, for every scene.
+    //
+    // This used to be each scanning scene's job, and the Locator forgot: Lock In
+    // (issue #6) keeps the ESP link live on the Locator screen, but that scene
+    // was the only scanning one with no recon_app_alert_tick() call, so a camera
+    // found while homing in set alert_pending and nothing ever consumed it. It
+    // was reported as "alerts don't work" by the same person who asked for Lock
+    // In (issue #5) -- the two features shipped in the same release and one
+    // silently disabled the other.
+    //
+    // Hoisted to the dispatcher tick rather than adding a sixth per-scene call,
+    // because "remember to call this in every new scene" is what failed. The
+    // GUI thread owns delivery either way; the ESP worker only sets the flag.
+    recon_app_alert_tick(app);
     scene_manager_handle_tick_event(app->scene_manager);
 }
 
