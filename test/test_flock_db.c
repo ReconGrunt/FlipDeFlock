@@ -138,4 +138,78 @@ void suite_flock_db(void) {
     CHECK_STR_EQ(flock_confidence_str(FlockConfidenceLikely), "Likely");
     CHECK_STR_EQ(flock_confidence_str(FlockConfidencePossible), "Possible");
     CHECK_STR_EQ(flock_confidence_str(FlockConfidenceNone), "-");
+
+    // --- flock_method_of: WHY a detection is on the list (issue #5) ---------
+    // 3c:91:80 is a real table prefix; aa:bb:cc is in no table.
+    const uint8_t oui_mac[6] = {0x3c, 0x91, 0x80, 0x11, 0x22, 0x33};
+    const uint8_t off_mac[6] = {0xaa, 0xbb, 0xcc, 0x11, 0x22, 0x33};
+    const uint8_t st_mac[6] = {0xd4, 0x11, 0xd6, 0x11, 0x22, 0x33};
+
+    // Strongest re-derivable indicator wins. An SSID pattern outranks the OUI
+    // even when both match.
+    CHECK_INT_EQ(flock_method_of(oui_mac, "flock-a1b2c3", 'B', 0), FlockMethodSsid);
+    CHECK_INT_EQ(flock_method_of(off_mac, "flock-a1b2c3", 'B', 0), FlockMethodSsid);
+    CHECK_INT_EQ(flock_method_of(off_mac, "myflock", 'B', 0), FlockMethodSsid); // "Likely" needle
+
+    // This is h00die's actual screenshot (issue #5): a 3c:91:80 beacon whose SSID
+    // is just its own MAC. Nothing about that name is a Flock pattern, so the OUI
+    // is the ONLY thing that put it on the list -- which is exactly what the user
+    // could not tell from a bare "Possible".
+    CHECK_INT_EQ(flock_method_of(oui_mac, "3C9180112233", 'B', 0), FlockMethodOui);
+    CHECK_INT_EQ(flock_method_of(oui_mac, "", 'B', 0), FlockMethodOui);
+    CHECK_INT_EQ(flock_method_of(oui_mac, NULL, 'P', 0), FlockMethodOui);
+
+    // An acoustic prefix is an OUI match too -- it is simply the other device
+    // class. Reporting it as unclassified would hide the one indicator we have.
+    CHECK_INT_EQ(flock_method_of(st_mac, "", 'B', 0), FlockMethodOui);
+
+    // A BLE sighting is classified on the companion (mfg 0x09C8 / Raven GATT)
+    // from advert bytes that never reach this side; name the source, don't guess.
+    CHECK_INT_EQ(flock_method_of(off_mac, "", 'L', 0), FlockMethodBle);
+    // ...but a re-derivable indicator still outranks it.
+    CHECK_INT_EQ(flock_method_of(oui_mac, "", 'L', 0), FlockMethodOui);
+    CHECK_INT_EQ(flock_method_of(off_mac, "flock-a1b2c3", 'L', 0), FlockMethodSsid);
+
+    // Nothing we can re-derive: the companion scored probe behaviour we never
+    // see. "Unknown" here is the honest answer, not a failure.
+    CHECK_INT_EQ(flock_method_of(off_mac, "linksys", 'P', 0), FlockMethodUnknown);
+    CHECK_INT_EQ(flock_method_of(NULL, NULL, 'O', 0), FlockMethodUnknown);
+
+    // The built-in IE-fp table ships EMPTY, so fp matching is inert by design and
+    // a non-zero fp alone must NOT be reported as a fingerprint match.
+    CHECK_INT_EQ(flock_ie_fp_match(0xdeadbeefu), FlockIeFpNone);
+    CHECK_INT_EQ(flock_method_of(off_mac, "linksys", 'F', 0xdeadbeefu), FlockMethodUnknown);
+
+    // Registering that fp as a USER signature makes it matchable, and it then
+    // outranks the OUI (but not an SSID pattern -- see the ladder above).
+    static const uint32_t method_fps[] = {0xdeadbeefu};
+    FlockDbExtras ex_method_fp = {.ie_fps = method_fps, .ie_fp_count = 1};
+    flock_db_set_extras(&ex_method_fp);
+    CHECK_INT_EQ(flock_method_of(off_mac, "linksys", 'F', 0xdeadbeefu), FlockMethodIeFp);
+    CHECK_INT_EQ(flock_method_of(oui_mac, "", 'F', 0xdeadbeefu), FlockMethodIeFp);
+    CHECK_INT_EQ(flock_method_of(oui_mac, "flock-a1b2c3", 'F', 0xdeadbeefu), FlockMethodSsid);
+    // fp == 0 means "no fingerprint" and must never match, even with extras live.
+    CHECK_INT_EQ(flock_method_of(oui_mac, "", 'F', 0), FlockMethodOui);
+    flock_db_set_extras(NULL);
+
+    // --- method label strings ----------------------------------------------
+    CHECK_STR_EQ(flock_method_str(FlockMethodSsid), "SSID");
+    CHECK_STR_EQ(flock_method_str(FlockMethodIeFp), "IE fp");
+    CHECK_STR_EQ(flock_method_str(FlockMethodOui), "OUI");
+    CHECK_STR_EQ(flock_method_str(FlockMethodBle), "BLE mfg ID");
+    // Not "none": the companion DID score it, on evidence we cannot re-derive.
+    CHECK_STR_EQ(flock_method_str(FlockMethodUnknown), "ESP probe rule");
+
+    // WIDTH BUDGET. The detail screen composes "Method: <label> + <frame>" onto
+    // one 128 px row that also carries a scrollbar -- about 26 characters. The
+    // longest frame phrase is "probe resp" (10), and "Method: " + " + " costs 11,
+    // so a label over 5 chars can only be used ALONE (BLE mfg ID / ESP probe rule
+    // are, in flock_detail_view.c). This is not cosmetic: the first draft used
+    // "OUI prefix"/"IE fingerprint" and the composed line ran off the screen edge
+    // on real hardware, which no host test could see.
+    CHECK(strlen(flock_method_str(FlockMethodSsid)) <= 5);
+    CHECK(strlen(flock_method_str(FlockMethodIeFp)) <= 5);
+    CHECK(strlen(flock_method_str(FlockMethodOui)) <= 5);
+    // 8 + 5 + 3 + 10 = 26, the widest line that fits.
+    CHECK(strlen("Method: ") + 5 + strlen(" + ") + strlen("probe resp") <= 26);
 }

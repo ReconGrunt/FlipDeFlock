@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 //
-// Tests for the shared report field emitters (R8): MAC + coordinate formatting.
+// Tests for the shared report field emitters (R8): MAC + coordinate formatting,
+// plus the RSSI->bar-level scale every screen that draws signal bars goes through.
 #include "report_fmt.h"
 #include "test.h"
 
@@ -29,4 +30,28 @@ void suite_report_fmt(void) {
     CHECK_STR_EQ(out, "48.500000");
     fmt_coord(out, sizeof(out), -11.25f, "");
     CHECK_STR_EQ(out, "-11.250000");
+
+    // --- fmt_signal_level ---------------------------------------------------
+    // 0 dBm is the "no reading" sentinel, not a colossally strong signal: a real
+    // RSSI is always negative, so 0 means the field was never populated.
+    CHECK_INT_EQ(fmt_signal_level(0), -1);
+
+    // Boundaries, each tested on both sides so a shifted threshold fails loudly.
+    CHECK_INT_EQ(fmt_signal_level(-50), 4);
+    CHECK_INT_EQ(fmt_signal_level(-51), 3);
+    CHECK_INT_EQ(fmt_signal_level(-62), 3);
+    CHECK_INT_EQ(fmt_signal_level(-63), 2);
+    CHECK_INT_EQ(fmt_signal_level(-74), 2);
+    CHECK_INT_EQ(fmt_signal_level(-75), 1);
+    CHECK_INT_EQ(fmt_signal_level(-86), 1);
+    CHECK_INT_EQ(fmt_signal_level(-87), 1);
+
+    // Strong readings saturate at 4 rather than overflowing the bar count.
+    CHECK_INT_EQ(fmt_signal_level(-1), 4);
+    CHECK_INT_EQ(fmt_signal_level(-30), 4);
+
+    // A very weak but PRESENT signal never collapses to 0 bars -- an empty bar
+    // and "nothing detected" must not look the same on screen.
+    CHECK_INT_EQ(fmt_signal_level(-100), 1);
+    CHECK_INT_EQ(fmt_signal_level(-128), 1);
 }
