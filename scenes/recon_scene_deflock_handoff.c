@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
 #include "../recon_app_i.h"
+#include "../helpers/plugin_host.h"
+#include "../plugins/qr_plugin_api.h"
 
 #include <math.h>
 #include <stdlib.h> // malloc/free for the scene-scoped snapshot
@@ -77,6 +79,10 @@ static void recon_scene_deflock_handoff_show(ReconApp* app) {
         app->deflock_qr_view, url, g_selected, g_cam_count, coords, conf, tags);
 }
 
+/** QR encoder plugin, mapped in only while this screen is open. NULL when it
+ *  could not be loaded -- the view then shows its "QR n/a" fallback. */
+static PluginHost* g_qr_plugin = NULL;
+
 void recon_scene_deflock_handoff_on_enter(void* context) {
     ReconApp* app = context;
 
@@ -104,6 +110,13 @@ void recon_scene_deflock_handoff_on_enter(void* context) {
     }
     furi_mutex_release(app->mutex);
 
+    // Map the encoder in for the lifetime of this screen. A failure here is
+    // not fatal: set_api(NULL) makes the view draw the text fallback, and the
+    // coordinates are still readable and hand-enterable at deflock.org/report.
+    const QrPluginApi* qr_api = NULL;
+    g_qr_plugin = plugin_host_load(QR_PLUGIN_APP_ID, QR_PLUGIN_API_VERSION, (const void**)&qr_api);
+    deflock_qr_view_set_api(app->deflock_qr_view, qr_api);
+
     deflock_qr_view_set_page_callback(
         app->deflock_qr_view, recon_scene_deflock_handoff_page_cb, app);
 
@@ -130,7 +143,13 @@ bool recon_scene_deflock_handoff_on_event(void* context, SceneManagerEvent event
 }
 
 void recon_scene_deflock_handoff_on_exit(void* context) {
-    UNUSED(context);
+    ReconApp* app = context;
+    // Drop the borrowed pointer BEFORE unmapping the plugin it points into, so
+    // a later redraw of a stale model can never call through freed code.
+    deflock_qr_view_set_api(app->deflock_qr_view, NULL);
+    plugin_host_free(g_qr_plugin);
+    g_qr_plugin = NULL;
+
     free(g_cams);
     g_cams = NULL;
     g_cam_count = 0;

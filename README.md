@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" width="560" alt="FlipDeFlock">
+  <img src="media/logo.png" width="560" alt="FlipDeFlock">
 </p>
 
 <p align="center"><em>"Snoop onto them as they snoop onto us."</em></p>
@@ -154,15 +154,15 @@ firmware; in Marauder mode they explain what's missing.
 ## Screenshots
 
 <p align="center">
-  <img src="assets/screenshots/net-guardian.png" width="420" alt="Net Guardian">
+  <img src="media/screenshots/net-guardian.png" width="420" alt="Net Guardian">
   <br><em>Net Guardian — the always-on watch face</em>
 </p>
 
 | | |
 |:--:|:--:|
-| <img src="assets/screenshots/alpr.png" width="330" alt="Flock / ALPR Detect"><br>**Flock / ALPR Detect** | <img src="assets/screenshots/menu.png" width="330" alt="Main menu"><br>**Main menu** |
-| <img src="assets/screenshots/flock-detail.png" width="330" alt="Detection detail"><br>**Why it was flagged** | <img src="assets/screenshots/ble-scan-results.png" width="330" alt="BLE / Tracker results"><br>**BLE / Tracker results** |
-| <img src="assets/screenshots/wifi-audit.png" width="330" alt="WiFi Audit"><br>**WiFi Audit** | <img src="assets/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** |
+| <img src="media/screenshots/alpr.png" width="330" alt="Flock / ALPR Detect"><br>**Flock / ALPR Detect** | <img src="media/screenshots/menu.png" width="330" alt="Main menu"><br>**Main menu** |
+| <img src="media/screenshots/flock-detail.png" width="330" alt="Detection detail"><br>**Why it was flagged** | <img src="media/screenshots/ble-scan-results.png" width="330" alt="BLE / Tracker results"><br>**BLE / Tracker results** |
+| <img src="media/screenshots/wifi-audit.png" width="330" alt="WiFi Audit"><br>**WiFi Audit** | <img src="media/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** |
 
 <sub>Captured on a Flipper Zero running v0.49. The devices shown are fabricated
 demo records — no real network, tracker or location appears in any screenshot.</sub>
