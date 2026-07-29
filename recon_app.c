@@ -271,6 +271,14 @@ void recon_app_ble_add(
     if(e) {
         e->count++;
         e->rssi = rssi;
+        // Freshness is a SIGHTING fact, not a location fact: this must advance on
+        // every sighting, with or without a GPS fix. It used to live inside the
+        // `if(app->gps_valid)` block below, so with GPS off (the default) it never
+        // advanced past entry creation and every last_tick consumer silently
+        // expired ~90 s into a session -- the WATCHSCORE flipper_near signal, the
+        // Guardian "Flip N" counter, the anomaly freshness window, and the BLE
+        // detail "FOLLOWING ... over %lus" readout (which always printed 0s).
+        e->last_tick = now;
         if(cat) e->cat = cat;
         e->company = company;
         if(name && name[0] && e->name[0] == '\0') {
@@ -285,7 +293,6 @@ void recon_app_ble_add(
         if(app->gps_valid) {
             e->last_lat = app->gps_lat;
             e->last_lon = app->gps_lon;
-            e->last_tick = now;
             // Fold this fix into the waypoint/span track (pure rule; the first fix
             // may arrive after a no-GPS creation, so the track seeds itself lazily).
             BleTrack track = {
@@ -320,8 +327,22 @@ void recon_app_ble_add(
         // Always ALPR-class: every BLE tell we match (0x09C8 battery, Penguin
         // naming, Raven GATT) belongs to the Flock ecosystem. SoundThinking is a
         // WiFi-side OUI match only -- no BLE signature for it is known.
+        //
+        // Re-derive the rung rather than asserting Confirmed. The companion also
+        // sets cat=1 on a bare OUI-prefix match against SHARED silicon-vendor
+        // ranges, so a hardcoded Confirmed here announced ordinary ESP32 hardware
+        // as a confirmed camera. See flock_ble_confidence().
         recon_app_report_flock(
-            app, addr, name, rssi, 0, 'L', FlockConfidenceConfirmed, 0, FlockClassAlpr, false);
+            app,
+            addr,
+            name,
+            rssi,
+            0,
+            'L',
+            flock_ble_confidence(company, name, raven_gatt),
+            0,
+            FlockClassAlpr,
+            false);
     }
 }
 
