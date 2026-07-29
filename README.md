@@ -241,6 +241,17 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.52** — **GPS off the companion board**, plus two bugs that made working features
+look broken. Settings gains a **GPS source** choice (`Flipper` / `Companion`) and the
+ESP pin the module's TX lands on — on boards that wire GPS to the ESP32 there was no
+way to use it before, since the Flipper's UART pins simply are not connected to it
+(needs companion firmware v0.52+). **Fixed:** detection alerts never fired while the
+**Locator** was open, the screen you are most likely to be watching during a hunt; the
+companion dropped every GPS sentence that arrived during a BLE scan, so wardriving lost
+fixes; flashing the companion failed before writing a byte on slower flash chips; and a
+successful flash ended with a `COMMAND_FAILED` line that contradicted the `Verified OK.`
+above it.
+
 **v0.51** — **A quarter of the memory footprint, gone.** Users on heavier firmware were
 being refused at launch with *"Not enough RAM to run the app"*
 ([#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5)); the app image is now
