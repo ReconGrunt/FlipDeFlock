@@ -33,6 +33,18 @@ explicit notice saying so. Either flash the companion firmware (**ESP32 Firmware
 a .bin**, no computer needed) or use the screens Marauder mode supports: Flock/ALPR
 Detect, Flock Map, and Reports.
 
+**GPS never gets a fix / the badge shows `GPS!`.** `GPS!` means the app knows a fix is
+impossible with the current settings, rather than that it is still searching. Almost
+always **GPS Port is set to the same UART as the ESP** — one UART cannot serve both, so
+move the GPS to the other port (LPUART, pins 15/16 by default) and leave the ESP on
+USART (13/14).
+
+If your GPS is a module **on the ESP32 board itself** rather than wired to the Flipper's
+header, no pin setting will help: the Flipper cannot see it at all, because the NMEA
+never reaches the Flipper's GPIO. That needs the companion firmware to relay the fix
+over the existing ESP link, which is not implemented yet — track it on
+[#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5).
+
 **Flock/ALPR Detect finds nothing at all.** Check in order:
 
 1. Board Mode matches your actual ESP32 firmware (Settings → Board Mode).

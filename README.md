@@ -198,6 +198,7 @@ exact dB. `-33dB` closer to 0 means physically closer.
 - **ch / frames / hits** — channel · 802.11 frames captured · Flock detections, counted this session (reset each time you open the screen)
 - **row tag** — `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only · `*` marked
 - **`ST` after the tag** — a SoundThinking (ShotSpotter) acoustic sensor, not an ALPR camera. Untagged rows are cameras; the detail screen names the class in full
+- **GPS badge** — filled `GPS 9` = locked with 9 satellites · hollow `GPS` = on and searching · filled `GPS!` = on but it can never get a fix, so go fix the setting. The usual cause of `GPS!` is **GPS Port set to the same UART as the ESP** — they cannot share one port, so put the GPS on the other one (LPUART / pins 15-16 by default)
 - Marauder mode shows `rx <n>  hits <n>` instead (serial heartbeat + detection count)
 
 **BLE / Tracker Scan** — header `BLE 33  trk 9  follow 0`

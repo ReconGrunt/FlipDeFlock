@@ -27,6 +27,8 @@ struct GpsLink {
     size_t line_len;
     /** Bytes the ISR could not buffer. ISR-written, worker-read: single writer. */
     volatile uint32_t rx_dropped;
+    /** Last start() could not take the port -- see gps_link_port_busy(). */
+    bool port_busy;
 };
 
 // Pure NMEA parsing (nmea_to_decimal / gps_coord_sane / nmea_tokenize /
@@ -123,6 +125,7 @@ void gps_link_start(GpsLink* gps) {
     if(gps->running) return;
     ReconApp* app = gps->app;
 
+    gps->port_busy = false;
     gps->line_len = 0;
     gps->rx_stream = furi_stream_buffer_alloc(GPS_RX_BUF, 1);
     gps->thread = furi_thread_alloc_ex("ReconGpsWorker", 1536, gps_worker, gps);
@@ -130,7 +133,9 @@ void gps_link_start(GpsLink* gps) {
 
     gps->serial = furi_hal_serial_control_acquire((FuriHalSerialId)app->settings.gps_uart);
     if(!gps->serial) {
-        // Port busy (e.g. same as ESP); abort cleanly.
+        // Port busy -- nearly always GPS Port set to the ESP's own UART. Latch it
+        // so the UI can SAY so instead of showing "searching" forever (issue #5).
+        gps->port_busy = true;
         furi_thread_flags_set(furi_thread_get_id(gps->thread), GpsEvtStop);
         furi_thread_join(gps->thread);
         furi_thread_free(gps->thread);
@@ -164,4 +169,8 @@ void gps_link_stop(GpsLink* gps) {
         gps->rx_stream = NULL;
     }
     gps->running = false;
+}
+
+bool gps_link_port_busy(GpsLink* gps) {
+    return gps && gps->port_busy;
 }

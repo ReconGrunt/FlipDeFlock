@@ -8,6 +8,8 @@
  * publishes the latest fix into the owning ReconApp under its mutex.
  */
 
+#include <stdbool.h>
+
 typedef struct GpsLink GpsLink;
 
 /** @param app  ReconApp* (passed as void* to avoid a header cycle). */
@@ -18,3 +20,16 @@ void gps_link_free(GpsLink* gps);
 void gps_link_start(GpsLink* gps);
 /** Stop the worker and release the serial port. */
 void gps_link_stop(GpsLink* gps);
+
+/**
+ * True when the last gps_link_start() could not acquire the configured port --
+ * almost always because GPS Port is set to the same UART as the ESP.
+ *
+ * This used to fail silently: the acquire returned NULL, the worker was torn
+ * down, and the UI just kept showing an unlit "searching" badge forever, with no
+ * way to tell a cold start from an impossible configuration. Reported on issue
+ * #5 by someone who set GPS Port to the ESP's own pins and got no feedback at
+ * all. Mirrors EspLinkPortBusy, which exists for exactly this reason on the
+ * other link.
+ */
+bool gps_link_port_busy(GpsLink* gps);
