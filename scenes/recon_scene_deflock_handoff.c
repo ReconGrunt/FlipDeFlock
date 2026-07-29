@@ -80,6 +80,14 @@ static void recon_scene_deflock_handoff_show(ReconApp* app) {
 void recon_scene_deflock_handoff_on_enter(void* context) {
     ReconApp* app = context;
 
+    // Allocate the snapshot list. v0.48 (d0a12a3) moved this array off BSS to a
+    // heap pointer in all three scenes that carried one, but only added the
+    // allocation to the other two -- so g_cams was NULL on every entry here and
+    // the `g_cams &&` guard below silently collected nothing. Share to DeFlock
+    // reported "No marked cameras" no matter what was marked, from v0.48 to
+    // v0.50. Same shape as recon_scene_guardian_sus.c and recon_scene_locator.c.
+    if(!g_cams) g_cams = malloc(sizeof(HandoffCam) * HANDOFF_MAX);
+
     // Snapshot marked + geotagged cameras under the mutex into the local list.
     g_cam_count = 0;
     g_selected = 0;
