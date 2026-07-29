@@ -234,6 +234,18 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.51** — **A quarter of the memory footprint, gone.** Users on heavier firmware were
+being refused at launch with *"Not enough RAM to run the app"*
+([#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5)); the app image is now
+**86,810 → 65,054 bytes (−25.1%)**. **Breaking: the NFC / RFID Audit and WiFi Audit
+screens are removed** — this app detects surveillance hardware, and those were 13.4 KB
+of an image that was failing to load. **Net Guardian is unaffected**: it still runs the
+Wi-Fi sweep and still flags evil-twin APs, because its score only reaches ELEVATED when
+two independent radios agree. The QR encoder now loads on demand from a plugin bundled
+inside the `.fap` (still a single-file install). Cheaper trig and tighter detection
+structs make up the rest. **Fixed:** *Share to DeFlock* had reported "No marked cameras"
+no matter what was marked, since v0.48.
+
 **v0.50** — Finishes a v0.49 fix that only landed on one of the three scanner
 screens. **No detection logic changed.** The WiFi Audit and BLE / Tracker lists were
 still swapping the signal bars for raw `-70dB` text on the selected row, above a
