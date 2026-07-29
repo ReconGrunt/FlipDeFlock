@@ -75,9 +75,11 @@
 #include <BLEAdvertisedDevice.h>
 
 // ---- Flock-associated OUI prefixes (31) ----------------------------------
-// MUST stay byte-identical to flock_ouis[] in helpers/flock_db.c -- there is no
-// shared header and no CI parity check, so editing one side alone silently
-// desyncs ESP-side `conf` scoring from the Flipper's. See that file for the
+// MUST stay byte-identical to flock_ouis[] in helpers/flock_db.c. There is no
+// shared header (an Arduino sketch cannot include the app's), so editing one
+// side alone would silently desync ESP-side `conf` scoring from the Flipper's.
+// tools/check_oui_parity.py is a REQUIRED CI gate that catches exactly that.
+// See that file for the
 // provenance notes. f8:a2:d6 dropped 2026-07-27 (upstream false positive: hit
 // on a Sony Media Player) -- do NOT re-add it from the older flat OUI list.
 //
@@ -404,7 +406,7 @@ static uint32_t ie_skeleton_hash(const uint8_t* p, int len) {
 // from different (randomized) MACs but with a *contiguous* 802.11 sequence
 // number run -- the SoC's seq counter increments across the burst regardless of
 // the source address. We treat such a run as ONE logical sighting and suppress
-// the duplicates on the ESP side so they never flood the Flipper's 96-entry
+// the duplicates on the ESP side so they never flood the Flipper's 64-entry
 // table. Keyed on the IE-skeleton hash so unrelated traffic with nearby seq
 // numbers isn't merged.
 #define SEQ_RUN_GAP 4 // max seq-num step to still count as the same burst
@@ -565,7 +567,7 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     // B1: fingerprint the probe body (MAC-independent device-class signature)
     // and coalesce MAC-cycling bursts via the 802.11 sequence-number run, so a
     // randomized-MAC spray collapses to one logical sighting before it can flood
-    // the Flipper's 96-entry table. Only probe requests carry a meaningful IE
+    // the Flipper's 64-entry table. Only probe requests carry a meaningful IE
     // skeleton. The coalescer runs only on candidate frames so unrelated noise
     // can't capture the run slot and suppress a real detection.
     uint32_t ie_fp = 0;

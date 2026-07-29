@@ -26,8 +26,9 @@
  * belong in the user signature file, not here -- see docs/signatures.md.
  *
  * DUPLICATED in esp32_companion/flock_companion/flock_companion.ino, which
- * scores ESP-side. No shared header, no CI parity check: change both, and keep
- * the row layout identical so they can be diffed by eye.
+ * scores ESP-side. No shared header is possible (that side is an Arduino
+ * sketch), so change BOTH and keep the row layout identical so they can be
+ * diffed by eye. tools/check_oui_parity.py enforces this as a required CI gate.
  */
 static const uint8_t flock_ouis[][3] = {
     {0x70, 0xc9, 0x4e}, {0x3c, 0x91, 0x80}, {0xd8, 0xf3, 0xbc}, {0x80, 0x30, 0x49},
@@ -56,7 +57,7 @@ static const uint8_t flock_ouis[][3] = {
  * for this hardware, so an acoustic detection can never reach "confirmed".
  *
  * DUPLICATED in esp32_companion/flock_companion/flock_companion.ino -- same
- * hand-sync rule as flock_ouis[] above.
+ * hand-sync rule as flock_ouis[] above, and covered by the same CI parity gate.
  */
 static const uint8_t soundthinking_ouis[][3] = {
     {0xd4, 0x11, 0xd6},
