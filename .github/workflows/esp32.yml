@@ -1,9 +1,14 @@
 name: "ESP32: Build companion firmware"
 
-# Heavy (downloads the esp32 core), so only on release tags or manual run.
+# Downloading an esp32 core is heavy, so the RELEASE build stays tag-only.
+# The core-3.x compat job, however, runs on every push and PR: it exists because
+# a tag-only compile is exactly what let issue #4 ship (the sketch did not build
+# on the core new users install, and CI never once tried).
 on:
   push:
+    branches: [main]
     tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -11,6 +16,9 @@ permissions:
 
 jobs:
   build-bin:
+    # Release artefact only: tags and manual runs. Day-to-day portability is
+    # covered by build-core3 below.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: "Build flock_companion .bin"
     steps:
@@ -24,7 +32,9 @@ jobs:
         run: |
           arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
-          # Pin to 2.0.x for the stable (by-value) BLE scan API used below.
+          # 2.0.17 is what the RELEASED WROOM image is built from -- the version
+          # with the most field mileage. Portability against core 3.x is proven
+          # by the separate compat job below, not by moving this pin.
           arduino-cli core install esp32:esp32@2.0.17
 
       - name: Compile (classic ESP32 / WROOM)
@@ -78,6 +88,79 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: build_esp/flipdeflock_companion_esp32wroom.bin
+          fail_on_unmatched_files: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Arduino core 3.x compatibility + the ESP32-C5 dual-band target.
+  #
+  # WHY THIS JOB EXISTS: the build above pins core 2.0.17, so for months nothing
+  # ever compiled the sketch against core 3.x -- which is what a fresh Arduino
+  # install has actually been getting. The result was that the companion did not
+  # build AT ALL for new users (issue #4, @h00die), and CI was green throughout.
+  # A pin without a matching compat build is a blind spot, not a policy.
+  #
+  # Runs on every push/PR, not just tags, because this is a regression guard.
+  build-core3:
+    runs-on: ubuntu-latest
+    name: "Core 3.x compat + ESP32-C5"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core 3.x
+        run: |
+          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      # Classic ESP32 on core 3.x: proves the 2.x/3.x shims work and that the
+      # 5 GHz code is genuinely compiled out on a 2.4-only radio.
+      - name: Compile classic ESP32 (core 3.x)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32:PartitionScheme=huge_app \
+            esp32_companion/flock_companion
+
+      - name: Compile bench emitter (core 3.x)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32:PartitionScheme=huge_app \
+            tools/flock_emitter
+
+      # ESP32-C5: the dual-band target. NOTE the bootloader offset differs
+      # (0x2000, not the classic 0x1000) -- the core's own generated
+      # *.merged.bin already uses the right per-chip offsets, which is why we
+      # publish that rather than hand-merging with fixed offsets.
+      - name: Compile ESP32-C5 (dual-band, UNVERIFIED on hardware)
+        run: |
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32c5:PartitionScheme=huge_app \
+            --output-dir build_c5 \
+            esp32_companion/flock_companion
+          cp build_c5/flock_companion.ino.merged.bin \
+             build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+
+      - name: Upload C5 firmware (experimental)
+        uses: actions/upload-artifact@v4
+        with:
+          name: flock_companion-esp32c5-experimental
+          path: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+          if-no-files-found: error
+
+      # Attached to the release with an EXPERIMENTAL name on purpose: it is
+      # compile-verified only. Nobody on the project owns a C5, so no one has
+      # confirmed it boots, hops, or detects anything. The filename is the
+      # warning that travels with the download.
+      - name: Attach C5 firmware to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,12 @@
 .ufbt/
 build/
 dist/
+# arduino-cli writes here when a platform recipe leaves {sketch_path} unexpanded.
+# Worth ignoring AND deleting: application.fam globs sources as "*.c*", which
+# also matches the .csv partition table dropped in that tree, and ufbt then
+# hands partitions.csv to the linker ("syntax error"). Prefer --output-dir, or
+# build the ESP sketches outside the repo entirely.
+{sketch_path}/
 *.elf
 *.map
 *.fap
