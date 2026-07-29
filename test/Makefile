@@ -15,12 +15,13 @@ CFLAGS += -Imocks -I../helpers
 MODULES := ../helpers/flock_db.c ../helpers/watchscore.c ../helpers/wifi_audit.c \
            ../helpers/esp_parser.c ../helpers/detect_rules.c ../helpers/report_escape.c \
            ../helpers/gps_parser.c ../helpers/report_fmt.c ../helpers/flock_store.c \
-           ../helpers/flock_ble.c ../helpers/oui_vendor.c ../helpers/marauder_scan.c
+           ../helpers/flock_ble.c ../helpers/oui_vendor.c ../helpers/marauder_scan.c \
+           ../helpers/fast_trig.c
 MOCKS   := mocks/furi_string_mock.c
 TESTS   := test_flock_db.c test_watchscore.c test_wifi_audit.c test_esp_parser.c \
            test_detect_rules.c test_report_escape.c test_gps_parser.c test_report_fmt.c \
            test_flock_store.c test_flock_ble.c test_oui_vendor.c test_marauder_scan.c \
-           test_main.c
+           test_fast_trig.c test_main.c
 HEADERS := test.h mocks/core/string.h
 
 BIN := run_tests
@@ -31,7 +32,7 @@ test: build
 
 build: $(BIN)
 
-# -lm: detect_rules uses cosf/sqrtf/fabsf (needs libm on glibc/Linux CI).
+# -lm: sqrtf/fabsf, plus test_fast_trig compares against libm's own sinf/cosf.
 $(BIN): $(MODULES) $(MOCKS) $(TESTS) $(HEADERS)
 	$(CC) $(CFLAGS) $(MODULES) $(MOCKS) $(TESTS) -o $(BIN) -lm
 
