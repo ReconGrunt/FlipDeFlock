@@ -228,6 +228,28 @@ void recon_app_gps_relay_pending(ReconApp* app) {
     furi_mutex_release(app->mutex);
 }
 
+void recon_app_set_chip(
+    ReconApp* app,
+    const char* target,
+    uint8_t gpio_count,
+    uint64_t gps_pin_mask,
+    bool has_5ghz) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    strncpy(app->esp_chip, target ? target : "", sizeof(app->esp_chip) - 1);
+    app->esp_chip[sizeof(app->esp_chip) - 1] = '\0';
+    app->esp_gpio_count = gpio_count;
+    app->esp_gps_pin_mask = gps_pin_mask;
+    app->esp_has_5ghz = has_5ghz;
+    furi_mutex_release(app->mutex);
+}
+
+void recon_app_set_band(ReconApp* app, uint8_t sel, uint16_t channels) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->esp_band_actual = sel;
+    app->esp_band_channels = channels;
+    furi_mutex_release(app->mutex);
+}
+
 void recon_app_request_gps_cfg(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->gps_cfg_resend = true;
@@ -242,7 +264,10 @@ void recon_app_gps_cfg_tick(ReconApp* app) {
     // Sent from the GUI thread only. The ESP worker raises the flag; if it did
     // the furi_hal_serial_tx itself it would race the commands this same thread
     // sends on entering a scan scene, on one UART handle.
-    if(want && app->esp) esp_link_send_gps_cfg(app->esp);
+    if(want && app->esp) {
+        esp_link_send_band(app->esp);
+        esp_link_send_gps_cfg(app->esp);
+    }
 }
 
 void recon_app_ble_begin(ReconApp* app) {
@@ -701,6 +726,7 @@ void recon_app_watchscore_tick(ReconApp* app) {
 
 static void recon_settings_defaults(ReconApp* app) {
     app->settings.backend = EspBackendCompanion;
+    app->settings.esp_band = ReconEspBand24; // detection first -- see ReconEspBand
     app->settings.esp_uart = FuriHalSerialIdUsart;
     app->settings.gps_uart = FuriHalSerialIdLpuart;
     app->settings.esp_baud = 115200;
@@ -725,8 +751,9 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\ngps_source=%d\nesp_gps_pin=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\nalert_mode=%d\nalert_min_conf=%d\nsave_hits=%d\n",
+            "backend=%d\nesp_band=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\ngps_source=%d\nesp_gps_pin=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nanomaly_flag=%d\nalert_mode=%d\nalert_min_conf=%d\nsave_hits=%d\n",
             app->settings.backend,
+            app->settings.esp_band,
             app->settings.esp_uart,
             app->settings.gps_uart,
             (unsigned long)app->settings.esp_baud,
@@ -767,6 +794,8 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val) {
         app->settings.marauder_cmd = (uint8_t)val;
     else if(strcmp(key, "gps_enabled") == 0)
         app->settings.gps_enabled = (val != 0);
+    else if(strcmp(key, "esp_band") == 0 && val >= 0 && val < ReconEspBandCount)
+        app->settings.esp_band = (uint8_t)val;
     else if(strcmp(key, "gps_source") == 0 && val >= 0 && val < ReconGpsSourceCount)
         app->settings.gps_source = (uint8_t)val; // corrupt value -> keep the default
     else if(strcmp(key, "esp_gps_pin") == 0 && val > 1 && val != 3 && val < 48)

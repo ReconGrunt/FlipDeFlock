@@ -55,6 +55,8 @@ typedef enum {
     EspMsgLocate, /**< LOC: live RSSI for the Locator target */
     EspMsgGpsNmea, /**< G: one NMEA sentence relayed from a GPS on the ESP board */
     EspMsgGpsCfg, /**< GPSCFG: the companion's echo of its GPS relay state */
+    EspMsgChip, /**< CHIP: the board's real SoC, GPIO count and usable GPS pins */
+    EspMsgBand, /**< BAND: the band selection actually in force */
 } EspMsgType;
 
 /**
@@ -125,6 +127,23 @@ typedef struct {
              */
             char* nmea;
         } gps;
+        struct { // EspMsgChip (CHIP)
+            /**
+             * What the companion is actually running on. The app used to offer a
+             * hardcoded classic-ESP32 pin list on every board: on an ESP32-C5
+             * four of those pins do not exist, two are the flash/PSRAM bus and
+             * one is UART0 itself. The board is the only thing that knows its own
+             * pinout, so it reports it rather than the app guessing (issue #5).
+             */
+            const char* target; /**< IDF target name, e.g. "esp32" / "esp32c5" */
+            uint8_t gpio_count;
+            uint64_t gps_pin_mask; /**< bit N set = GPIO N can carry the GPS */
+            bool has_5ghz;
+        } chip;
+        struct { // EspMsgBand (BAND)
+            uint8_t sel; /**< ReconEspBand actually in force (2.4-only parts force 0) */
+            uint16_t channels; /**< how many channels the sweep covers */
+        } band;
         struct { // EspMsgGpsCfg (GPSCFG)
             /**
              * The companion's answer to `gps <rx> [baud]`, echoed on every such

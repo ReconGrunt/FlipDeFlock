@@ -35,3 +35,11 @@ void esp_link_send(EspLink* esp, const char* cmd);
  * cannot drift apart. No-op on the Marauder backend, which has no such command.
  */
 void esp_link_send_gps_cfg(EspLink* esp);
+
+/**
+ * Send the band selection (2.4 / 5 / both) the operator chose.
+ *
+ * Paired with esp_link_send_gps_cfg() everywhere, because both are session
+ * config the board must be told about and both must survive an ESP reboot.
+ */
+void esp_link_send_band(EspLink* esp);

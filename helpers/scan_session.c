@@ -15,6 +15,7 @@ bool scan_session_start(void* _app) {
     // opens a session -- rather than in each scene, which is how the alert
     // delivery bug happened. The command is built in esp_link so that this call
     // and the on-banner re-send cannot drift apart; it is a no-op on Marauder.
+    esp_link_send_band(app->esp);
     esp_link_send_gps_cfg(app->esp);
     return true;
 }

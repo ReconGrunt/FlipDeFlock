@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.55
+**ESP32-C5 correctness.** The one person field-testing this runs a C5, and three
+separate things in the app assumed every board was a classic ESP32.
+
+### Fixed
+
+- **The GPS pin picker no longer offers pins that can brick the link.** It was a
+  hardcoded classic-ESP32 list. On a C5, four of its ten pins do not exist
+  (GPIO stops at 28), two are the flash/PSRAM bus, and one is UART0 itself -- so
+  the picker could hand you the pin carrying the Flipper link, which needs a
+  recovery flash to undo. The board now reports its own usable pins and the app
+  offers those. Until it does, a conservative fallback is used, plus whatever pin
+  you already had, so an existing working setup is never silently changed.
+- **The companion's pin guard asks the chip instead of assuming.** It was
+  `rx != 1 && rx != 3 && rx < 48`, which is the classic ESP32's pinout written as
+  if universal. It is now derived from this target's own IDF headers, so it
+  refuses the real UART0 pins, the real flash bus and out-of-range pins on
+  whatever part it was built for. A refusal now also says why.
+
+### Added
+
+- **Band is a Settings item, and defaults to 2.4 GHz.** The companion defaulted a
+  C5 to sweeping both bands: 41 channels instead of 13, which at the same dwell
+  is ~12.3 s per sweep instead of ~3.9 s, so **any given camera is revisited a
+  third as often**. A user parked beside three known Flock cameras and detected
+  none while the radio spent two thirds of its time on 5 GHz. Covering a band we
+  cannot yet confirm anything uses must not cost two thirds of the dwell on the
+  band every signature we hold actually lives on. 5 GHz and Both remain available.
+
 ## v0.54
 **Three bugs from [@h00die](https://github.com/h00die) in
 [#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5), one of them a data-loss

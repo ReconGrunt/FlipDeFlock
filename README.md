@@ -241,6 +241,14 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.55** - **ESP32-C5 correctness.** The **GPS pin picker no longer offers pins that
+can cut the link** - it was a hardcoded classic-ESP32 list, and on a C5 four of those
+pins do not exist, two are the flash bus and one is UART0 itself. The board now
+reports its own usable pins. The companion's guard is likewise derived from the
+chip's own headers rather than assuming a pinout. And **Band is now a Settings item
+defaulting to 2.4 GHz**: a C5 previously swept 41 channels by default, revisiting any
+given camera a third as often, which is why cameras were being missed.
+
 **v0.54** — **Three bug fixes, one of them ours.** **Alerts never fired for a camera
 you had already saved**, because restored entries came back with their alert latch
 set and nothing cleared it, so turning on Save Hits silently disabled alerts for

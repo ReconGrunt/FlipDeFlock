@@ -145,6 +145,17 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             gps_apply_nmea(app, m->u.gps.nmea);
         }
         break;
+    case EspMsgChip:
+        recon_app_set_chip(
+            app,
+            m->u.chip.target,
+            m->u.chip.gpio_count,
+            m->u.chip.gps_pin_mask,
+            m->u.chip.has_5ghz);
+        break;
+    case EspMsgBand:
+        recon_app_set_band(app, m->u.band.sel, m->u.band.channels);
+        break;
     case EspMsgGpsCfg:
         // Recorded regardless of the current source setting: it is the answer to
         // a question we asked, and the badge decides what to make of it. Storing
@@ -300,6 +311,20 @@ void esp_link_send(EspLink* esp, const char* cmd) {
     if(!esp->running || !esp->serial) return;
     furi_hal_serial_tx(esp->serial, (const uint8_t*)cmd, strlen(cmd));
     furi_hal_serial_tx(esp->serial, (const uint8_t*)"\n", 1);
+}
+
+// Index-aligned with ReconEspBand.
+static const char* const esp_band_cmd[] = {"band 2g", "band 5g", "band all"};
+
+void esp_link_send_band(EspLink* esp) {
+    ReconApp* app = esp->app;
+    if(app->settings.backend != EspBackendCompanion) return;
+    uint8_t i = app->settings.esp_band;
+    if(i >= ReconEspBandCount) i = ReconEspBand24;
+    // Sent every session, not only when non-default: the board keeps its own
+    // selection across app restarts, so a companion left on "all" by an earlier
+    // run would silently keep the slow sweep even after the setting was changed.
+    esp_link_send(esp, esp_band_cmd[i]);
 }
 
 void esp_link_send_gps_cfg(EspLink* esp) {

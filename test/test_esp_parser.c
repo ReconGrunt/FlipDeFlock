@@ -377,6 +377,41 @@ void suite_esp_parser(void) {
     // Must not shadow the NMEA relay line, nor be shadowed by it.
     CHECK_INT_EQ(P("G,$GPRMC,1,2,3"), EspMsgGpsNmea);
 
+    // --- CHIP: the board reporting its own pinout (issue #5) ----------------
+    // The app used to offer a hardcoded classic-ESP32 GPS pin list on every
+    // board. On an ESP32-C5 four of those pins do not exist, two are the
+    // flash/PSRAM bus and one is UART0 itself -- so the picker could hand the
+    // operator the very pin carrying the link, which needs a recovery flash to
+    // undo. The chip is the only thing that knows, so it says.
+    CHECK_INT_EQ(P("CHIP,esp32c5,29,00000000,1fff8030,1"), EspMsgChip);
+    CHECK_STR_EQ(m.u.chip.target, "esp32c5");
+    CHECK_INT_EQ(m.u.chip.gpio_count, 29);
+    CHECK_INT_EQ(m.u.chip.has_5ghz, 1);
+    // The mask must survive as 64 bits: a classic ESP32 has usable pins above 31,
+    // so folding it through a 32-bit value would silently drop them.
+    CHECK_INT_EQ(P("CHIP,esp32,40,000000ff,ffffff00,0"), EspMsgChip);
+    CHECK_INT_EQ(m.u.chip.gpio_count, 40);
+    CHECK_INT_EQ(m.u.chip.has_5ghz, 0);
+    CHECK(m.u.chip.gps_pin_mask == 0x000000ffffffff00ULL);
+    CHECK_INT_EQ(P("CHIP,esp32,40"), EspMsgIgnore); // truncated
+    CHECK_INT_EQ(P("CHIP"), EspMsgIgnore);
+
+    // --- BAND: the sweep actually in force ----------------------------------
+    // Reports coverage that EXISTS, not coverage that was asked for: a 2.4-only
+    // radio answers 2g however it was commanded.
+    CHECK_INT_EQ(P("BAND,2g,13"), EspMsgBand);
+    CHECK_INT_EQ(m.u.band.sel, 0);
+    CHECK_INT_EQ(m.u.band.channels, 13);
+    CHECK_INT_EQ(P("BAND,all,41"), EspMsgBand);
+    CHECK_INT_EQ(m.u.band.sel, 2);
+    CHECK_INT_EQ(m.u.band.channels, 41);
+    CHECK_INT_EQ(P("BAND,5g,28"), EspMsgBand);
+    CHECK_INT_EQ(m.u.band.sel, 1);
+    // An unrecognised band name is not a band. Defaulting it to 2g would report
+    // a 13-channel sweep that may not be what the radio is doing.
+    CHECK_INT_EQ(P("BAND,6g,59"), EspMsgIgnore);
+    CHECK_INT_EQ(P("BAND,2g"), EspMsgIgnore);
+
     // --- banners / batch markers / junk ------------------------------------
     CHECK_INT_EQ(P("FLOCKCO,1"), EspMsgBanner);
     CHECK_INT_EQ(m.u.banner.version, 1); // wire-protocol version parsed from the banner
