@@ -54,6 +54,7 @@ typedef enum {
     EspMsgAttack, /**< ATK: active attack-tool signature */
     EspMsgLocate, /**< LOC: live RSSI for the Locator target */
     EspMsgGpsNmea, /**< G: one NMEA sentence relayed from a GPS on the ESP board */
+    EspMsgGpsCfg, /**< GPSCFG: the companion's echo of its GPS relay state */
 } EspMsgType;
 
 /**
@@ -124,6 +125,19 @@ typedef struct {
              */
             char* nmea;
         } gps;
+        struct { // EspMsgGpsCfg (GPSCFG)
+            /**
+             * The companion's answer to `gps <rx> [baud]`, echoed on every such
+             * command. Without it the app could not tell "relay running, still
+             * searching" from "relay refused that pin" from "this firmware has
+             * no relay at all" -- three states that all rendered as a hollow
+             * "searching" badge forever, which is what made issue #5's GPS
+             * problem take four rounds to pin down.
+             */
+            bool on; /**< the companion is relaying (it accepted the pin) */
+            int16_t pin; /**< the pin it is using, or the one it refused */
+            uint32_t baud;
+        } gpscfg;
         struct { // EspMsgAttack (ATK)
             const char* kind;
             uint32_t value;

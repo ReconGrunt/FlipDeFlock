@@ -238,6 +238,21 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
     // EspMsg.u.gps.nmea for why it is not parsed here. Guard the payload: an
     // empty or non-'$' body is not a sentence, and forwarding it would only make
     // the NMEA parser reject it one layer further on.
+    // GPSCFG,<on>,<pin>,<baud>  the companion's echo of its relay state. Tested
+    // BEFORE "G," would ever be reached anyway, but kept adjacent to it since the
+    // two are the same feature. A malformed echo is ignored rather than guessed
+    // at: reporting the relay as off when we simply could not read the line would
+    // send the operator hunting a configuration problem that does not exist.
+    if(strncmp(line, "GPSCFG,", 7) == 0) {
+        char* f[4];
+        int n = esp_split_fields(line, f, 4);
+        if(n < 4) return EspMsgIgnore;
+        out->u.gpscfg.on = (atoi(f[1]) != 0);
+        out->u.gpscfg.pin = (int16_t)atoi(f[2]);
+        out->u.gpscfg.baud = strtoul(f[3], NULL, 10);
+        out->type = EspMsgGpsCfg;
+        return out->type;
+    }
     if(strncmp(line, "G,", 2) == 0) {
         if(line[2] != '$') return EspMsgIgnore;
         out->u.gps.nmea = line + 2;

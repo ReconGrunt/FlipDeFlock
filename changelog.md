@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.54
+**Three bugs from [@h00die](https://github.com/h00die) in
+[#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5), one of them a data-loss
+regression this project shipped in v0.53.**
+
+### Fixed
+
+- **Alerts never fired for a camera you had already saved.** `hits.csv` restores
+  each entry with its alert latch already set, so a reboot cannot buzz at you --
+  but nothing ever cleared it, and the restored confidence also failed the
+  "crossing" test. The result: turning on **Save Hits** silently disabled alerts
+  for every device you had ever driven past, permanently and across reboots.
+  Meeting a stored device on the air is now treated as the new event it is. This
+  was reported twice as "alerts don't work"; the v0.52 fix addressed a different
+  cause and this one survived it.
+- **Net Guardian destroyed your Flock detections.** Opening it wiped the entire
+  detection table, including entries restored from `hits.csv`, and leaving it then
+  wrote that empty table back over the file -- so a reboot could not bring them
+  back either. A user lost a drive's worth of hits in the field to this. The clear
+  was never needed for scoring: the watchscore already skips archived entries and
+  already gates live ones on freshness, so it bought nothing and cost the data.
+- **`hits.csv` is no longer removed as a side effect of an empty table.** v0.53
+  made an empty table delete the store, meaning ANY code path that cleared it in
+  memory became permanent loss on disk -- which is what turned the Net Guardian
+  bug above from "the list looks empty" into "the file is gone". Removal now
+  happens only where the operator explicitly deletes the last entry.
+
+### Added
+
+- **The GPS badge can now tell you WHICH thing is wrong.** The companion echoes
+  `GPSCFG,<on>,<pin>,<baud>` for every relay command and the app was discarding
+  it, so with the ESP32 as GPS source every failure looked identical: a hollow
+  "searching" badge, forever. Now `GPS?` means the board never answered (wrong or
+  old firmware -- reflash) and `GPS!` means it answered and refused the pin
+  (change the pin). Those need opposite fixes, which is why the distinction
+  matters.
+- **The relay config is re-sent when the companion announces itself.** It was sent
+  once when a scan started, which a board still booting simply missed -- and a
+  silently dropped config is indistinguishable from a dead GPS module. A banner
+  also arrives on every ESP reboot, so a power blip now re-arms the relay by
+  itself.
+
 ## v0.53
 **Two UI requests from
 [@h00die](https://github.com/h00die) in

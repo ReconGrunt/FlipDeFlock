@@ -122,6 +122,34 @@ void suite_detect_rules(void) {
     CHECK(flock_alert_should_fire(0, 4, false, 12, 0, false, dflt));
     CHECK(!flock_alert_should_fire(0, 4, false, 12, 0, true, dflt)); // genuinely 12 ms ago
 
+    // --- a STORED device met again on the air (issue #5) --------------------
+    // recon_hits_add() sets `alerted` on every entry it restores from hits.csv so
+    // a reboot cannot buzz, and the stored confidence comes back with it. Nothing
+    // cleared either, so with Save Hits on, a camera you had already driven past
+    // was muted forever: the latch vetoed it, and even without the latch the
+    // restored confidence failed the crossing test. Reported twice as "still not
+    // getting alerts".
+    //
+    // first_live_sighting says "this entry was archived until right now", and
+    // must beat BOTH vetoes -- checking only one still leaves it silent.
+    CHECK(flock_alert_should_fire_ex(4, 4, true, true, 100000, 1000, true, dflt));
+    CHECK(flock_alert_should_fire_ex(2, 2, true, true, 100000, 1000, true, dflt));
+    // Each veto on its own, to prove neither is doing the work alone.
+    CHECK(!flock_alert_should_fire_ex(4, 4, true, false, 100000, 1000, true, dflt)); // latch
+    CHECK(!flock_alert_should_fire_ex(4, 4, false, false, 100000, 1000, true, dflt)); // crossing
+
+    // It is a bypass for provenance, NOT for the operator's threshold: a restored
+    // entry below the chosen rung still stays silent.
+    CHECK(!flock_alert_should_fire_ex(1, 1, true, true, 100000, 1000, true, dflt));
+    // ...nor for the cooldown, or driving into a stored cluster would machine-gun
+    // the vibro motor on every entry at once.
+    CHECK(!flock_alert_should_fire_ex(
+        4, 4, true, true, 1000 + ALERT_COOLDOWN_MS - 1, 1000, true, dflt));
+
+    // A live entry re-seen in the SAME session is unaffected: still one alert per
+    // device. Only the archived->live transition resets it.
+    CHECK(!flock_alert_should_fire_ex(4, 4, true, false, 100000, 1000, true, dflt));
+
     // --- the threshold is honoured, not just accepted ------------------------
     // The whole point of issue #5: an operator who only ever sees "Possible" can
     // lower the bar and actually be told. Same input, three thresholds.

@@ -226,8 +226,7 @@ void suite_flock_store(void) {
     {
         FlockStoreRec junk;
         // 12 columns (v1 minus epoch)
-        CHECK(!flock_store_parse_line(
-            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1", &junk));
+        CHECK(!flock_store_parse_line("E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1", &junk));
         // 14 columns: a half-v2 line, class but no hidden
         CHECK(!flock_store_parse_line(
             "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0", &junk));

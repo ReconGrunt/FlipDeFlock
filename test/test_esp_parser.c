@@ -345,6 +345,38 @@ void suite_esp_parser(void) {
     // Must not shadow a real Flock detection line or any other prefix.
     CHECK_INT_EQ(P("GPS,1,2"), EspMsgIgnore);
 
+    // --- GPSCFG: the companion's relay-state echo (issue #5) ----------------
+    // The app discarded this line until v0.54, which left "relay running", "pin
+    // refused" and "firmware has no relay" all rendering as the same hollow
+    // searching badge. Each state has to survive the wire intact for the badge to
+    // tell them apart.
+    CHECK_INT_EQ(P("GPSCFG,1,16,9600"), EspMsgGpsCfg);
+    CHECK_INT_EQ(m.u.gpscfg.on, 1);
+    CHECK_INT_EQ(m.u.gpscfg.pin, 16);
+    CHECK_INT_EQ((int)m.u.gpscfg.baud, 9600);
+    // Refused pin: the companion still echoes the pin it was ASKED for, with the
+    // relay off. That pairing is what tells the operator to change the pin rather
+    // than reflash the board.
+    CHECK_INT_EQ(P("GPSCFG,0,1,9600"), EspMsgGpsCfg);
+    CHECK_INT_EQ(m.u.gpscfg.on, 0);
+    CHECK_INT_EQ(m.u.gpscfg.pin, 1);
+    // `gps off` reply, and the -1 "no pin" the companion reports with it.
+    CHECK_INT_EQ(P("GPSCFG,0,-1,9600"), EspMsgGpsCfg);
+    CHECK_INT_EQ(m.u.gpscfg.on, 0);
+    CHECK_INT_EQ(m.u.gpscfg.pin, -1);
+    // A high baud must not be truncated into the 16-bit pin field's range.
+    CHECK_INT_EQ(P("GPSCFG,1,33,115200"), EspMsgGpsCfg);
+    CHECK_INT_EQ((int)m.u.gpscfg.baud, 115200);
+    CHECK_INT_EQ(m.u.gpscfg.pin, 33);
+    // Malformed: too few fields. Ignored rather than guessed at -- claiming the
+    // relay is OFF because a line was unreadable would send the operator hunting
+    // a configuration fault that does not exist.
+    CHECK_INT_EQ(P("GPSCFG,1,16"), EspMsgIgnore);
+    CHECK_INT_EQ(P("GPSCFG,"), EspMsgIgnore);
+    CHECK_INT_EQ(P("GPSCFG"), EspMsgIgnore);
+    // Must not shadow the NMEA relay line, nor be shadowed by it.
+    CHECK_INT_EQ(P("G,$GPRMC,1,2,3"), EspMsgGpsNmea);
+
     // --- banners / batch markers / junk ------------------------------------
     CHECK_INT_EQ(P("FLOCKCO,1"), EspMsgBanner);
     CHECK_INT_EQ(m.u.banner.version, 1); // wire-protocol version parsed from the banner

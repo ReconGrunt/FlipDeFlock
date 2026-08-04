@@ -8,9 +8,8 @@
 // sequence_error: those already mean "report saved" / "report failed" elsewhere
 // in the app, and a detection is neither. message_sound_off closes the tone so
 // the speaker doesn't hold the last note.
-#define ALERT_NOTES                                                            \
-    &message_note_c5, &message_delay_50, &message_note_g5, &message_delay_50, \
-        &message_sound_off
+#define ALERT_NOTES \
+    &message_note_c5, &message_delay_50, &message_note_g5, &message_delay_50, &message_sound_off
 
 static const NotificationSequence alert_seq_backlight = {
     &message_display_backlight_on,

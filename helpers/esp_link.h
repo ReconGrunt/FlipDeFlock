@@ -26,3 +26,12 @@ void esp_link_stop(EspLink* esp);
 
 /** Send a raw command line (newline appended automatically). */
 void esp_link_send(EspLink* esp, const char* cmd);
+
+/**
+ * (Re)send the companion's GPS-relay config from current settings, and start the
+ * clock on its `GPSCFG` echo.
+ *
+ * One place builds this command so the scan-session and the on-banner re-send
+ * cannot drift apart. No-op on the Marauder backend, which has no such command.
+ */
+void esp_link_send_gps_cfg(EspLink* esp);

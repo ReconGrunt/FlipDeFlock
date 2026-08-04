@@ -38,7 +38,8 @@ void suite_flock_ble(void) {
 
     // --- Flock-specific tells DO reach CONFIRMED ----------------------------
     // 0x09C8 is Flock's own manufacturer id in the advert.
-    CHECK_INT_EQ(flock_ble_confidence(FLOCK_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(FLOCK_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
     CHECK_INT_EQ(flock_ble_confidence(0x09C8, "anything", false), FlockConfidenceConfirmed);
     // Raven-specific GATT services are Raven-SPECIFIC, so they stand alone.
     CHECK_INT_EQ(flock_ble_confidence(0, NULL, true), FlockConfidenceConfirmed);
@@ -50,7 +51,8 @@ void suite_flock_ble(void) {
     CHECK_INT_EQ(flock_ble_confidence(0, "fs ext battery", false), FlockConfidenceConfirmed);
     // "FS Ext" is matched as a substring (mirrors the companion's own test), so a
     // decorated name still lands.
-    CHECK_INT_EQ(flock_ble_confidence(0, "Unit 7 FS Ext Battery", false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(0, "Unit 7 FS Ext Battery", false), FlockConfidenceConfirmed);
 
     // Never None: the caller only asks about devices already classified as Flock,
     // so the floor is Possible. A None here would silently drop the detection.

@@ -82,11 +82,11 @@ bool ble_following_gate(uint32_t count, uint32_t elapsed_ms, uint32_t waypoints,
  *  can be all you ever see, and an alert you cannot turn on is no alert. Opt-in
  *  only -- the shipped default is unchanged, so the loose mode is a deliberate
  *  choice to accept false positives, never something the app does on its own. */
-#define ALERT_MIN_CONF     2u
+#define ALERT_MIN_CONF    2u
 /** Minimum gap between two alerts. A MAC-randomising unit, or driving into a
  *  dense deployment, can mint several qualifying entries inside one second;
  *  without this the vibro motor machine-guns and drains the battery. */
-#define ALERT_COOLDOWN_MS  3000u
+#define ALERT_COOLDOWN_MS 3000u
 
 /** ReconSettings.alert_min_conf. Index-aligned with alert_conf_text[] in the
  *  settings scene; map to a confidence rung with flock_alert_min_conf_rung(). */
@@ -117,6 +117,19 @@ uint8_t flock_alert_min_conf_rung(uint8_t choice);
  * @param prev_conf           entry confidence BEFORE this sighting was merged.
  * @param new_conf            entry confidence AFTER the merge.
  * @param already_alerted     the entry's own latch (this device already alerted).
+ * @param first_live_sighting this entry was ARCHIVED (restored from hits.csv)
+ *                            until this sighting, so both its latch and its
+ *                            confidence were carried in from an earlier session
+ *                            and neither describes anything that happened now.
+ *                            Treated as a fresh device for alerting purposes.
+ *
+ *                            Without this, saving hits silently disabled alerts
+ *                            for every camera you had ever recorded: the loader
+ *                            sets `alerted` so a restored hit cannot buzz at
+ *                            startup, nothing cleared it, and the restored
+ *                            confidence also failed the crossing test below.
+ *                            Driving past the same camera tomorrow is a new
+ *                            event and must alert (issue #5).
  * @param now_tick            furi tick of this sighting.
  * @param last_alert_tick     tick of the last alert this session (any device).
  * @param have_alerted_before false until the first alert of the session, so a
@@ -125,11 +138,32 @@ uint8_t flock_alert_min_conf_rung(uint8_t choice);
  * @param min_conf            lowest qualifying rung, from
  *                            flock_alert_min_conf_rung(settings.alert_min_conf).
  */
-bool flock_alert_should_fire(
+bool flock_alert_should_fire_ex(
+    uint8_t prev_conf,
+    uint8_t new_conf,
+    bool already_alerted,
+    bool first_live_sighting,
+    uint32_t now_tick,
+    uint32_t last_alert_tick,
+    bool have_alerted_before,
+    uint8_t min_conf);
+
+/** Back-compat shim: a live entry that was never archived. */
+static inline bool flock_alert_should_fire(
     uint8_t prev_conf,
     uint8_t new_conf,
     bool already_alerted,
     uint32_t now_tick,
     uint32_t last_alert_tick,
     bool have_alerted_before,
-    uint8_t min_conf);
+    uint8_t min_conf) {
+    return flock_alert_should_fire_ex(
+        prev_conf,
+        new_conf,
+        already_alerted,
+        false,
+        now_tick,
+        last_alert_tick,
+        have_alerted_before,
+        min_conf);
+}

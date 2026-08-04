@@ -98,6 +98,22 @@ typedef enum {
     ReconGpsSourceCount,
 } ReconGpsSource;
 
+/**
+ * What the companion has said about its GPS relay this session.
+ *
+ * The companion echoes `GPSCFG,<on>,<pin>,<baud>` for every `gps` command it
+ * receives. Until v0.54 the app discarded that line, so a companion-sourced GPS
+ * had exactly one visible state -- the hollow "searching" badge -- whether the
+ * relay was running, whether it had refused the pin, or whether the firmware was
+ * too old to have a relay at all. Issue #5 spent four rounds inside that blind
+ * spot.
+ */
+typedef enum {
+    ReconGpsRelayUnknown = 0, /**< configured, nothing echoed back yet */
+    ReconGpsRelayOn, /**< GPSCFG,1: the companion accepted the pin and is relaying */
+    ReconGpsRelayOff, /**< GPSCFG,0: it refused the pin, or the relay is off */
+} ReconGpsRelayState;
+
 typedef struct {
     EspBackend backend;
     uint8_t esp_uart; /**< FuriHalSerialId for the ESP32. */
@@ -253,6 +269,17 @@ typedef struct {
     uint32_t alert_last_tick; /**< tick of the last alert fired (any device) */
     bool alert_have_fired; /**< false until the session's first alert -> cooldown is inert */
 
+    // Companion GPS-relay health (issue #5). Only meaningful when the GPS source
+    // is the companion; the Flipper-UART path has its own busy/conflict test.
+    uint8_t gps_relay; /**< ReconGpsRelayState */
+    int16_t gps_relay_pin; /**< the pin the companion reported, -1 if none */
+    uint32_t gps_relay_baud; /**< the baud it reported */
+    uint32_t gps_cfg_tick; /**< tick the config was last sent; 0 = never this session */
+    bool gps_cfg_resend; /**< worker saw a banner -> GUI tick must re-send the config.
+                           *  A flag, not a direct send: furi_hal_serial_tx from the
+                           *  ESP worker would race the GUI thread's own commands on
+                           *  the same handle. Same discipline as alert_pending. */
+
     bool gps_valid;
     float gps_lat;
     float gps_lon;
@@ -391,6 +418,18 @@ void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
 /** Update the queryable ESP-link state (thread-safe). See EspLinkState. */
 void recon_app_set_esp_link_state(ReconApp* app, EspLinkState state);
 
+/** Record a `GPSCFG` echo from the companion (issue #5 diagnosability). */
+void recon_app_set_gps_relay(ReconApp* app, bool on, int16_t pin, uint32_t baud);
+
+/** Mark the relay config as sent and awaiting its echo; starts the ack clock. */
+void recon_app_gps_relay_pending(ReconApp* app);
+
+/** Worker-side: ask the GUI thread to re-send the relay config (banner seen). */
+void recon_app_request_gps_cfg(ReconApp* app);
+
+/** GUI-tick side: send the relay config if the worker asked for it. */
+void recon_app_gps_cfg_tick(ReconApp* app);
+
 /** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
 void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);
 
@@ -468,3 +507,13 @@ void recon_settings_save(ReconApp* app);
 void recon_hits_load(ReconApp* app);
 void recon_hits_save(ReconApp* app);
 void recon_hits_clear(ReconApp* app);
+
+/**
+ * Persist after the operator DELETED an entry. Writes the table, or removes
+ * `hits.csv` entirely when they deleted the last one.
+ *
+ * Never call this for an incidentally empty table. recon_hits_save() runs on
+ * every scan-session exit, and folding this removal into it turned Net
+ * Guardian's baseline reset into permanent data loss (issue #5).
+ */
+void recon_hits_save_after_delete(ReconApp* app);

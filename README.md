@@ -241,6 +241,17 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.54** — **Three bug fixes, one of them ours.** **Alerts never fired for a camera
+you had already saved**, because restored entries came back with their alert latch
+set and nothing cleared it, so turning on Save Hits silently disabled alerts for
+every device you had driven past. **Net Guardian destroyed your Flock detections** on
+entry and then persisted the empty table over `hits.csv`, so a reboot could not
+recover them; it never needed to clear that table at all. And **`hits.csv` is no
+longer deleted as a side effect of an empty table** — a v0.53 regression that turned
+the Net Guardian bug into permanent data loss. Also, the GPS badge now distinguishes
+`GPS?` (companion never answered — reflash) from `GPS!` (it refused the pin — change
+the pin), instead of sitting on "searching" forever.
+
 **v0.53** — **Two UI requests, both verified on hardware.** You can now **remove a
 detection** from the detail screen (Left, then confirm) — persistence had made a false
 positive permanent, and the delete writes through to the card immediately. Every hit
