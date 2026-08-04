@@ -100,10 +100,12 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
 
     size_t count = app->flock_count;
     bool connected = app->esp_connected;
-    uint32_t frames = app->esp_frames;
     uint32_t hits = app->esp_hits;
     uint8_t channel = app->esp_channel;
     uint32_t lines = app->esp_lines;
+    int32_t frame_rate = app->esp_frame_rate;
+    uint32_t ble_seen = app->esp_ble_seen;
+    uint32_t reboots = app->esp_reboots;
     uint32_t deauths = app->esp_deauths;
     bool proto_mismatch = app->esp_proto_mismatch;
     uint8_t proto_version = app->esp_proto_version;
@@ -265,12 +267,38 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         // carries the RX heartbeat there and the detection count belongs here.
         snprintf(hdr, sizeof(hdr), "%s  hits %zu%s", connected ? "ESP" : "...", count, drop);
     } else {
+        // Live activity, not a lifetime total. "frames 319" only ever climbed, so
+        // it told you the link was up and nothing about whether the radio was
+        // hearing anything RIGHT NOW -- the actual question while parked next to a
+        // camera that is not showing up (issue #5).
+        //
+        //   rx<n>/s  Wi-Fi frames per second. "--" until two status lines land.
+        //   b<n>     BLE adverts this session. The Flock screen showed NOTHING
+        //            about BLE, so a working BLE half and one that never ran were
+        //            indistinguishable -- and BLE is the easy detection on these.
+        //   !r<n>    the companion RESTARTED n times. A lifetime counter can only
+        //            fall if the board rebooted; that used to be absorbed silently
+        //            and just looked like the number sliding back to zero.
+        // Clamped, not just formatted: the compiler cannot prove a uint32_t fits
+        // these buffers, and a header field that can grow without bound is a bug
+        // waiting for a long drive.
+        char rst[10] = "";
+        if(reboots) snprintf(rst, sizeof(rst), " !r%u", (unsigned)(reboots > 99 ? 99 : reboots));
+        char rate_s[8];
+        if(frame_rate < 0) {
+            snprintf(rate_s, sizeof(rate_s), "--");
+        } else {
+            snprintf(
+                rate_s, sizeof(rate_s), "%u", (unsigned)(frame_rate > 9999 ? 9999 : frame_rate));
+        }
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s  frames %lu%s",
+            "%s rx%s/s b%u%s%s",
             connected ? "ESP" : "...",
-            (unsigned long)frames,
+            rate_s,
+            (unsigned)(ble_seen > 99999 ? 99999 : ble_seen),
+            rst,
             drop);
     }
     canvas_set_font(canvas, FontSecondary);

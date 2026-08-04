@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.56
+**The Flock header now shows live activity instead of a number that only grows.**
+From a suggestion by [@h00die](https://github.com/h00die) on
+[#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5).
+
+### Added
+
+- **`rx<n>/s` replaces the cumulative frame count.** A lifetime total tells you
+  the link is up; it does not tell you whether the radio is hearing anything right
+  now, which is the question you have while parked next to a camera that is not
+  showing up.
+- **`b<n>`: BLE adverts this session.** The Flock screen previously showed nothing
+  at all about BLE, so in `flockcombo` mode a working BLE half and one that never
+  ran looked identical. BLE is usually the easy detection on these cameras.
+- **`!r<n>`: the companion restarted.** A lifetime counter can only fall if the
+  board rebooted, and that was being silently absorbed by the per-session rebase
+  -- so it just looked like the count sliding back toward zero. Reported as a
+  cosmetic oddity on a long drive; it actually meant the ESP was resetting and
+  dropping detections in between.
+
 ## v0.55
 **ESP32-C5 correctness.** The one person field-testing this runs a C5, and three
 separate things in the app assumed every board was a classic ESP32.

@@ -88,6 +88,24 @@ bool ble_following_gate(uint32_t count, uint32_t elapsed_ms, uint32_t waypoints,
  *  without this the vibro motor machine-guns and drains the battery. */
 #define ALERT_COOLDOWN_MS 3000u
 
+/**
+ * Frames-per-second from two lifetime counter readings, or -1 when no honest
+ * rate can be derived.
+ *
+ * The companion reports LIFETIME totals, so the on-screen number only ever grew.
+ * That answers "is the link alive" but not "is this thing hearing anything right
+ * now", which is the question you actually have while parked next to a camera
+ * (issue #5). A rate answers it in six characters.
+ *
+ * Returns -1, rather than 0 or a huge number, in the two cases where the inputs
+ * do not describe a rate at all:
+ *   - no time has elapsed between readings (divide by zero), and
+ *   - the counter went DOWN, which a lifetime total cannot do unless the ESP
+ *     rebooted. Reporting 0/s there would read as "the radio went deaf" when
+ *     what happened is the board restarted.
+ */
+int32_t esp_frames_rate(uint32_t prev_frames, uint32_t now_frames, uint32_t elapsed_ms);
+
 /** ReconSettings.alert_min_conf. Index-aligned with alert_conf_text[] in the
  *  settings scene; map to a confidence rung with flock_alert_min_conf_rung(). */
 typedef enum {

@@ -335,6 +335,21 @@ typedef struct {
     bool esp_rebase; /**< next status line captures the per-session base */
     uint8_t esp_channel;
     uint32_t esp_lines; /**< RX line heartbeat (generic mode liveness) */
+    // Live activity, not lifetime totals. A number that only grows tells you the
+    // link is up but not whether the radio is hearing anything RIGHT NOW, which
+    // is the question you have while parked next to a camera (issue #5).
+    int32_t esp_frame_rate; /**< frames/s from the last two status lines, -1 = unknown */
+    uint32_t esp_frames_prev; /**< lifetime total at the last rate sample */
+    uint32_t esp_rate_tick; /**< tick of that sample */
+    uint32_t esp_ble_seen; /**< BLE adverts received this session. The Flock screen
+                             *  showed NOTHING about BLE, so in flockcombo mode there
+                             *  was no way to tell a working BLE half from one that
+                             *  never ran -- and BLE is usually the easy detection. */
+    uint32_t esp_reboots; /**< times the companion's lifetime counter fell, i.e. the
+                            *  board restarted mid-session. Silently absorbed before
+                            *  v0.56: a user reported the count "ticking back to 0" on
+                            *  long drives as a cosmetic annoyance, when it was the ESP
+                            *  resetting and dropping detections. */
     uint32_t esp_deauths; /**< deauth/disassoc frames seen (attack indicator) */
     uint8_t esp_proto_version; /**< companion wire-protocol version (FLOCKCO banner; 0 = unknown) */
     bool esp_proto_mismatch; /**< companion speaks a different protocol version than the app */

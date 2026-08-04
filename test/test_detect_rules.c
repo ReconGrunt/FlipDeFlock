@@ -150,6 +150,22 @@ void suite_detect_rules(void) {
     // device. Only the archived->live transition resets it.
     CHECK(!flock_alert_should_fire_ex(4, 4, true, false, 100000, 1000, true, dflt));
 
+    // --- esp_frames_rate: live activity, not a lifetime total (issue #5) -----
+    CHECK_INT_EQ(esp_frames_rate(0, 100, 1000), 100); // 100 frames in 1 s
+    CHECK_INT_EQ(esp_frames_rate(500, 1000, 1000), 500);
+    CHECK_INT_EQ(esp_frames_rate(0, 50, 500), 100); // half a second, doubled
+    CHECK_INT_EQ(esp_frames_rate(1000, 1000, 1000), 0); // link up, hearing nothing
+    // -1 means "no honest rate", and the two cases are NOT the same as 0/s:
+    // a divide-by-zero window, and a lifetime counter that FELL, which can only
+    // happen when the ESP rebooted. Reporting 0/s for a reboot would read as "the
+    // radio went deaf" when the board actually restarted -- the distinction a
+    // user hit as the count "ticking back to 0" on a long drive.
+    CHECK_INT_EQ(esp_frames_rate(100, 200, 0), -1);
+    CHECK_INT_EQ(esp_frames_rate(9000, 12, 1000), -1);
+    // Must not overflow on a big delta: delta * 1000 exceeds 32 bits well before
+    // a uint32_t frame counter does.
+    CHECK(esp_frames_rate(0, 4000000000u, 1000) > 0);
+
     // --- the threshold is honoured, not just accepted ------------------------
     // The whole point of issue #5: an operator who only ever sees "Possible" can
     // lower the bar and actually be told. Same input, three thresholds.

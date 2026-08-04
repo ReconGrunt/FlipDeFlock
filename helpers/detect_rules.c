@@ -91,3 +91,14 @@ bool flock_alert_should_fire_ex(
     if(have_alerted_before && (now_tick - last_alert_tick) < ALERT_COOLDOWN_MS) return false;
     return true;
 }
+
+int32_t esp_frames_rate(uint32_t prev_frames, uint32_t now_frames, uint32_t elapsed_ms) {
+    if(elapsed_ms == 0) return -1;
+    if(now_frames < prev_frames) return -1; // lifetime counter fell -> ESP rebooted
+    uint32_t delta = now_frames - prev_frames;
+    // 64-bit intermediate: a 921600-baud link can move enough frames between two
+    // status lines that delta * 1000 overflows 32 bits on a long interval.
+    uint64_t r = ((uint64_t)delta * 1000u) / elapsed_ms;
+    if(r > 99999u) r = 99999u; // clamp so the header can never be blown open
+    return (int32_t)r;
+}

@@ -241,6 +241,12 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.56** - **The Flock header shows live activity, not a total that only grows.**
+`rx<n>/s` is the Wi-Fi frame rate, `b<n>` is BLE adverts this session (the screen
+previously showed nothing about BLE at all), and `!r<n>` means the companion
+restarted - which used to be hidden, appearing only as the count sliding back
+toward zero.
+
 **v0.55** - **ESP32-C5 correctness.** The **GPS pin picker no longer offers pins that
 can cut the link** - it was a hardcoded classic-ESP32 list, and on a C5 four of those
 pins do not exist, two are the flash bus and one is UART0 itself. The board now
