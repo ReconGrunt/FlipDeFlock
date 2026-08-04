@@ -1113,12 +1113,35 @@ static constexpr int flock_min_i(int a, int b) {
 static constexpr int flock_max_i(int a, int b) {
     return a > b ? a : b;
 }
+// The flash-bus pin macros were RENAMED between IDF 4.x and 5.x: core 2.x calls
+// them SPI_IOMUX_PIN_NUM_*, core 3.x calls the memory-SPI bus MSPI_IOMUX_PIN_NUM_*
+// and reuses the bare SPI_ prefix for the general-purpose controllers. Building
+// against only one spelling compiles on one core and fails on the other, which is
+// exactly what the core-3.x compat job exists to catch -- and did.
+#if defined(MSPI_IOMUX_PIN_NUM_CLK)
+#define FLOCK_F_CLK  MSPI_IOMUX_PIN_NUM_CLK
+#define FLOCK_F_MISO MSPI_IOMUX_PIN_NUM_MISO
+#define FLOCK_F_MOSI MSPI_IOMUX_PIN_NUM_MOSI
+#define FLOCK_F_HD   MSPI_IOMUX_PIN_NUM_HD
+#define FLOCK_F_WP   MSPI_IOMUX_PIN_NUM_WP
+#define FLOCK_F_CS   MSPI_IOMUX_PIN_NUM_CS
+#elif defined(SPI_IOMUX_PIN_NUM_CLK)
+#define FLOCK_F_CLK  SPI_IOMUX_PIN_NUM_CLK
+#define FLOCK_F_MISO SPI_IOMUX_PIN_NUM_MISO
+#define FLOCK_F_MOSI SPI_IOMUX_PIN_NUM_MOSI
+#define FLOCK_F_HD   SPI_IOMUX_PIN_NUM_HD
+#define FLOCK_F_WP   SPI_IOMUX_PIN_NUM_WP
+#define FLOCK_F_CS   SPI_IOMUX_PIN_NUM_CS
+#else
+#error "No flash IOMUX pin macros for this IDF -- the GPS pin guard cannot be derived"
+#endif
+
 static constexpr int FLOCK_FLASH_LO = flock_min_i(
-    flock_min_i(flock_min_i(SPI_IOMUX_PIN_NUM_CLK, SPI_IOMUX_PIN_NUM_MISO), SPI_IOMUX_PIN_NUM_MOSI),
-    flock_min_i(flock_min_i(SPI_IOMUX_PIN_NUM_HD, SPI_IOMUX_PIN_NUM_WP), SPI_IOMUX_PIN_NUM_CS));
+    flock_min_i(flock_min_i(FLOCK_F_CLK, FLOCK_F_MISO), FLOCK_F_MOSI),
+    flock_min_i(flock_min_i(FLOCK_F_HD, FLOCK_F_WP), FLOCK_F_CS));
 static constexpr int FLOCK_FLASH_HI = flock_max_i(
-    flock_max_i(flock_max_i(SPI_IOMUX_PIN_NUM_CLK, SPI_IOMUX_PIN_NUM_MISO), SPI_IOMUX_PIN_NUM_MOSI),
-    flock_max_i(flock_max_i(SPI_IOMUX_PIN_NUM_HD, SPI_IOMUX_PIN_NUM_WP), SPI_IOMUX_PIN_NUM_CS));
+    flock_max_i(flock_max_i(FLOCK_F_CLK, FLOCK_F_MISO), FLOCK_F_MOSI),
+    flock_max_i(flock_max_i(FLOCK_F_HD, FLOCK_F_WP), FLOCK_F_CS));
 
 /* These pin down the two things above that are easy to get quietly wrong: that
  * the MIN5/MAX5 folding actually yields the flash span, and that the per-target
