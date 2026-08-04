@@ -1124,7 +1124,12 @@ static constexpr int flock_max_i(int a, int b) {
 #define FLOCK_F_MOSI MSPI_IOMUX_PIN_NUM_MOSI
 #define FLOCK_F_HD   MSPI_IOMUX_PIN_NUM_HD
 #define FLOCK_F_WP   MSPI_IOMUX_PIN_NUM_WP
-#define FLOCK_F_CS   MSPI_IOMUX_PIN_NUM_CS
+// ...and the chip-select is CS0 on some core-3.x targets, bare CS on others.
+#if defined(MSPI_IOMUX_PIN_NUM_CS0)
+#define FLOCK_F_CS MSPI_IOMUX_PIN_NUM_CS0
+#else
+#define FLOCK_F_CS MSPI_IOMUX_PIN_NUM_CS
+#endif
 #elif defined(SPI_IOMUX_PIN_NUM_CLK)
 #define FLOCK_F_CLK  SPI_IOMUX_PIN_NUM_CLK
 #define FLOCK_F_MISO SPI_IOMUX_PIN_NUM_MISO
