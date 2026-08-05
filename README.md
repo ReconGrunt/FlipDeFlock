@@ -11,11 +11,9 @@ deauth floods and evil-twin APs. The Flipper is the screen, GPS tagger, and
 logger; the ESP32 does the Wi-Fi sniffing its BLE-only radio can't. It's for
 security assessments, anti-surveillance awareness, and CTF/research.
 
-**Flock / ALPR recon is passive only.** It listens; it never transmits deauth,
-injection, or jamming. The companion's tracker tools are different: **Ping** and
-**Ring** are explicit, user-triggered BLE actions on a selected, validated tracker.
-Detections are indicators, not proof: OUI-only matches are possible, not confirmed,
-so verify by eye. Use it only where you are authorized to.
+**Passive recon only.** It listens; it never transmits — no deauth, injection, or
+jamming. Detections are indicators, not proof: OUI-only matches are possible, not
+confirmed, so verify by eye. Use it only where you are authorized to.
 
 Builds against Flipper API 87.1, shared by current stock OFW and
 [Momentum](https://github.com/Next-Flip/Momentum-Firmware).
@@ -44,6 +42,10 @@ Download `flipdeflock.fap` from the [latest release](../../releases/latest), cop
 it to `apps/Tools/` on your Flipper's SD card, and launch **FlipDeFlock** from the
 Tools menu. Every push also builds a fresh `.fap` as a CI artifact under the
 **Actions** tab.
+
+Releases also carry `SHA256SUMS.txt`. If you got your copy anywhere other than this
+repository's releases page, check it — `sha256sum -c SHA256SUMS.txt` — and see
+[TRADEMARK.md](TRADEMARK.md#verifying-an-official-build).
 
 If a newer firmware bumps the API and the app refuses to load ("API mismatch"),
 rebuild it with `ufbt` — see [Build from source](#build-from-source). Other common
@@ -110,14 +112,10 @@ firmware; in Marauder mode they explain what's missing.
   Google Find My trackers and Flock/Raven BLE. Apple Find My status bytes keep
   phones, Macs, and AirPods out of the tracker list, and weak tracker adverts are
   ignored. With GPS on, a tracker that stays with you across several waypoints is
-  flagged `!FOLLOWING` (anti-stalking); open it for the track. BLE reports retain
-  the tracker `SEP state` as an advertisement marker, not proof of ownership or
-  stalking. From a tracker detail view, **Ping** performs a one-shot GATT
-  reachability check; **Ring** sends the non-owner anti-stalking sound request,
-  only for an Apple/Find My tracker freshly advertising `SEP`. A successful write
-  is not proof that a sound was heard. Labels a **Flock Raven (audio sensor)** only
-  when it sees the Raven's own Bluetooth services — it never guesses "camera" by
-  elimination.
+  flagged `!FOLLOWING` (anti-stalking); open it for the track. `SEP state` is an
+  advertisement state marker, not proof of ownership or stalking. Labels a
+  **Flock Raven (audio sensor)** only when it sees the Raven's own Bluetooth
+  services — it never guesses "camera" by elimination.
 - **Net Guardian** *(companion)* — a leave-it-on-the-desk watch face. Keeps the ESP
   running and rotates it across Wi-Fi and BLE so the fused **CLEAR / WATCHFUL /
   ELEVATED** "am I being watched?" score stays live, with a pwnagotchi-style face
@@ -502,7 +500,12 @@ the ESP MD5 routine (BSD) — see the headers under `lib/`.
 licensed code. Don't publish a fork, repackage, or store listing under the
 FlipDeFlock name or logo in a way that implies it's official. Rename your
 derivative — a "based on FlipDeFlock" credit is welcome. Forking on GitHub keeps
-the link and credit intact.
+the link and credit intact. Full policy, including how to verify an official
+build: [TRADEMARK.md](TRADEMARK.md).
+
+**Commercial licensing.** FlipDeFlock is and stays free under the GPL. If you want
+to ship it inside a closed product and can't meet the GPL's source obligations, a
+separate commercial licence is available — see [LICENSING.md](LICENSING.md).
 
 ## Contributing
 
