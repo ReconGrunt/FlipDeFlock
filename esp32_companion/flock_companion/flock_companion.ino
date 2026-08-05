@@ -1518,7 +1518,20 @@ void loop() {
 
     // Locator mode owns the radio: stream the target's live RSSI as LOC lines.
     if(g_locate_kind == 'w') {
-        if(now - g_last_loc >= 120) {
+        // 400 ms, not 120.
+        //
+        // The main target is a Flock camera, and those are station-mode devices
+        // that sweep the channels with probe requests. We sit on ONE channel, so
+        // the target lands on us roughly once every 1.6 s. Against that, a 120 ms
+        // window that hard-resets its peak spends about 92% of its life expiring
+        // empty, and the readings that do survive are single raw frames.
+        //
+        // A longer window does not invent data -- the same frames arrive either
+        // way. It stops discarding the peak between them, so a reading that was
+        // captured actually reaches the operator instead of being thrown away
+        // 120 ms later. Still silent when genuinely nothing was heard, which is
+        // what makes "out of range" mean something.
+        if(now - g_last_loc >= 400) {
             g_last_loc = now;
             if(g_locate_best > -127) {
                 Serial.printf("LOC,%d\n", g_locate_best);
