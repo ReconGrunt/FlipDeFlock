@@ -150,7 +150,12 @@ void recon_app_alert_tick(ReconApp* app) {
 
     // Fire outside the lock: notification_message queues work for the
     // notification service and must not stall the ESP worker behind it.
-    if(pending) recon_alert_fire(app->notifications, mode, sound);
+    if(pending) {
+        recon_alert_fire(app->notifications, mode, sound);
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        app->alert_fired++;
+        furi_mutex_release(app->mutex);
+    }
 }
 
 void recon_app_set_esp_status(
@@ -296,6 +301,12 @@ void recon_app_gps_cfg_tick(ReconApp* app) {
         esp_link_send_band(app->esp);
         esp_link_send_gps_cfg(app->esp);
     }
+}
+
+void recon_app_ble_scan_done(ReconApp* app) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->esp_ble_scans++;
+    furi_mutex_release(app->mutex);
 }
 
 void recon_app_ble_begin(ReconApp* app) {

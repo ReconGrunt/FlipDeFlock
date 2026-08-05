@@ -241,6 +241,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.58** - **The version is on the main menu and About.** The Flock header also gains
+`a<n>`, the count of alerts actually delivered, so "no beep" can be told apart from
+the Flipper's own notification settings swallowing it; and `b-` now means no BLE scan
+has completed yet, as distinct from `b0` meaning one ran and heard nothing.
+
 **v0.57** - **Screen icons in the title bars.** A camera on Flock, a shield on Net
 Guardian, a crosshair on the Locator, with `FLOCK/ALPR` shortened to `FDF` to hand
 header width back to the counters. Also reclaims 156 bytes from the Settings pin

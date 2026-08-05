@@ -35,7 +35,9 @@ static void recon_scene_start_update_header(ReconApp* app) {
     WatchState st = (WatchState)app->watch.state;
     if(st == WatchStateClear) {
         submenu_set_header(
-            app->submenu, wifi_only ? "FlipDeFlock - watch: WiFi only" : "FlipDeFlock");
+            app->submenu,
+            wifi_only ? "FlipDeFlock " RECON_VERSION " - WiFi only" :
+                        "FlipDeFlock " RECON_VERSION);
         return;
     }
     const char* bd = app->watch.breakdown;

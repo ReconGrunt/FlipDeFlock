@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.58
+**Version on screen, and two invisible failures made visible.** All from
+[@h00die](https://github.com/h00die) on
+[#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5).
+
+### Added
+
+- **The version is on the main menu** (`FlipDeFlock v0.58`) and on About, so a bug
+  report can name the build without digging.
+- **`a<n>`: alerts actually DELIVERED this session.** "No beep or vibrate" has been
+  reported three times, and there was no way to tell the app not firing from the
+  Flipper's own notification settings swallowing it. Those are different faults
+  with different fixes. If `a` climbs and nothing buzzes, the app did its part and
+  the fault is the Flipper's Notification settings (volume / vibro) or the alert
+  level being set above the rung being detected.
+- **`b-` versus `b0`.** A BLE count of 0 could not distinguish "BLE ran and heard
+  nothing" from "BLE never ran at all" -- and a user seeing `b0` beside a healthy
+  Wi-Fi rate had no way to know which. `b-` now means no BLE scan phase has
+  completed yet; `b0` means one has, and found nothing.
+- Spaces dropped after each header tag, freeing width before the GPS badge.
+- **About credits @h00die**, who has found more real bugs in this project than
+  anyone else using it.
+
 ## v0.57
 **Screen icons in the title bars, and a small memory reclaim.**
 

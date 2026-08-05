@@ -75,6 +75,8 @@ void recon_scene_guardian_on_enter(void* context) {
     app->esp_frames_prev = 0;
     app->esp_rate_tick = 0;
     app->esp_ble_seen = 0;
+    app->esp_ble_scans = 0;
+    app->alert_fired = 0;
     app->esp_reboots = 0;
     app->esp_rebase = true; // per-session rebase off the companion's lifetime total
     app->esp_connected = false;

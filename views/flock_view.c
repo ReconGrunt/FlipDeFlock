@@ -105,6 +105,8 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     uint32_t lines = app->esp_lines;
     int32_t frame_rate = app->esp_frame_rate;
     uint32_t ble_seen = app->esp_ble_seen;
+    uint32_t ble_scans = app->esp_ble_scans;
+    uint32_t alerts = app->alert_fired;
     uint32_t reboots = app->esp_reboots;
     uint32_t deauths = app->esp_deauths;
     bool proto_mismatch = app->esp_proto_mismatch;
@@ -247,7 +249,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // (overlong RX lines) is appended as a "!dN" health suffix on the normal lines.
     char drop[16] = "";
     if(dropped) snprintf(drop, sizeof(drop), " !d%lu", (unsigned long)dropped);
-    char hdr[48];
+    char hdr[64]; // rx+ble+alerts+reboots+drop all in one line
     if(proto_mismatch) {
         snprintf(hdr, sizeof(hdr), "! Companion FW proto v%u mismatch", proto_version);
     } else if(deauths >= DEAUTH_FLOOD_MIN) {
@@ -282,6 +284,19 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         // Clamped, not just formatted: the compiler cannot prove a uint32_t fits
         // these buffers, and a header field that can grow without bound is a bug
         // waiting for a long drive.
+        // Spaces dropped after each tag on a user's suggestion: the sub-line has
+        // to clear the GPS badge, and "b" is unambiguous next to a digit.
+        //
+        //   rx<n>/s  Wi-Fi frames per second, "--" until two status lines land.
+        //   b<n>     BLE adverts. "b-" means NO BLE scan phase has completed yet,
+        //            which a bare 0 could not distinguish from "BLE ran and heard
+        //            nothing" -- and that ambiguity is exactly what left a user
+        //            unable to tell whether his BLE half worked at all.
+        //   a<n>     alerts DELIVERED. The app firing and the Flipper's own
+        //            notification settings swallowing it are different faults with
+        //            different fixes, and "no beep" was reported three times with
+        //            no way to see which one it was.
+        //   !r<n>    the companion restarted.
         char rst[10] = "";
         if(reboots) snprintf(rst, sizeof(rst), " !r%u", (unsigned)(reboots > 99 ? 99 : reboots));
         char rate_s[8];
@@ -291,13 +306,20 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             snprintf(
                 rate_s, sizeof(rate_s), "%u", (unsigned)(frame_rate > 9999 ? 9999 : frame_rate));
         }
+        char ble_s[8];
+        if(!ble_scans) {
+            snprintf(ble_s, sizeof(ble_s), "-");
+        } else {
+            snprintf(ble_s, sizeof(ble_s), "%u", (unsigned)(ble_seen > 9999 ? 9999 : ble_seen));
+        }
         snprintf(
             hdr,
             sizeof(hdr),
-            "%s rx%s/s b%u%s%s",
+            "%s rx%s/s b%s a%u%s%s",
             connected ? "ESP" : "...",
             rate_s,
-            (unsigned)(ble_seen > 99999 ? 99999 : ble_seen),
+            ble_s,
+            (unsigned)(alerts > 99 ? 99 : alerts),
             rst,
             drop);
     }

@@ -36,6 +36,9 @@
 #define RECON_BLE_MAX     48
 #define RECON_TEXT_STORE  160
 #define RECON_SSID_LEN    33
+/** Shown on the main menu and About. Kept in step with fap_version by hand;
+ *  a user reporting a bug needs to be able to read it off the screen. */
+#define RECON_VERSION     "v0.58"
 /** Most GPS-capable pins any supported part exposes (classic ESP32 has ~34). */
 #define RECON_GPS_PIN_MAX 40
 
@@ -344,6 +347,14 @@ typedef struct {
     int32_t esp_frame_rate; /**< frames/s from the last two status lines, -1 = unknown */
     uint32_t esp_frames_prev; /**< lifetime total at the last rate sample */
     uint32_t esp_rate_tick; /**< tick of that sample */
+    uint32_t esp_ble_scans; /**< BLE scan phases COMPLETED (BEND). Distinguishes
+                             *   "BLE ran and saw nothing" from "BLE never ran",
+                             *   which a bare count of 0 cannot. */
+    uint32_t alert_fired; /**< alerts actually delivered this session. Shown so an
+                            *   operator can tell the app not firing from the
+                            *   Flipper's own notification settings swallowing it --
+                            *   reported three times as "no beep/vibrate" with no way
+                            *   to see which half was at fault (issue #5). */
     uint32_t esp_ble_seen; /**< BLE adverts received this session. The Flock screen
                              *  showed NOTHING about BLE, so in flockcombo mode there
                              *  was no way to tell a working BLE half from one that
@@ -524,6 +535,10 @@ void recon_app_set_locate_rssi(ReconApp* app, int8_t rssi);
 
 /** BLE scan results (thread-safe; called from the ESP worker). */
 void recon_app_ble_begin(ReconApp* app);
+
+/** A BLE scan phase finished (BEND). Counted so "BLE never ran" and "BLE ran
+ *  and saw nothing" stop looking identical on the header. */
+void recon_app_ble_scan_done(ReconApp* app);
 void recon_app_ble_add(
     ReconApp* app,
     const uint8_t addr[6],
