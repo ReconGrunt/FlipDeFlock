@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.59
+### Added
+
+- **Settings gains `Test alert`.** Press Left/Right and the app fires the real
+  detection alert with your real settings, immediately.
+  "No beep or vibrate" has been reported three times on
+  [#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5) and every structural
+  part of the path audits clean, because the app firing and the Flipper's own
+  notification settings swallowing it are indistinguishable from outside. One
+  press separates them. Silent means the fault is the Flipper's **Notifications**
+  (volume / vibro) or **Alert on hit** being OFF, and no detection tuning will
+  ever produce a sound. A buzz means the notification path works and the question
+  moves to whether a detection actually qualified -- which the new `a<n>` counter
+  on the Flock header then answers.
+  It calls the same `recon_alert_fire()` the detection path calls, deliberately:
+  a test that exercises different code than the thing it tests is worth nothing.
+
 ## v0.58
 **Version on screen, and two invisible failures made visible.** All from
 [@h00die](https://github.com/h00die) on

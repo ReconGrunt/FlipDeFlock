@@ -155,6 +155,17 @@ static void esp_band_changed(VariableItem* item) {
     recon_settings_save(app);
 }
 
+// Fires the REAL alert with the operator's real settings. Left/Right rather than
+// OK because a VariableItemList item is a value-changer, not a button; the value
+// text says so. Deliberately calls the same recon_alert_fire() the detection path
+// calls -- a test that exercises different code than the thing it tests is worth
+// nothing.
+static void test_alert_changed(VariableItem* item) {
+    ReconApp* app = variable_item_get_context(item);
+    variable_item_set_current_value_text(item, "press <>");
+    recon_alert_fire(app->notifications, app->settings.alert_mode, app->settings.sound);
+}
+
 static void gps_port_changed(VariableItem* item) {
     ReconApp* app = variable_item_get_context(item);
     uint8_t idx = variable_item_get_current_value_index(item);
@@ -375,6 +386,22 @@ void recon_scene_settings_on_enter(void* context) {
     item = variable_item_list_add(list, "Anomaly flag", 2, anomaly_flag_changed, app);
     variable_item_set_current_value_index(item, idx);
     variable_item_set_current_value_text(item, onoff_text[idx]);
+
+    // Fire the REAL alert, with the operator's real settings, on demand.
+    //
+    // "No beep or vibrate" has been reported three times and every structural
+    // part of the path audits clean, because the app firing and the Flipper's own
+    // notification settings swallowing it are indistinguishable from the outside.
+    // One press splits them: if this is silent, the fault is the Flipper's
+    // Notifications (volume / vibro) or Alert on hit being OFF, and no amount of
+    // detection tuning will ever produce a sound. If it buzzes, the notification
+    // path works and the question moves to whether a detection qualified.
+    //
+    // Deliberately the same recon_alert_fire() the detection path calls, not a
+    // stand-in: a test that exercises different code than the thing it is testing
+    // is worth nothing.
+    item = variable_item_list_add(list, "Test alert", 2, test_alert_changed, app);
+    variable_item_set_current_value_text(item, "press <>");
 
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewVarItemList);
 }

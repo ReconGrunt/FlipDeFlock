@@ -241,6 +241,10 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.59** - **Settings gains `Test alert`**: press Left/Right to fire the real
+detection alert with your real settings. If it is silent the fault is the Flipper's
+own Notifications settings or Alert on hit being off, not the detection side.
+
 **v0.58** - **The version is on the main menu and About.** The Flock header also gains
 `a<n>`, the count of alerts actually delivered, so "no beep" can be told apart from
 the Flipper's own notification settings swallowing it; and `b-` now means no BLE scan
