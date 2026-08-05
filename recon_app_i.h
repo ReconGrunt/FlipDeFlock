@@ -38,7 +38,7 @@
 #define RECON_SSID_LEN    33
 /** Shown on the main menu and About. Kept in step with fap_version by hand;
  *  a user reporting a bug needs to be able to read it off the screen. */
-#define RECON_VERSION     "v0.61"
+#define RECON_VERSION     "v0.62"
 /** Most GPS-capable pins any supported part exposes (classic ESP32 has ~34). */
 #define RECON_GPS_PIN_MAX 40
 
@@ -350,6 +350,9 @@ typedef struct {
     uint32_t esp_ble_scans; /**< BLE scan phases COMPLETED (BEND). Distinguishes
                              *   "BLE ran and saw nothing" from "BLE never ran",
                              *   which a bare count of 0 cannot. */
+    bool warn_dismissed; /**< the operator has read the fault panel this session */
+    bool gps_fault_active; /**< a GPS fault is currently showing, so OK means
+                             *   "dismiss" rather than "open detail" */
     uint32_t alert_fired; /**< alerts actually delivered this session. Shown so an
                             *   operator can tell the app not firing from the
                             *   Flipper's own notification settings swallowing it --

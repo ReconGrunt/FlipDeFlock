@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.62
+**A warning that cannot be looked up is not a warning.**
+
+### Added
+
+- **Help & Warnings**, a new main-menu page explaining every mark this app can put
+  on a screen: the GPS badge states and what to do about each, the scan header
+  fields, the row confidence letters and tags, and a common-fixes section. A user
+  hit `!PORT` on his own device and said "I don't know what it means and have no
+  way of finding out" -- naming a fault precisely is only half the job.
+- **A fault explains itself where you meet it.** When GPS cannot work, the scan
+  screen shows what is wrong, what to change, and where -- e.g. `!PORT UART clash
+  / GPS and ESP share a port. / Settings > GPS Port`. OK dismisses it, and it only
+  re-arms on a fresh scan session, so it never becomes something to swat away.
+
 ## v0.61
 ### Fixed
 

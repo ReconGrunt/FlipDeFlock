@@ -241,6 +241,10 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.62** - **Help & Warnings**, a new main-menu page explaining every mark the app
+can show and how to fix the ones that matter. A GPS fault also now explains itself
+on the scan screen, with the setting to change, dismissible with OK.
+
 **v0.61** - **GPS fault badges no longer start with "GPS"**, which was being read as
 the opposite of what it meant. They now name the fix: `!PORT`, `!PIN`, `!FW`. The
 Wi-Fi glyph is also tightened so it reads as one mark.

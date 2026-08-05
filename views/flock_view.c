@@ -107,6 +107,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     uint32_t ble_seen = app->esp_ble_seen;
     uint32_t ble_scans = app->esp_ble_scans;
     uint32_t alerts = app->alert_fired;
+    bool warn_dismissed = app->warn_dismissed;
     uint32_t reboots = app->esp_reboots;
     uint32_t deauths = app->esp_deauths;
     bool proto_mismatch = app->esp_proto_mismatch;
@@ -162,6 +163,27 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     bool gps_relay_mute = gps_companion && !generic && connected &&
                           app->gps_relay == ReconGpsRelayUnknown && app->gps_cfg_tick &&
                           (furi_get_tick() - app->gps_cfg_tick) > furi_ms_to_ticks(4000);
+
+    // One place decides both the badge and the explanation, so the two can never
+    // describe different faults.
+    const char* fault_title = NULL;
+    const char* fault_msg = NULL;
+    const char* fault_fix = NULL;
+    if(gps_relay_mute) {
+        fault_title = "!FW  no GPS relay";
+        fault_msg = "Companion never answered.";
+        fault_fix = "Reflash: ESP32 Firmware";
+    } else if(gps_relay_bad) {
+        fault_title = "!PIN  refused";
+        fault_msg = "Board rejected that pin.";
+        fault_fix = "Settings > ESP GPS Pin";
+    } else if(gps_busy) {
+        fault_title = "!PORT  UART clash";
+        fault_msg = "GPS and ESP share a port.";
+        fault_fix = "Settings > GPS Port";
+    }
+
+    app->gps_fault_active = (fault_msg != NULL);
 
     // Most-attacked BSSID + channel for the deauth header attribution.
     bool have_attr = false;
@@ -415,6 +437,30 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     }
     canvas_draw_line(canvas, 0, 24, 128, 24);
 
+    // A fault explains itself HERE, where you meet it, once per session.
+    //
+    // The badge names what is wrong in five characters, which is all the header
+    // has room for and is useless on its own: a user hit !PORT and said "I don't
+    // know what it means and have no way of finding out." Naming a fault without
+    // saying what to do about it just relocates the confusion. The full reference
+    // lives in Help & Warnings; this is the pointer to it, at the moment it
+    // matters. Dismissed with OK, and only re-armed on a fresh scan session, so
+    // it never becomes something to swat away every frame.
+    if(fault_msg && !warn_dismissed) {
+        canvas_set_color(canvas, ColorWhite);
+        canvas_draw_box(canvas, 0, 26, 128, 38);
+        canvas_set_color(canvas, ColorBlack);
+        canvas_draw_frame(canvas, 0, 26, 128, 38);
+        canvas_set_font(canvas, FontPrimary);
+        canvas_draw_str(canvas, 3, 36, fault_title);
+        canvas_set_font(canvas, FontSecondary);
+        ui_draw_str_fit(canvas, 3, 45, fault_msg, 125);
+        ui_draw_str_fit(canvas, 3, 53, fault_fix, 125);
+        canvas_draw_str(canvas, 3, 62, "OK dismiss - see Help");
+        canvas_draw_line(canvas, 0, 24, 128, 24);
+        return;
+    }
+
     if(count == 0) {
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str_aligned(
@@ -547,6 +593,18 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                 true);
             handled = true;
         } else if(event->key == InputKeyOk && event->type == InputTypeShort) {
+            // The fault panel owns OK while it is up: the first press is far more
+            // likely to be "I have read this" than "open a detail screen I cannot
+            // even see right now".
+            ReconApp* app = NULL;
+            with_view_model(fv->view, FlockViewModel * model, { app = model->app; }, false);
+            if(app) {
+                furi_mutex_acquire(app->mutex, FuriWaitForever);
+                bool showing = !app->warn_dismissed && app->gps_fault_active;
+                if(showing) app->warn_dismissed = true;
+                furi_mutex_release(app->mutex);
+                if(showing) return true;
+            }
             int sel = 0;
             with_view_model(fv->view, FlockViewModel * model, { sel = model->selected; }, false);
             if(fv->ok_cb) fv->ok_cb(fv->ok_ctx, sel);
