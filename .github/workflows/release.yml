@@ -64,6 +64,28 @@ jobs:
             echo 'FAPEOF'
           } >> "$GITHUB_OUTPUT"
 
+      # Pack the desktop asset pack and attach it too.
+      #
+      # SEPARATE from the .fap on purpose, unlike the QR plugin above. The plugin
+      # is embedded because it is part of the app; this is not -- it replaces the
+      # FIRMWARE's desktop animations, installs to a different place on the SD
+      # card, and is entirely optional. Bundling it into the .fap would be
+      # impossible anyway, since the firmware reads it from /ext/asset_packs.
+      #
+      # Frames are committed as .png sources and packed to .bm here, using the
+      # SDK's own icon packer rather than a reimplementation: the format is a
+      # heatshrink payload behind a 4-byte header, and getting it subtly wrong
+      # produces files that look fine and render as garbage.
+      - name: Pack asset pack
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet heatshrink2 pillow
+          python tools/pack_assets.py asset_packs/FlipDeFlock dist/asset_pack/FlipDeFlock
+          cd dist/asset_pack
+          zip -qr ../../flipdeflock_asset_pack.zip FlipDeFlock
+          cd ../..
+          ls -l flipdeflock_asset_pack.zip
+
       # Attach the built .fap to the Release for this tag.
       # - If the maintainer already created the release manually, this updates it
       #   (does not create a duplicate).
@@ -71,7 +93,9 @@ jobs:
       - name: Attach .fap to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.assets.outputs.files }}
+          files: |
+            ${{ steps.assets.outputs.files }}
+            flipdeflock_asset_pack.zip
           fail_on_unmatched_files: true
           # Auto-generate "What's Changed" notes when THIS workflow creates the
           # release (tag pushed with no release yet). If the maintainer pre-created

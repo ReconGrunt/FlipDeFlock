@@ -241,6 +241,9 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.65** - **The asset pack now ships with releases** as `flipdeflock_asset_pack.zip`,
+so the desktop animations can actually be installed without cloning the repo.
+
 **v0.64** - **Asset pack gains a hoodie-kicks-the-camera-pole animation**, a tribute
 to [@h00die](https://github.com/h00die). The on-screen version is also derived from
 a single source now, so it can never disagree with the build it came from.

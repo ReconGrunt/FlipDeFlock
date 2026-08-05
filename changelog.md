@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.65
+### Added
+
+- **The asset pack ships with every release**, as `flipdeflock_asset_pack.zip`.
+  It was previously repo-only, which meant the animations existed but nobody
+  could install them without cloning the source. Unzip into `asset_packs/` on the
+  SD card and pick it in the firmware's Desktop settings.
+- **`tools/pack_assets.py`** turns the committed `.png` frames into the `.bm`
+  files the firmware reads. The repo keeps PNGs because those are what a human
+  can open and diff; the device wants `.bm`, and this is the step between.
+  Validated by re-packing the existing frames and diffing against what the
+  firmware SDK's own packer produces: 16 of 16 byte-identical.
+
 ## v0.64
 ### Added
 
