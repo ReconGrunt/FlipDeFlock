@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Tiny host-test assert harness (plain C, no dependencies). Each CHECK_* records
 // a check and prints a one-line diagnostic on failure; the process exits non-zero

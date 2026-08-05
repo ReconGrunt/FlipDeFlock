@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 #include "recon_report.h"
 #include "../recon_app_i.h"
 #include "report_escape.h" // csv/json/md/xml field escapers (pure, host-tested)

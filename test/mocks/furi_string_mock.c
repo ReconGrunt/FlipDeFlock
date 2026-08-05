@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Host implementation of the minimal FuriString mock (see mocks/core/string.h):
 // a plain growable char buffer, enough to exercise the modules that append

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Shared Apple Find My advertisement and anti-stalking eligibility rules.
 #include "test.h"

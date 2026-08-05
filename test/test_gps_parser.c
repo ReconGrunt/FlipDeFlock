@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // NMEA parser fixtures. Locks in the shipped GPS fixes: B10 (checksum verified
 // before a sentence is trusted), B23 (satellite count clamped), B7 (a 'V'/void

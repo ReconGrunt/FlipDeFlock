@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+# Copyright (c) 2026 ReconGrunt
 """
 Fail if the OUI tables in the Flipper app and the ESP32 companion have drifted.
 

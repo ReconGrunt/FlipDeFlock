@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Confidence-scoring truth tables for flock_db. Locks in B6 (strict
 // "Flock-XXXXXX" provisioning-AP anchoring) and the precision-first contracts:

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Minimal host mock of Flipper's <core/string.h> (FuriString). Only the surface
 // the unit-tested modules + tests touch is provided; the real FuriString is

@@ -487,8 +487,7 @@ were and weren't imported, and why, is recorded in
 
 ## License
 
-**GPL-3.0-or-later** — see [LICENSE](LICENSE). Copyright (c) 2026 ReconGrunt and
-FlipDeFlock contributors.
+**GPL-3.0-or-later** — see [LICENSE](LICENSE). Copyright (c) 2026 ReconGrunt.
 
 If you distribute a modified version, publish your source under the same terms and
 keep the notices intact. Bundled third-party components keep their own compatible

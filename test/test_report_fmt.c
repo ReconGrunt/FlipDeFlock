@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Tests for the shared report field emitters (R8): MAC + coordinate formatting,
 // plus the RSSI->bar-level scale every screen that draws signal bars goes through.

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Tests for the persisted-hit record format (issue #2). The round trip is the
 // contract that matters: whatever is written on one run must come back

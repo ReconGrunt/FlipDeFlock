@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // helpers/oui_vendor.c -- the curated OUI -> vendor label shown on the WiFi
 // detail screen. Small, but it is displayed next to a detection, so a wrong

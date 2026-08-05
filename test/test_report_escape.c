@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // B12: report field escaping vs injection payloads. A detected SSID / BLE name
 // is up to 32 bytes of attacker-influenced data written into CSV / JSON / KML /

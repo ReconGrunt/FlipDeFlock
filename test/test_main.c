@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Host unit-test runner for FlipDeFlock's pure-logic modules. Builds with plain
 // gcc (see Makefile) so the confidence-scoring / coincidence-gate / auth-grading

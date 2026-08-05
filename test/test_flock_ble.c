@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // helpers/flock_ble.c -- the BLE side of the detection path: serial extraction
 // from the 0x09C8 advert, conservative model identification, and (new in v0.48)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // WATCHSCORE state-machine tests. Locks in the >=2-independent-radio ELEVATED
 // coincidence gate and B16 (a strong 2-radio signal must pass THROUGH WATCHFUL,

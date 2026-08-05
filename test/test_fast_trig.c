@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // fast_trig replaces newlib's sinf/cosf to keep ~3.2 KB of Payne-Hanek range
 // reduction out of an image that has to load into one contiguous allocation.

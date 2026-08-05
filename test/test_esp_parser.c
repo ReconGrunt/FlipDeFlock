@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Copyright (c) 2026 ReconGrunt and FlipDeFlock contributors
+// Copyright (c) 2026 ReconGrunt
 //
 // Adversarial line fixtures for the companion wire-protocol parser (R2 split:
 // parse != mutate). Verifies each line type decodes to the right tagged record
