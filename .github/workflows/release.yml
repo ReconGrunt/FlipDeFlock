@@ -127,6 +127,12 @@ jobs:
       - name: Wait for every asset, then checksum them
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job deliberately has no checkout -- it only needs the API. But
+          # `gh` resolves the repo from a git remote by default, so without this
+          # every call dies with "not a git repository" and the poll below reads
+          # that as "asset not there yet". v0.69 burned the full 10 minutes and
+          # failed on an asset that had been present the whole time.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
           WANT: flipdeflock_companion_esp32wroom.bin
         run: |
