@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.60
+### Changed
+
+- **The Flock header uses the Wi-Fi and Bluetooth glyphs instead of the letters
+  `rx` and `b`**, suggested by [@h00die](https://github.com/h00die) on
+  [#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5). The same two marks
+  already label every row below, so the header stops needing a vocabulary of its
+  own. Reads `ESP [wifi]55/s [bt]490 a2`.
+- **The sub-line is measured against the GPS badge rather than guessed.** It is
+  drawn as placed segments now, each positioned from the measured width of the
+  one before, and nothing is drawn past the badge's left edge -- so no counter can
+  grow into it however large it gets. Previously the only check on that was a
+  user counting the remaining gap by hand off a photograph.
+
 ## v0.59
 ### Added
 

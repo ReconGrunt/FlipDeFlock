@@ -249,7 +249,17 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // (overlong RX lines) is appended as a "!dN" health suffix on the normal lines.
     char drop[16] = "";
     if(dropped) snprintf(drop, sizeof(drop), " !d%lu", (unsigned long)dropped);
-    char hdr[64]; // rx+ble+alerts+reboots+drop all in one line
+    char hdr[64]; // the non-icon variants (proto mismatch / deauth / Marauder)
+    // The normal companion line is drawn as SEGMENTS, not one string, because two
+    // of its fields are glyphs. Reusing the row icons rather than the letters
+    // "rx" and "b" was a user's suggestion and it is strictly better: the same
+    // mark already means Wi-Fi and BLE on every row below, so the header stops
+    // needing its own vocabulary. Their mock-up put the icons BESIDE the labels,
+    // which is wider than what it replaced -- these replace them.
+    bool icon_line = false;
+    char rate_s[10] = "";
+    char ble_s[10] = "";
+    char tail_s[40] = ""; // a<n> + optional !r<n> + optional !d<n>
     if(proto_mismatch) {
         snprintf(hdr, sizeof(hdr), "! Companion FW proto v%u mismatch", proto_version);
     } else if(deauths >= DEAUTH_FLOOD_MIN) {
@@ -299,32 +309,22 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         //   !r<n>    the companion restarted.
         char rst[10] = "";
         if(reboots) snprintf(rst, sizeof(rst), " !r%u", (unsigned)(reboots > 99 ? 99 : reboots));
-        char rate_s[8];
         if(frame_rate < 0) {
-            snprintf(rate_s, sizeof(rate_s), "--");
+            snprintf(rate_s, sizeof(rate_s), "--/s");
         } else {
             snprintf(
-                rate_s, sizeof(rate_s), "%u", (unsigned)(frame_rate > 9999 ? 9999 : frame_rate));
+                rate_s, sizeof(rate_s), "%u/s", (unsigned)(frame_rate > 9999 ? 9999 : frame_rate));
         }
-        char ble_s[8];
         if(!ble_scans) {
             snprintf(ble_s, sizeof(ble_s), "-");
         } else {
             snprintf(ble_s, sizeof(ble_s), "%u", (unsigned)(ble_seen > 9999 ? 9999 : ble_seen));
         }
         snprintf(
-            hdr,
-            sizeof(hdr),
-            "%s rx%s/s b%s a%u%s%s",
-            connected ? "ESP" : "...",
-            rate_s,
-            ble_s,
-            (unsigned)(alerts > 99 ? 99 : alerts),
-            rst,
-            drop);
+            tail_s, sizeof(tail_s), "a%u%s%s", (unsigned)(alerts > 99 ? 99 : alerts), rst, drop);
+        icon_line = true;
     }
     canvas_set_font(canvas, FontSecondary);
-    canvas_draw_str(canvas, 0, 22, hdr);
 
     // GPS state as a badge, not a code (issue #5). Four states, each visually
     // distinct so it reads at a glance in a moving car:
@@ -335,8 +335,13 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     //                      relay config: wrong/old firmware, so reflash it
     // The last two used to render as the hollow "searching" badge forever, which
     // is indistinguishable from a cold start.
+    // Built BEFORE the sub-line is drawn, because its width is what the sub-line
+    // has to stop short of. A user counted the remaining gap by hand off a photo
+    // to work out whether another field would fit; the code should be the one
+    // measuring that, not him.
+    char gps_str[12] = "";
+    int gps_w = 0;
     if(gps_enabled) {
-        char gps_str[12];
         if(gps_relay_mute) {
             // "?" not "!": the difference is reflash-the-companion versus
             // change-the-pin, and sending someone to the wrong one is exactly the
@@ -349,7 +354,38 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         } else {
             snprintf(gps_str, sizeof(gps_str), "GPS");
         }
-        int w = canvas_string_width(canvas, gps_str) + 4;
+        gps_w = canvas_string_width(canvas, gps_str) + 4;
+    }
+    int sub_limit = gps_enabled ? (128 - gps_w - 3) : 126;
+
+    if(icon_line) {
+        // Wi-Fi glyph + rate, BLE glyph + count, then the plain-text tail. Each
+        // segment is placed from the measured width of the one before it, and
+        // nothing is drawn past sub_limit, so the line can never grow into the
+        // GPS badge however large the counters get.
+        int sx = 0;
+        const char* conn = connected ? "ESP" : "...";
+        canvas_draw_str(canvas, sx, 22, conn);
+        sx += canvas_string_width(canvas, conn) + 3;
+        if(sx + UI_RADIO_ICON_W < sub_limit) {
+            ui_icon_radio(canvas, sx, 16, false);
+            sx += UI_RADIO_ICON_W;
+            ui_draw_str_fit(canvas, sx, 22, rate_s, sub_limit);
+            sx += canvas_string_width(canvas, rate_s) + 4;
+        }
+        if(sx + UI_RADIO_ICON_W < sub_limit) {
+            ui_icon_radio(canvas, sx, 16, true);
+            sx += UI_RADIO_ICON_W;
+            ui_draw_str_fit(canvas, sx, 22, ble_s, sub_limit);
+            sx += canvas_string_width(canvas, ble_s) + 4;
+        }
+        if(sx < sub_limit) ui_draw_str_fit(canvas, sx, 22, tail_s, sub_limit);
+    } else {
+        ui_draw_str_fit(canvas, 0, 22, hdr, sub_limit);
+    }
+
+    if(gps_enabled) {
+        int w = gps_w;
         int x = 128 - w;
         // Fill for both "locked" and "misconfigured": a filled badge means "this
         // is settled, stop waiting for it" either way, and the glyph says which.

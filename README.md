@@ -241,6 +241,10 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.60** - **The Flock header uses the Wi-Fi and Bluetooth glyphs** instead of the
+letters `rx` and `b`, and the sub-line is now measured against the GPS badge so no
+counter can ever grow into it.
+
 **v0.59** - **Settings gains `Test alert`**: press Left/Right to fire the real
 detection alert with your real settings. If it is silent the fault is the Flipper's
 own Notifications settings or Alert on hit being off, not the detection side.
