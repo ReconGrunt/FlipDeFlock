@@ -241,6 +241,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.66** - **"Evil twin" now requires a security downgrade**, not just any auth-mode
+difference. The old rule fired on WPA2/WPA3 transition mode, i.e. ordinary modern
+networks. The Suspicious list also shows which BSSID is the open one instead of just
+naming the SSID.
+
 **v0.65** - **The asset pack now ships with releases** as `flipdeflock_asset_pack.zip`,
 so the desktop animations can actually be installed without cloning the repo.
 

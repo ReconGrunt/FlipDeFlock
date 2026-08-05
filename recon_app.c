@@ -544,7 +544,11 @@ void recon_app_wifi_end(ReconApp* app) {
                memcmp(app->wifi[i].bssid, app->wifi[j].bssid, 6) != 0) {
                 app->wifi[i].dup = true;
                 app->wifi[j].dup = true;
-                if(app->wifi[i].authmode != app->wifi[j].authmode) {
+                // Only a security DOWNGRADE is evil-twin shaped. Any auth-mode
+                // difference used to qualify, which fires on WPA2/WPA3
+                // transition mode -- an ordinary modern network -- and told the
+                // operator they were under attack. See wifi_rogue_pair().
+                if(wifi_rogue_pair(app->wifi[i].authmode, app->wifi[j].authmode)) {
                     app->wifi[i].rogue = true;
                     app->wifi[j].rogue = true;
                 }

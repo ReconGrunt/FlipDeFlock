@@ -150,6 +150,32 @@ void suite_detect_rules(void) {
     // device. Only the archived->live transition resets it.
     CHECK(!flock_alert_should_fire_ex(4, 4, true, false, 100000, 1000, true, dflt));
 
+    // --- wifi_rogue_pair: only a DOWNGRADE is evil-twin shaped ---------------
+    // esp wifi_auth_mode_t: 0 OPEN, 1 WEP, 2 WPA_PSK, 3 WPA2_PSK, 4 WPA_WPA2_PSK,
+    // 5 WPA2_ENT, 6 WPA3_PSK, 7 WPA2_WPA3_PSK.
+    //
+    // The attack: a clone you can join with no password, or with breakable
+    // crypto, standing in for a network you trust.
+    CHECK(wifi_rogue_pair(0, 3)); // open twin of WPA2
+    CHECK(wifi_rogue_pair(3, 0)); // order must not matter
+    CHECK(wifi_rogue_pair(0, 7)); // open twin of WPA2/WPA3
+    CHECK(wifi_rogue_pair(1, 6)); // WEP twin of WPA3 -- breakable, still a downgrade
+    CHECK(wifi_rogue_pair(5, 0)); // open twin of an enterprise network
+
+    // NOT rogue: the benign cases the old "any difference" rule shouted at.
+    // WPA2/WPA3 transition mode across two radios or two mesh nodes is an
+    // ordinary modern network, and calling it an evil twin is the kind of false
+    // positive that makes every later warning worth less.
+    CHECK(!wifi_rogue_pair(3, 7)); // WPA2_PSK vs WPA2_WPA3_PSK -- transition mode
+    CHECK(!wifi_rogue_pair(6, 7)); // WPA3_PSK vs WPA2_WPA3_PSK
+    CHECK(!wifi_rogue_pair(2, 3)); // WPA vs WPA2 -- mixed-generation mesh
+    CHECK(!wifi_rogue_pair(3, 4)); // WPA2 vs WPA/WPA2
+    CHECK(!wifi_rogue_pair(3, 3)); // identical, not a pair at all
+    // Both weak is a badly configured network, not a clone impersonating a
+    // secured one. Nothing is being downgraded.
+    CHECK(!wifi_rogue_pair(0, 0));
+    CHECK(!wifi_rogue_pair(0, 1));
+
     // --- esp_frames_rate: live activity, not a lifetime total (issue #5) -----
     CHECK_INT_EQ(esp_frames_rate(0, 100, 1000), 100); // 100 frames in 1 s
     CHECK_INT_EQ(esp_frames_rate(500, 1000, 1000), 500);

@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.66
+**The evil-twin rule was too loose, and its alert was unverifiable.**
+
+### Fixed
+
+- **"Evil twin" now requires a security DOWNGRADE**, not merely a difference. It
+  flagged any two APs sharing an SSID whose auth modes differed at all -- which
+  fires on **WPA2/WPA3 transition mode**, where one radio or mesh node advertises
+  `WPA2_PSK` and another `WPA2_WPA3_PSK`. That is an ordinary modern network, and
+  the app was telling its owner they were under attack. It now requires one side
+  to be open or WEP while the other is secured: a clone you would join without a
+  password, standing in for a network you trust. A clone using the *same*
+  security was never detectable this way regardless, so nothing catchable is
+  lost. "A false positive is worse than a missed detection" applies hardest to
+  the scariest thing this app can say.
+- **The Suspicious entry shows the evidence.** It read `Rogue AP <ssid>` -- an
+  accusation with no way to check it, since you could not see the two BSSIDs or
+  which one was open. It now reads `Twin <ssid> [OPEN] AABBCC`, naming the
+  security and the BSSID, so the dangerous half is identified rather than implied.
+
 ## v0.65
 ### Added
 
