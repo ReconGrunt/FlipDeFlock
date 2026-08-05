@@ -21,6 +21,7 @@ void suite_flock_ble(void);
 void suite_oui_vendor(void);
 void suite_marauder_scan(void);
 void suite_fast_trig(void);
+void suite_tracker_rules(void);
 
 int main(void) {
     printf("FlipDeFlock host unit tests\n");
@@ -36,6 +37,7 @@ int main(void) {
     suite_oui_vendor();
     suite_marauder_scan();
     suite_fast_trig();
+    suite_tracker_rules();
 
     printf("\n%d checks, %d failed\n", g_checks, g_fails);
     if(g_fails) {

@@ -2,10 +2,9 @@
 
 > **This board transmits.**
 >
-> FlipDeFlock itself is passive by architecture and always will be. This is a
-> separate tool that exists only so the detector has something to detect. It is
-> not part of the `.fap`, it never ships to a Flipper, and nothing in the app
-> depends on it.
+> Flock / ALPR detection in FlipDeFlock is passive. This is a separate tool that
+> exists only so the detector has something to detect. It is not part of the
+> `.fap`, it never ships to a Flipper, and nothing in the app depends on it.
 >
 > **Run it on a bench, on hardware you own, and switch it off when you are
 > done.** It impersonates surveillance hardware. Leaving it running somewhere

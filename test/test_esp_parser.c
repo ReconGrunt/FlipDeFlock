@@ -278,6 +278,13 @@ void suite_esp_parser(void) {
         m.u.ble.mfg[0] == 0x09 && m.u.ble.mfg[1] == 0xc8 && m.u.ble.mfg[2] == 0xaa &&
         m.u.ble.mfg[3] == 0xbb);
     CHECK_INT_EQ(m.u.ble.raven_gatt, 1);
+    CHECK_INT_EQ(m.u.ble.tracker_separated, 0);
+
+    // All three optional fields fit independently; the ninth field must not be
+    // glued to rv=1 by a stale parser cap.
+    CHECK_INT_EQ(P("BLE,a1b2c3d4e5f6,-60,1,2504,Tag,09c8,rv=1,sep=1"), EspMsgBleDev);
+    CHECK_INT_EQ(m.u.ble.raven_gatt, 1);
+    CHECK_INT_EQ(m.u.ble.tracker_separated, 1);
 
     // Trailers in the other order (rv=1 then mfghex) still decode correctly.
     CHECK_INT_EQ(P("BLE,a1b2c3d4e5f6,-60,1,2504,Tag,rv=1,09c8"), EspMsgBleDev);
@@ -285,10 +292,17 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ((long)m.u.ble.mfg_len, 2);
     CHECK_STR_EQ(m.u.ble.name, "Tag");
 
+    // Apple Find My state is an optional key=value trailer. An empty name is
+    // still a real field, so sep=1 must not be glued into it.
+    CHECK_INT_EQ(P("BLE,a1b2c3d4e5f6,-60,2,76,,sep=1"), EspMsgBleDev);
+    CHECK_STR_EQ(m.u.ble.name, "");
+    CHECK_INT_EQ(m.u.ble.tracker_separated, 1);
+
     CHECK_INT_EQ(P("BLE,a1b2c3d4e5f6,-60,0,0"), EspMsgBleDev); // minimal (n=5), no name
     CHECK_STR_EQ(m.u.ble.name, "");
     CHECK_INT_EQ((long)m.u.ble.mfg_len, 0);
     CHECK_INT_EQ(m.u.ble.raven_gatt, 0);
+    CHECK_INT_EQ(m.u.ble.tracker_separated, 0);
 
     CHECK_INT_EQ(P("BLE,xx,-60,1,2504,Tag"), EspMsgIgnore); // bad mac
     CHECK_INT_EQ(P("BLE,a1b2c3d4e5f6,-60,1"), EspMsgIgnore); // n=4 < 5
@@ -318,6 +332,19 @@ void suite_esp_parser(void) {
 
     CHECK_INT_EQ(P("LOC,-42"), EspMsgLocate);
     CHECK_INT_EQ(m.u.locate.rssi, -42);
+
+    // --- explicit tracker actions -----------------------------------------
+    CHECK_INT_EQ(P("ACT,PING,ok,-61"), EspMsgAction);
+    CHECK_STR_EQ(m.u.action.op, "PING");
+    CHECK_STR_EQ(m.u.action.status, "ok");
+    CHECK_INT_EQ(m.u.action.have_rssi, 1);
+    CHECK_INT_EQ(m.u.action.rssi, -61);
+    CHECK_INT_EQ(P("ACT,RING,sent"), EspMsgAction);
+    CHECK_STR_EQ(m.u.action.op, "RING");
+    CHECK_STR_EQ(m.u.action.status, "sent");
+    CHECK_INT_EQ(m.u.action.have_rssi, 0);
+    CHECK_INT_EQ(P("ACT,,ok"), EspMsgIgnore); // empty operation is not actionable
+    CHECK_INT_EQ(P("ACT,PING,"), EspMsgIgnore); // empty status is not displayable
 
     // --- G: NMEA relayed from a GPS on the ESP board (issue #5) -------------
     // The payload is handed through VERBATIM for gps_parser.c to decode, so the
