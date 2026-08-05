@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.63
+### Fixed
+
+- **Help & Warnings was unreadable on the device.** It shipped as flowing prose
+  hand-broken at a column limit, which put line breaks mid-sentence ("GPS and the
+  ESP are / on the SAME UART. They"), plus doubled section gaps. Rewritten so
+  every line is a short complete phrase that stands on its own -- the same shape
+  the About page uses, which is why that one always read cleanly. It now opens
+  with a summary table of all five GPS badge states, visible without scrolling,
+  before the per-fault detail.
+
 ## v0.62
 **A warning that cannot be looked up is not a warning.**
 

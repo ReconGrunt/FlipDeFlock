@@ -241,6 +241,10 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.63** - **Help & Warnings is readable.** It shipped with prose hand-broken
+mid-sentence; every line is now a short standalone phrase, opening with a summary
+table of the GPS badge states.
+
 **v0.62** - **Help & Warnings**, a new main-menu page explaining every mark the app
 can show and how to fix the ones that matter. A GPS fault also now explains itself
 on the scan screen, with the setting to change, dismissible with OK.

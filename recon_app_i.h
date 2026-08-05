@@ -38,7 +38,7 @@
 #define RECON_SSID_LEN    33
 /** Shown on the main menu and About. Kept in step with fap_version by hand;
  *  a user reporting a bug needs to be able to read it off the screen. */
-#define RECON_VERSION     "v0.62"
+#define RECON_VERSION     "v0.63"
 /** Most GPS-capable pins any supported part exposes (classic ESP32 has ~34). */
 #define RECON_GPS_PIN_MAX 40
 
