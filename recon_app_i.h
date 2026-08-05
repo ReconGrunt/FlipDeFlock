@@ -306,7 +306,10 @@ typedef struct {
     uint8_t esp_band_actual; /**< ReconEspBand the board says is in force */
     // GPS pin picker, rebuilt from esp_gps_pin_mask each time Settings opens.
     uint8_t gps_pin_vals[RECON_GPS_PIN_MAX];
-    char gps_pin_text[RECON_GPS_PIN_MAX][4];
+    char gps_pin_label[4]; /**< text for the CURRENT pin only. Storing all 40
+                             *   cost 160 bytes of a single contiguous
+                             *   allocation the loader already struggles to
+                             *   place on heavier firmware. */
     uint8_t gps_pin_count;
     uint16_t esp_band_channels; /**< channels the current sweep covers */
     uint8_t gps_relay; /**< ReconGpsRelayState */

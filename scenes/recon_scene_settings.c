@@ -118,9 +118,6 @@ void recon_settings_build_gps_pins(ReconApp* app) {
         if(!have && n < RECON_GPS_PIN_MAX) app->gps_pin_vals[n++] = app->settings.esp_gps_pin;
     }
     app->gps_pin_count = n;
-    for(uint8_t i = 0; i < n; i++) {
-        snprintf(app->gps_pin_text[i], sizeof(app->gps_pin_text[i]), "%u", app->gps_pin_vals[i]);
-    }
     // Only re-point the stored pin when the BOARD is the authority for this list
     // and it does not contain that pin -- i.e. this chip genuinely cannot use it.
     if(from_board && n) {
@@ -137,7 +134,8 @@ static void esp_gps_pin_changed(VariableItem* item) {
     uint8_t idx = variable_item_get_current_value_index(item);
     if(idx >= app->gps_pin_count) idx = 0;
     app->settings.esp_gps_pin = app->gps_pin_vals[idx];
-    variable_item_set_current_value_text(item, app->gps_pin_text[idx]);
+    snprintf(app->gps_pin_label, sizeof(app->gps_pin_label), "%u", app->gps_pin_vals[idx]);
+    variable_item_set_current_value_text(item, app->gps_pin_label);
     recon_settings_save(app);
 }
 
@@ -314,7 +312,8 @@ void recon_scene_settings_on_enter(void* context) {
     item =
         variable_item_list_add(list, "ESP GPS Pin", app->gps_pin_count, esp_gps_pin_changed, app);
     variable_item_set_current_value_index(item, idx);
-    variable_item_set_current_value_text(item, app->gps_pin_text[idx]);
+    snprintf(app->gps_pin_label, sizeof(app->gps_pin_label), "%u", app->gps_pin_vals[idx]);
+    variable_item_set_current_value_text(item, app->gps_pin_label);
 
     idx = (app->settings.gps_uart == FuriHalSerialIdLpuart) ? 1 : 0;
     item = variable_item_list_add(list, "GPS Port", 2, gps_port_changed, app);
