@@ -204,7 +204,7 @@ exact dB. `-33dB` closer to 0 means physically closer.
 - **ch / frames / hits** — channel · 802.11 frames captured · Flock detections, counted this session (reset each time you open the screen)
 - **row tag** — `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only · `*` marked
 - **`ST` after the tag** — a SoundThinking (ShotSpotter) acoustic sensor, not an ALPR camera. Untagged rows are cameras; the detail screen names the class in full
-- **GPS badge** — filled `GPS 9` = locked with 9 satellites · hollow `GPS` = on and searching · filled `GPS!` = on but it can never get a fix, so go fix the setting. The usual cause of `GPS!` is **GPS Port set to the same UART as the ESP** — they cannot share one port, so put the GPS on the other one (LPUART / pins 15-16 by default)
+- **GPS badge** - filled `GPS 9` = locked with 9 satellites, hollow `GPS` = on and searching. A fault names what to fix and never says "GPS", because a filled badge starting with those three letters reads as a lock: `!PORT` = GPS and the ESP are on the same UART (put GPS on the other one, LPUART / pins 15-16), `!PIN` = the companion refused that ESP GPS Pin, `!FW` = the companion never answered, so reflash it
 - Marauder mode shows `rx <n>  hits <n>` instead (serial heartbeat + detection count)
 
 **BLE / Tracker Scan** — header `BLE 33  trk 9  follow 0`
@@ -240,6 +240,10 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.61** - **GPS fault badges no longer start with "GPS"**, which was being read as
+the opposite of what it meant. They now name the fix: `!PORT`, `!PIN`, `!FW`. The
+Wi-Fi glyph is also tightened so it reads as one mark.
 
 **v0.60** - **The Flock header uses the Wi-Fi and Bluetooth glyphs** instead of the
 letters `rx` and `b`, and the sub-line is now measured against the GPS badge so no

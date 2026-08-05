@@ -342,13 +342,28 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     char gps_str[12] = "";
     int gps_w = 0;
     if(gps_enabled) {
+        // A FAULT BADGE MUST NOT START WITH THE WORD "GPS".
+        //
+        // "GPS!" and "GPS?" were both read as the GPS being on and working -- the
+        // reporter of the original GPS bug looked at a filled "GPS!" and said his
+        // board was "showing a gps lock". That is the exact opposite of what it
+        // meant, and it is not his misreading: a filled badge is how this header
+        // says "locked, n satellites", so a filled badge whose first three
+        // characters are G-P-S reads as a lock at a glance. The punctuation was
+        // carrying the entire meaning and lost.
+        //
+        // Each fault now NAMES THE THING TO FIX, and none of them says "GPS":
+        //   !PORT  the Flipper's GPS and ESP are on the same UART, or the port is
+        //          held -- change GPS Port
+        //   !PIN   the companion answered and refused that pin -- change ESP GPS Pin
+        //   !FW    the companion never answered at all -- reflash it
+        // The leading "!" is this app's existing warning mark (!DEAUTH, !r, !d).
         if(gps_relay_mute) {
-            // "?" not "!": the difference is reflash-the-companion versus
-            // change-the-pin, and sending someone to the wrong one is exactly the
-            // loop this badge exists to break.
-            snprintf(gps_str, sizeof(gps_str), "GPS?");
-        } else if(gps_busy || gps_relay_bad) {
-            snprintf(gps_str, sizeof(gps_str), "GPS!");
+            snprintf(gps_str, sizeof(gps_str), "!FW");
+        } else if(gps_relay_bad) {
+            snprintf(gps_str, sizeof(gps_str), "!PIN");
+        } else if(gps_busy) {
+            snprintf(gps_str, sizeof(gps_str), "!PORT");
         } else if(gps_valid) {
             snprintf(gps_str, sizeof(gps_str), "GPS %d", gps_sats);
         } else {

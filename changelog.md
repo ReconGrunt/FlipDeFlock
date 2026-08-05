@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.61
+### Fixed
+
+- **A GPS fault badge no longer starts with the word "GPS".** `GPS!` and `GPS?`
+  were both read as the GPS being on and working -- the reporter of the original
+  GPS bug looked at a filled `GPS!` and described his board as "showing a gps
+  lock", which is the exact opposite of what it meant. That is not a misreading:
+  a filled badge is how this header says "locked, n satellites", so a filled badge
+  whose first three characters are G-P-S reads as a lock at a glance, and the
+  punctuation was carrying the entire meaning alone. Each fault now names the
+  thing to fix: **`!PORT`** (GPS and the ESP are on the same UART), **`!PIN`** (the
+  companion refused that ESP GPS Pin), **`!FW`** (the companion never answered --
+  reflash it).
+- **The Wi-Fi glyph's arcs sit adjacent.** With a blank row between both arcs and
+  the dot it read as three loose fragments rather than one mark. Only the dot
+  keeps its gap now -- it is the device, the arcs are the signal leaving it.
+
 ## v0.60
 ### Changed
 

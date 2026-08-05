@@ -77,9 +77,13 @@ void ui_icon_radio(Canvas* canvas, int x, int y, bool ble) {
         // marker. A blank row between each arc keeps them from merging at this
         // size.
         //
+        // The two arcs sit ADJACENT. An earlier version left a blank row between
+        // them as well as before the dot, and at this size that read as three
+        // loose fragments rather than one mark. Only the dot keeps its gap: it is
+        // the device, and the arcs are the signal leaving it.
+        //
         //   .#####.
         //   #.....#
-        //   .......
         //   ..###..
         //   .#...#.
         //   .......
@@ -87,10 +91,10 @@ void ui_icon_radio(Canvas* canvas, int x, int y, bool ble) {
         canvas_draw_line(canvas, x + 1, y, x + 5, y);
         canvas_draw_dot(canvas, x, y + 1);
         canvas_draw_dot(canvas, x + 6, y + 1);
-        canvas_draw_line(canvas, x + 2, y + 3, x + 4, y + 3);
-        canvas_draw_dot(canvas, x + 1, y + 4);
-        canvas_draw_dot(canvas, x + 5, y + 4);
-        canvas_draw_dot(canvas, x + 3, y + 6);
+        canvas_draw_line(canvas, x + 2, y + 2, x + 4, y + 2);
+        canvas_draw_dot(canvas, x + 1, y + 3);
+        canvas_draw_dot(canvas, x + 5, y + 3);
+        canvas_draw_dot(canvas, x + 3, y + 5);
     }
 }
 
