@@ -241,6 +241,10 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.64** - **Asset pack gains a hoodie-kicks-the-camera-pole animation**, a tribute
+to [@h00die](https://github.com/h00die). The on-screen version is also derived from
+a single source now, so it can never disagree with the build it came from.
+
 **v0.63** - **Help & Warnings is readable.** It shipped with prose hand-broken
 mid-sentence; every line is now a short standalone phrase, opening with a summary
 table of the GPS badge states.

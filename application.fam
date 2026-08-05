@@ -1,3 +1,15 @@
+# SINGLE SOURCE OF TRUTH for the version.
+#
+# It reaches the C code as the RECON_VERSION cdefine below, so the string on the
+# main menu and About cannot drift from the version stamped into the .fap. It
+# used to be a #define in recon_app_i.h maintained by hand alongside fap_version
+# here: two edits in two files, with nothing enforcing that they matched. Bumped
+# seven times in one day without incident, which is exactly the kind of thing
+# that holds right up until it doesn't -- and the failure is silent, showing a
+# confident wrong version to the one person who was asking for it so he could
+# report bugs against the right build.
+FAP_VERSION = "0.64"
+
 App(
     appid="flipdeflock",
     name="FlipDeFlock",
@@ -28,7 +40,7 @@ App(
     fap_icon="icon.png",
     fap_category="Tools",
     fap_author="@ReconGrunt",
-    fap_version="0.63",
+    fap_version=FAP_VERSION,
     fap_description="FlipDeFlock: detect Flock/ALPR surveillance cameras via any "
     "ESP32 (Marauder or companion FW), with GPS geotagging and "
     "DeFlock-compatible reports.",
@@ -66,6 +78,8 @@ App(
         "SERIAL_FLASHER_INTERFACE_UART=1",
         "MD5_ENABLED=1",
         "SERIAL_FLASHER_WRITE_BLOCK_RETRIES=10",
+        # Derived, never typed twice. See FAP_VERSION above.
+        'RECON_VERSION=\\"v' + FAP_VERSION + '\\"',
     ],
 )
 

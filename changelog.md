@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.64
+### Added
+
+- **Asset pack: a hooded figure kicking a camera pole down**, 24 frames at
+  128x64, alongside the existing scanner animation. A tribute to
+  [@h00die](https://github.com/h00die), who has field-tested this project harder
+  than anyone and found most of the bugs worth finding.
+
+### Fixed
+
+- **The on-screen version can no longer disagree with the build.** It was a
+  hand-maintained `#define` kept in step with `fap_version` by hand: two edits in
+  two files with nothing checking they matched. It is derived from a single
+  `FAP_VERSION` in `application.fam` now and reaches the C code as a build
+  define. The old arrangement survived seven bumps in a day, and its failure mode
+  was silent -- showing a confidently wrong version to precisely the person who
+  asked for it so he could report bugs against a known build.
+
 ## v0.63
 ### Fixed
 
