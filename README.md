@@ -241,6 +241,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.67** - **A bare OUI match is no longer a detection.** The list is mostly shared
+silicon-vendor prefixes, and Flock cameras stopped acting as access points around
+December 2025, so an OUI hit on a beacon was never evidence of a camera. Also adds
+the missing OUI `f8:a2:d6`.
+
 **v0.66** - **"Evil twin" now requires a security downgrade**, not just any auth-mode
 difference. The old rule fired on WPA2/WPA3 transition mode, i.e. ordinary modern
 networks. The Suspicious list also shows which BSSID is the open one instead of just

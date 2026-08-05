@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.67
+**A bare OUI match is no longer a detection.**
+
+### Fixed
+
+- **OUI-only sightings are dropped.** A T-Mobile gateway broadcasting
+  `tmobile-5416` was reported as a possible ALPR camera. The OUI table is mostly
+  shared silicon-vendor ranges -- Espressif, Liteon and friends -- so "beacons,
+  and has one of these prefixes" describes an enormous number of ordinary
+  consumer devices.
+  It is also no longer evidence of anything: Flock's management AP was
+  deactivated around **December 2025** and the cameras moved to station mode,
+  emitting wildcard **probe requests** roughly every 125 ms rather than
+  beaconing. So an OUI hit on a beacon is, by construction, not a camera. The
+  upstream research this OUI list comes from reached the same conclusion and
+  disabled every detection path except probe-request + OUI + IE fingerprint.
+  Nothing catchable is lost: a real camera still reaches Likely via the
+  probe-request branches and Confirmed via an SSID name or IE fingerprint.
+- **The Marauder backend got the same treatment.** It has no frame type to work
+  with, so it now requires a Flock-shaped SSID on the same line to corroborate an
+  OUI.
+
+### Added
+
+- **OUI `f8:a2:d6`**, which was missing from our copy of the upstream list. Both
+  the app and the companion carry it, enforced by the existing CI parity gate.
+
 ## v0.66
 **The evil-twin rule was too loose, and its alert was unverifiable.**
 

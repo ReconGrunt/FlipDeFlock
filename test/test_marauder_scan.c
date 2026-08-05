@@ -49,16 +49,32 @@ void suite_marauder_scan(void) {
     CHECK_STR_EQ(s.ssid, "");
 
     // --- OUI matching --------------------------------------------------------
-    // A Flock OUI always counts, at "possible" even with a benign SSID.
+    // A BARE OUI IS NOT A DETECTION. These assertions used to demand the
+    // opposite -- "a Flock OUI always counts, at possible, even with a benign
+    // SSID" -- and that is what put a T-Mobile gateway (SSID "tmobile-5416") on
+    // a user's camera list. The table is mostly shared silicon-vendor ranges
+    // (Espressif, Liteon), so it describes a huge number of ordinary devices,
+    // and Flock's cameras stopped acting as APs around December 2025 anyway.
+    // The old fixture encoded the bug as intended behaviour, which is worse than
+    // having no test at all: it defended the false positive.
     marauder_scan_line("-40 Ch: 6 " FLOCK_MAC " ESSID: HomeNetwork", &s);
+    CHECK_INT_EQ(s.hit_count, 0);
+    marauder_scan_line("-40 Ch: 6 " ST_MAC " ESSID: HomeNetwork", &s);
+    CHECK_INT_EQ(s.hit_count, 0);
+
+    // The exact shape of the reported false positive.
+    marauder_scan_line("-40 Ch: 6 " FLOCK_MAC " ESSID: tmobile-5416", &s);
+    CHECK_INT_EQ(s.hit_count, 0);
+
+    // Corroborated by a Flock-shaped SSID on the same line, it still counts --
+    // and the device class still comes from the OUI.
+    marauder_scan_line("-40 Ch: 6 " FLOCK_MAC " ESSID: Flock-a1b2c3", &s);
     CHECK_INT_EQ(s.hit_count, 1);
-    CHECK_INT_EQ(s.hits[0].conf, FlockConfidencePossible);
+    CHECK_INT_EQ(s.hits[0].conf, FlockConfidenceConfirmed);
     CHECK_INT_EQ(s.hits[0].dev_class, FlockClassAlpr);
 
-    // SoundThinking OUI is reported as its own device class, not as a camera.
-    marauder_scan_line("-40 Ch: 6 " ST_MAC " ESSID: HomeNetwork", &s);
+    marauder_scan_line("-40 Ch: 6 " ST_MAC " ESSID: flock-test", &s);
     CHECK_INT_EQ(s.hit_count, 1);
-    CHECK_INT_EQ(s.hits[0].conf, FlockConfidencePossible);
     CHECK_INT_EQ(s.hits[0].dev_class, FlockClassAcoustic);
 
     // An unknown OUI on a benign line is not a detection at all.
@@ -148,6 +164,9 @@ void suite_marauder_scan(void) {
     for(int i = 0; i < 10; i++) {
         w += (size_t)snprintf(many + w, sizeof(many) - w, "70:c9:4e:11:22:%02x ", i);
     }
+    // Needs a Flock-shaped SSID now that a bare OUI is not a hit; the point of
+    // this case is the hit-table cap, not the scoring rule.
+    w += (size_t)snprintf(many + w, sizeof(many) - w, "ESSID: Flock-a1b2c3");
     marauder_scan_line(many, &s);
     CHECK_INT_EQ(s.mac_count, 10);
     CHECK_INT_EQ(s.hit_count, MARAUDER_MAX_HITS);

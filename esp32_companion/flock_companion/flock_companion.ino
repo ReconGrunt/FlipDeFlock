@@ -164,7 +164,7 @@ static const uint8_t FLOCK_OUIS[][3] = {
     {0x70, 0xc9, 0x4e}, {0x3c, 0x91, 0x80}, {0xd8, 0xf3, 0xbc}, {0x80, 0x30, 0x49},
     {0xb8, 0x35, 0x32}, {0x14, 0x5a, 0xfc}, {0x74, 0x4c, 0xa1}, {0x08, 0x3a, 0x88},
     {0x9c, 0x2f, 0x9d}, {0xc0, 0x35, 0x32}, {0x94, 0x08, 0x53}, {0xe4, 0xaa, 0xea},
-    {0xf4, 0x6a, 0xdd}, {0x24, 0xb2, 0xb9}, {0x00, 0xf4, 0x8d}, {0xd0, 0x39, 0x57},
+    {0xf4, 0x6a, 0xdd}, {0xf8, 0xa2, 0xd6}, {0x24, 0xb2, 0xb9}, {0x00, 0xf4, 0x8d}, {0xd0, 0x39, 0x57},
     {0xe8, 0xd0, 0xfc}, {0xe0, 0x4f, 0x43}, {0xb8, 0x1e, 0xa4}, {0x70, 0x08, 0x94},
     {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x3c, 0x71, 0xbf}, {0x58, 0x00, 0xe3},
     {0x90, 0x35, 0xea}, {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69}, {0x48, 0x27, 0xea},
@@ -723,8 +723,27 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
         conf = 2; // OUI (sender or silent receiver) + probe behaviour
     else if(s_score == 2)
         conf = 2;
-    else if(oui_tx || oui_rx)
-        conf = 1; // OUI prefix only
+    // NO conf=1 FOR A BARE OUI MATCH ANY MORE.
+    //
+    // A Flock camera is not an access point. Flock's management AP was
+    // deactivated around December 2025 and the cameras moved to station mode --
+    // they now emit wildcard PROBE REQUESTS roughly every 125 ms and do not
+    // beacon (see the upstream flock-you research this OUI list comes from).
+    // So an OUI hit on a BEACON is, by construction, not a camera. It is some
+    // other product built on the same silicon.
+    //
+    // And this list is mostly shared silicon-vendor ranges -- Espressif, Liteon
+    // and friends -- so "beacons, and has one of these OUIs" describes an
+    // enormous number of ordinary consumer devices. It reported a T-Mobile
+    // gateway (SSID "tmobile-5416") as a possible ALPR camera, which is exactly
+    // the failure this project says it will not accept: a false positive is
+    // worse than a missed detection.
+    //
+    // Nothing real is lost. Anything that IS a camera still reaches conf=2 via
+    // the probe-request branches above, and conf=3 via an SSID name or IE
+    // fingerprint. The only sightings dropped are OUI-only ones with no probe
+    // behaviour and no name -- which is precisely the set that cannot be
+    // distinguished from an unrelated device sharing a chip vendor.
 
     if(conf == 0) return; // not a candidate; drop to keep UART quiet
 
