@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.68
+**The Locator gave no usable sense of closer or farther.** The cause was
+arithmetic, not a broken feature.
+
+### Fixed
+
+- **The meter shows the smoothed level, not the last raw sample.** A single
+  frame's RSSI swings hard with multipath and body position, so the big number
+  jumped around with no relation to whether you were walking closer. The smoothed
+  value already existed and was only being used for the warmer/colder word.
+- **Smoothing retuned 70/30 to 50/50.** Readings on the primary target arrive
+  roughly once every 1.6 s, so at the old weight a new sample took five readings
+  (~8 s) to move the needle. When samples are scarce each one has to count more.
+- **Companion LOC window 120 ms to 400 ms.** A Flock camera sweeps the channels
+  with probe requests while the companion listens on one, so it is heard about
+  once every 1.6 s. A 120 ms window that hard-resets its peak spent most of its
+  life expiring empty and threw away the readings it *had* caught. This invents no
+  data; it stops discarding it.
+- **Freshness 2500 ms to 4000 ms**, which sat barely above the gap between
+  readings and flipped the display to "quiet" on ordinary jitter.
+
+Worth stating plainly: about one reading every 1.6 s is a physical limit for
+Wi-Fi homing on a target that hops 13 channels while you sit on one. This makes
+the feedback usable and truthful, not fast. BLE targets update far more often.
+
 ## v0.67
 **A bare OUI match is no longer a detection.**
 

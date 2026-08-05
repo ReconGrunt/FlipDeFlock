@@ -241,6 +241,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.68** - **The Locator now gives a usable closer/farther reading.** It showed the
+last raw RSSI sample, which swings too hard to follow; it shows the smoothed level
+now, with retuned smoothing and a wider companion sampling window to suit how rarely
+a channel-hopping target is heard.
+
 **v0.67** - **A bare OUI match is no longer a detection.** The list is mostly shared
 silicon-vendor prefixes, and Flock cameras stopped acting as access points around
 December 2025, so an OUI hit on a beacon was never evidence of a camera. Also adds
