@@ -239,7 +239,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     } else {
         snprintf(right, sizeof(right), "ch%3u h%lu", channel, (unsigned long)hits);
     }
-    ui_title_bar(canvas, "FLOCK/ALPR", right); // leaves color=black, font=Secondary
+    ui_title_bar_icon(canvas, UiIconCamera, "FDF", right); // leaves color=black, font=Secondary
 
     // Status sub-line: only what the title bar does NOT already show.
     // A wire-protocol version mismatch is the highest-priority health warning (the

@@ -241,6 +241,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.57** - **Screen icons in the title bars.** A camera on Flock, a shield on Net
+Guardian, a crosshair on the Locator, with `FLOCK/ALPR` shortened to `FDF` to hand
+header width back to the counters. Also reclaims 156 bytes from the Settings pin
+picker.
+
 **v0.56** - **The Flock header shows live activity, not a total that only grows.**
 `rx<n>/s` is the Wi-Fi frame rate, `b<n>` is BLE adverts this session (the screen
 previously showed nothing about BLE at all), and `!r<n>` means the companion

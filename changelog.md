@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.57
+**Screen icons in the title bars, and a small memory reclaim.**
+
+### Added
+
+- **Title bars carry a screen glyph**: a camera on Flock, a shield on Net
+  Guardian, a crosshair on the Locator. `FLOCK/ALPR` also shortens to `FDF`,
+  which hands roughly 45 px back to a header that has to fit channel, hits, the
+  frame rate, the BLE count and the GPS badge.
+  Hand-placed pixels and every form is axis-aligned. Deriving them from the
+  project logo was tried and abandoned: its camera sits at 45 degrees and was
+  already an unreadable blob at 16 px, because a rotated edge is entirely
+  staircase and leaves nothing for the shape. All three were checked on a real
+  panel, inverted, before shipping.
+
+### Fixed
+
+- **156 bytes reclaimed from the Settings GPS pin picker.** It stored a
+  formatted string for every selectable pin inside the single contiguous
+  allocation the app loader has to place, and only one item is ever dynamic.
+
 ## v0.56
 **The Flock header now shows live activity instead of a number that only grows.**
 From a suggestion by [@h00die](https://github.com/h00die) on
