@@ -11,9 +11,12 @@ deauth floods and evil-twin APs. The Flipper is the screen, GPS tagger, and
 logger; the ESP32 does the Wi-Fi sniffing its BLE-only radio can't. It's for
 security assessments, anti-surveillance awareness, and CTF/research.
 
-**Passive recon only.** It listens; it never transmits — no deauth, injection, or
-jamming. Detections are indicators, not proof: OUI-only matches are possible, not
-confirmed, so verify by eye. Use it only where you are authorized to.
+**Passive recon.** Flock / ALPR detection is listen-only — no deauth, injection, or
+jamming, ever. The single exception is explicit and user-initiated: for a tracker you
+have already selected and validated, you can send a Ping or a Ring. Nothing is
+transmitted unless you press it. Detections are indicators, not proof: OUI-only
+matches are possible, not confirmed, so verify by eye. Use it only where you are
+authorized to.
 
 Builds against Flipper API 87.1, shared by current stock OFW and
 [Momentum](https://github.com/Next-Flip/Momentum-Firmware).
@@ -115,7 +118,10 @@ firmware; in Marauder mode they explain what's missing.
   flagged `!FOLLOWING` (anti-stalking); open it for the track. `SEP state` is an
   advertisement state marker, not proof of ownership or stalking. Labels a
   **Flock Raven (audio sensor)** only when it sees the Raven's own Bluetooth
-  services — it never guesses "camera" by elimination.
+  services — it never guesses "camera" by elimination. On a validated tracker you
+  can also send **Ping** (a one-shot reachability check) or **Ring** (a non-owner
+  sound request, Apple/Find My only) — the only actions in the app that transmit,
+  and only when you press them.
 - **Net Guardian** *(companion)* — a leave-it-on-the-desk watch face. Keeps the ESP
   running and rotates it across Wi-Fi and BLE so the fused **CLEAR / WATCHFUL /
   ELEVATED** "am I being watched?" score stays live, with a pwnagotchi-style face
@@ -247,6 +253,11 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.69** - **A tagged device no longer un-tags itself on Back.** Marking a device
+sent it to the Locator, but the mark was cleared one keypress later, so the Locator
+had nothing to home on. Adds explicit **Ping** and **Ring** actions for a validated
+tracker, and `SHA256SUMS.txt` on every release so an official build can be verified.
 
 **v0.68** - **The Locator now gives a usable closer/farther reading.** It showed the
 last raw RSSI sample, which swings too hard to follow; it shows the smoothed level

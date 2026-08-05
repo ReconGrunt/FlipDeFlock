@@ -1,5 +1,44 @@
 # Changelog
 
+## v0.69
+**Marking a device sent it to the Locator, and the Locator had nothing to home
+on.** The tag was being thrown away one keypress after it was made.
+
+### Fixed
+
+- **A tagged device survives a Back press.** The BLE screen cleared its whole
+  table in `on_enter`, and scene re-entry re-runs `on_enter` -- which is exactly
+  what a plain Back from the detail screen does. So tagging a device and stepping
+  back reset the table before the mark was visible to anything else. The Locator
+  reads that table, so it never saw a tag, because making one always costs a Back
+  press. It now clears only on a genuinely fresh scan session, the same signal the
+  Flock, Flock Map and Guardian screens already gated on. Same root cause as the
+  Net Guardian data loss in issue #5.
+
+### Added
+
+- **Ping and Ring for a validated tracker.** On a tracker you have already
+  selected, **Ping** does a one-shot reachability check and **Ring** asks an
+  Apple/Find My tag in separated state to make a sound. These are the only
+  actions in the app that transmit, they are explicit, and nothing goes out
+  unless you press them. Ring is deliberately limited to the Apple/Find My
+  non-owner path rather than guessed at for Tile or SmartTag.
+- **`SHA256SUMS.txt` on every release**, covering all published assets. Flock
+  detection is a trust decision, so being able to prove the file you hold is the
+  one this repo built matters. See [TRADEMARK.md](TRADEMARK.md).
+- **[TRADEMARK.md](TRADEMARK.md) and [LICENSING.md](LICENSING.md).** The first
+  draws the line between a legitimate fork (welcome) and a repackage passing
+  itself off as official (not). The second states the dual offer plainly:
+  GPL-3.0-or-later free for everyone, plus a commercial licence for anyone
+  shipping FlipDeFlock inside a closed product. **Nothing is gated, and nothing
+  changes for existing users** -- see [SUPPORTERS.md](SUPPORTERS.md).
+
+### Changed
+
+- **The README's "it never transmits" line was inaccurate** once Ping and Ring
+  existed, and now says what is actually true: detection is listen-only, those
+  two explicit actions are the exception.
+
 ## v0.68
 **The Locator gave no usable sense of closer or farther.** The cause was
 arithmetic, not a broken feature.

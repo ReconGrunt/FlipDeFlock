@@ -104,3 +104,54 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Publish SHA256SUMS.txt covering EVERY asset on the release.
+  #
+  # WHY: a re-upload of this project once passed itself off as official, and a
+  # user had no way to tell the difference. Checksums do not stop a clone -- the
+  # GPL allows one -- but they let anyone prove whether the file they hold is the
+  # one this repo built. TRADEMARK.md points here.
+  #
+  # The wait is the awkward part and it is deliberate. The companion firmware is
+  # attached by a SEPARATE workflow (esp32.yml) running in parallel on the same
+  # tag, so hashing immediately would produce a checksum file that silently omits
+  # the largest download -- worse than publishing none, because it looks complete.
+  # So poll until it lands, and fail loudly rather than publish a partial list.
+  checksums:
+    runs-on: ubuntu-latest
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    name: "Publish SHA256SUMS.txt"
+    steps:
+      - name: Wait for every asset, then checksum them
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          WANT: flipdeflock_companion_esp32wroom.bin
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 40); do
+            if gh release view "$TAG" --json assets --jq '.assets[].name' \
+                 | grep -qx "$WANT"; then
+              echo "$WANT present after $((i-1)) polls."
+              break
+            fi
+            if [ "$i" -eq 40 ]; then
+              echo "::error::$WANT never appeared on $TAG (waited 10 min)." \
+                   "Refusing to publish a SHA256SUMS.txt that omits it."
+              exit 1
+            fi
+            echo "waiting for $WANT ($i/40)"
+            sleep 15
+          done
+
+          mkdir -p sums
+          cd sums
+          gh release download "$TAG" --clobber
+          # A re-run would otherwise hash the previous checksum file into itself.
+          rm -f SHA256SUMS.txt
+          sha256sum -- * > ../SHA256SUMS.txt
+          cd ..
+          cat SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber
