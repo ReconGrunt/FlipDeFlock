@@ -15,18 +15,12 @@ updates:
       prefix: "chore"
     labels:
       - "dependencies"
-    # Grouped, and major kept apart from the rest.
-    #
-    # Ungrouped, the first run after this config landed opened four separate PRs
-    # that each carried a major bump: checkout 4 to 7, upload-artifact 4 to 7,
-    # download-artifact 4 to 8, action-gh-release 2 to 3. Four small green PRs
-    # read as routine. The same four as one PR titled "major" reads as a thing to
-    # look at, which is what a major bump of a release-path action deserves.
-    #
-    # The split matters more than the grouping. A major here can change runner
-    # requirements or artifact behaviour, and the release path is only exercised
-    # by tagging, so the cost of waving one through is paid later and in public.
-    # Patch and minor can stay boring.
+    # Major kept apart from the rest, because the two deserve different
+    # attention. A major here can change runner requirements or artifact
+    # behaviour, and the release path is only exercised by tagging, so waving one
+    # through costs nothing until it costs a release. Ungrouped, four separate
+    # green PRs each carrying a major bump read as routine; one PR marked major
+    # reads as something to look at.
     groups:
       actions-minor:
         patterns: ["*"]
