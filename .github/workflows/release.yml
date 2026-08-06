@@ -10,6 +10,18 @@ name: "FAP: Release"
 # softprops/action-gh-release attaches to an existing release for the tag if one
 # is present (and creates one only if it is absent), and we set
 # fail_on_unmatched_files: false so a transient miss won't turn the run red.
+#
+# RUN IT BY HAND TO REHEARSE A RELEASE. A workflow_dispatch run does everything
+# except publish: it builds all three targets, uploads them, downloads them back,
+# checks the collected set, and packs the asset pack. Only the attach and the
+# checksum job are tag-only.
+#
+# That matters because this workflow is otherwise ONLY exercised by tagging, and
+# a tag is a bad place to discover that it broke. Dependabot moved checkout,
+# upload-artifact, download-artifact and action-gh-release by a major version
+# each after v0.70 shipped, and none of those had run this path even once: the
+# artifact handoff below lives here and nowhere else, so build.yml cannot cover
+# it. This is the same tag-only blind spot that let issue #4 ship.
 on:
   push:
     tags: ["v*"]
@@ -83,8 +95,67 @@ jobs:
           merge-multiple: true
           path: faps
 
-      - name: Show what will be attached
-        run: ls -l faps
+      # A rehearsal that only proves files moved is not worth much. Check the set
+      # is what a release should contain, and read the API version out of each
+      # .fap's own manifest, which is the thing users actually get wrong and the
+      # reason the matrix exists.
+      #
+      # Deliberately does NOT assert the three APIs differ. They differ today
+      # (87.1, 87.1, 88.2), but if the firmwares ever converge on one API that is
+      # a legitimate state, not a build fault. The printout is for a human; the
+      # hard failures below are the ones that mean something broke.
+      - name: Check the collected .fap set
+        run: |
+          set -euo pipefail
+          n="$(find faps -maxdepth 1 -name '*.fap' | wc -l)"
+          if [ "$n" -ne 3 ]; then
+            echo "::error::expected 3 .fap files from the build matrix, got $n."
+            ls -lR faps || true
+            exit 1
+          fi
+          python3 - <<'PY'
+          import struct, pathlib, sys
+
+          FAP_MANIFEST_MAGIC = 0x52474448
+
+          for p in sorted(pathlib.Path("faps").glob("*.fap")):
+              d = p.read_bytes()
+              if d[:4] != b"\x7fELF":
+                  sys.exit(f"::error::{p.name} is not an ELF. The artifact is corrupt.")
+
+              # Minimal ELF32 section walk to find .fapmeta.
+              shoff, = struct.unpack_from("<I", d, 0x20)
+              shentsize, shnum, shstrndx = struct.unpack_from("<HHH", d, 0x2E)
+
+              # Bounds-check before walking. A half-downloaded .fap keeps a valid
+              # ELF header, so without this the walk reads off the end and the job
+              # fails with a Python traceback instead of saying what is wrong.
+              if shnum == 0 or shstrndx >= shnum or shoff + shnum * shentsize > len(d):
+                  sys.exit(f"::error::{p.name} is truncated: the section table runs past the end of the file.")
+
+              def section(i):
+                  o = shoff + i * shentsize
+                  name, _type, _flags, _addr, off, size = struct.unpack_from("<IIIIII", d, o)
+                  return name, off, size
+
+              stroff = section(shstrndx)[1]
+              meta = None
+              for i in range(shnum):
+                  nm, off, size = section(i)
+                  end = d.index(b"\x00", stroff + nm)
+                  if d[stroff + nm:end] == b".fapmeta":
+                      meta = d[off:off + size]
+                      break
+
+              if meta is None:
+                  sys.exit(f"::error::{p.name} has no .fapmeta section.")
+
+              magic, _mver, api_minor, api_major = struct.unpack_from("<IIHH", meta, 0)
+              if magic != FAP_MANIFEST_MAGIC:
+                  sys.exit(f"::error::{p.name} manifest magic is {magic:#x}, expected {FAP_MANIFEST_MAGIC:#x}.")
+
+              print(f"{p.name}: API {api_major}.{api_minor}, {len(d):,} bytes")
+          PY
 
       # Pack the desktop asset pack and attach it too.
       #
@@ -112,7 +183,16 @@ jobs:
       # - If the maintainer already created the release manually, this updates it
       #   (does not create a duplicate).
       # - The maintainer may also upload/release manually; this just automates it.
+      #
+      # Tag-only, which is what makes the manual run a rehearsal rather than a
+      # publish. It is also the step that made workflow_dispatch useless before:
+      # with no tag_name set the action falls back to the ref, and on a branch it
+      # throws "GitHub Releases requires a tag" (see run.ts in the action). So a
+      # hand-started run did all the work and then died on the last step. Skipping
+      # it instead means the run ends green having proved the build, the artifact
+      # handoff and the asset pack all still work.
       - name: Attach .fap to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           files: |
