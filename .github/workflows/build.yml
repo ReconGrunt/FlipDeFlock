@@ -45,11 +45,22 @@ jobs:
           sdk-index-url: ${{ matrix.index }}
           sdk-channel: release
 
+      # Named with the SAME action release.yml uses, so what you download from a
+      # CI run is the file the README tells you to look for. Uploading ufbt's raw
+      # artifact list instead would put three identically-named flipdeflock.fap
+      # files in three artifacts, plus the .fal that is already embedded in each.
+      - name: Name the .fap for this firmware
+        id: fap
+        uses: ./.github/actions/name-fap
+        with:
+          fap-artifacts: ${{ steps.build-app.outputs.fap-artifacts }}
+          target: ${{ matrix.target }}
+
       - name: Upload .fap artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.repository.name }}-${{ matrix.target }}-${{ steps.build-app.outputs.suffix }}
-          path: ${{ steps.build-app.outputs.fap-artifacts }}
+          path: ${{ steps.fap.outputs.path }}
           if-no-files-found: error
 
       # --- API drift guard (advisory) ------------------------------------------

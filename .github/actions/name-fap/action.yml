@@ -1,0 +1,70 @@
+name: "Name the built .fap"
+description: >
+  Pick the single .fap out of ufbt's artifact list and give it the release
+  filename for this firmware target.
+
+# Shared by build.yml and release.yml so a CI artifact and a release asset can
+# never end up named differently for the same target. They were separate copies
+# of this shell for about an hour and that was already one copy too many: the
+# whole point of the naming is that a user can tell which file is theirs, which
+# fails the moment the two disagree.
+inputs:
+  fap-artifacts:
+    description: "The ufbt action's fap-artifacts output (newline separated)."
+    required: true
+  target:
+    description: "Firmware target: ofw, unleashed or momentum."
+    required: true
+  out-dir:
+    description: "Directory to write the named .fap into."
+    required: false
+    default: out
+
+outputs:
+  path:
+    description: "Path to the named .fap."
+    value: ${{ steps.pick.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - id: pick
+      shell: bash
+      env:
+        FAP_ARTIFACTS: ${{ inputs.fap-artifacts }}
+        TARGET: ${{ inputs.target }}
+        OUT_DIR: ${{ inputs.out-dir }}
+      run: |
+        set -euo pipefail
+
+        # ufbt's fap-artifacts lists EVERY image it built, which since v0.51
+        # includes the QR plugin's flipdeflock_qr.fal. That .fal already ships
+        # INSIDE flipdeflock.fap as an embedded file asset, so shipping it
+        # alongside only invites "do I need to copy this too?" -- the answer is
+        # no, and the install is meant to be one file.
+        faps="$(printf '%s\n' "$FAP_ARTIFACTS" | grep '\.fap$' || true)"
+        if [ -z "$faps" ]; then
+          echo "::error::ufbt produced no .fap for target '$TARGET'."
+          exit 1
+        fi
+
+        # Exactly one, or the copy below silently picks a winner.
+        n="$(printf '%s\n' "$faps" | wc -l)"
+        if [ "$n" -ne 1 ]; then
+          echo "::error::expected one .fap from ufbt for target '$TARGET', got $n:"
+          printf '%s\n' "$faps"
+          exit 1
+        fi
+
+        # The ofw build keeps the bare name. Every install guide, forum post and
+        # bookmark out there points at flipdeflock.fap, and renaming it would
+        # break all of them to gain nothing: the other two are the new files.
+        mkdir -p "$OUT_DIR"
+        if [ "$TARGET" = "ofw" ]; then
+          dest="$OUT_DIR/flipdeflock.fap"
+        else
+          dest="$OUT_DIR/flipdeflock-$TARGET.fap"
+        fi
+        cp "$faps" "$dest"
+        ls -l "$dest"
+        echo "path=$dest" >> "$GITHUB_OUTPUT"

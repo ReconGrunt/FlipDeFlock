@@ -45,53 +45,24 @@ jobs:
           sdk-index-url: ${{ matrix.index }}
           sdk-channel: release
 
-      # ufbt's fap-artifacts output lists EVERY image it built, which since v0.51
-      # includes the QR plugin's flipdeflock_qr.fal. That .fal already ships
-      # INSIDE flipdeflock.fap as an embedded file asset, so attaching it to the
-      # release as well only invites "do I need to copy this too?" -- the answer
-      # is no, and the install is meant to be one file. Filter to the .fap.
-      #
-      # Fails loudly on an empty result on purpose. The attach step below used to
-      # run with fail_on_unmatched_files: false, which would have published a
-      # release with NO app in it if the artifact path ever moved, and stayed
-      # green while doing it.
-      #
-      # The ofw build keeps the bare `flipdeflock.fap` name. Every install guide,
-      # forum post and bookmark out there points at that filename, and renaming it
-      # would break all of them to gain nothing -- the other two are the new files.
+      # Filters ufbt's artifact list to the single .fap and gives it this
+      # target's release filename. Shared with build.yml so the CI artifact and
+      # the release asset can never be named differently. It fails loudly on an
+      # empty or ambiguous result: the attach step below used to run with
+      # fail_on_unmatched_files: false, which would have published a release with
+      # NO app in it if the artifact path ever moved, and stayed green doing it.
       - name: Name the .fap for this firmware
-        env:
-          FAP_ARTIFACTS: ${{ steps.build-app.outputs.fap-artifacts }}
-          TARGET: ${{ matrix.target }}
-        run: |
-          set -euo pipefail
-          faps="$(printf '%s\n' "$FAP_ARTIFACTS" | grep '\.fap$' || true)"
-          if [ -z "$faps" ]; then
-            echo "::error::ufbt produced no .fap -- refusing to publish an empty release."
-            exit 1
-          fi
-          # Exactly one, or the copy below silently picks a winner.
-          n="$(printf '%s\n' "$faps" | wc -l)"
-          if [ "$n" -ne 1 ]; then
-            echo "::error::expected one .fap from ufbt, got $n:"
-            printf '%s\n' "$faps"
-            exit 1
-          fi
-
-          mkdir -p out
-          if [ "$TARGET" = "ofw" ]; then
-            dest="out/flipdeflock.fap"
-          else
-            dest="out/flipdeflock-$TARGET.fap"
-          fi
-          cp "$faps" "$dest"
-          ls -l "$dest"
+        id: fap
+        uses: ./.github/actions/name-fap
+        with:
+          fap-artifacts: ${{ steps.build-app.outputs.fap-artifacts }}
+          target: ${{ matrix.target }}
 
       - name: Upload .fap for the release job
         uses: actions/upload-artifact@v4
         with:
           name: fap-${{ matrix.target }}
-          path: out/*.fap
+          path: ${{ steps.fap.outputs.path }}
           if-no-files-found: error
 
   release:

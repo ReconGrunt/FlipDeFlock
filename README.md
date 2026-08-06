@@ -61,8 +61,16 @@ Unleashed build is the one to use there.
 
 Every push also builds all three as CI artifacts under the **Actions** tab.
 
-Releases also carry `SHA256SUMS.txt`. If you got your copy anywhere other than this
-repository's releases page, check it — `sha256sum -c SHA256SUMS.txt` — and see
+Releases also carry `SHA256SUMS.txt`, covering every asset. If you got your copy
+anywhere other than this repository's releases page, check it:
+
+```sh
+sha256sum --ignore-missing -c SHA256SUMS.txt
+```
+
+`--ignore-missing` checks the files you actually downloaded. Without it the command
+reports `FAILED` for every asset you did not take and exits non-zero, which reads as
+"your download is bad" when nothing is wrong. A genuine mismatch still fails. See
 [TRADEMARK.md](TRADEMARK.md#verifying-an-official-build).
 
 If your firmware is not listed, or it bumps its API before the next release here,
