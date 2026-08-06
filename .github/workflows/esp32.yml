@@ -86,7 +86,7 @@ jobs:
           PY
 
       - name: Upload firmware binaries
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flock_companion-esp32-bin
           path: |
@@ -174,7 +174,7 @@ jobs:
             build_c5_raw esp32c5 build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
 
       - name: Upload C5 firmware (experimental)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: flock_companion-esp32c5-experimental
           path: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
