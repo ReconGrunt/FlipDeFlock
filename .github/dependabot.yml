@@ -1,0 +1,17 @@
+# Keeps the SHA-pinned actions in .github/workflows from going stale.
+#
+# Pinning to a commit is what makes a release reproducible, but a pin nobody
+# ever moves is just an old dependency with extra steps. Dependabot reads the
+# `# vX.Y.Z` comment beside each pin, and bumps the SHA and the comment
+# together, so updates arrive as reviewable PRs instead of arriving silently
+# whenever an upstream tag moves.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "chore"
+    labels:
+      - "dependencies"
