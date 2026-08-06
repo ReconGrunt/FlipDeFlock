@@ -277,10 +277,16 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
-**v0.69** - **A tagged device no longer un-tags itself on Back.** Marking a device
-sent it to the Locator, but the mark was cleared one keypress later, so the Locator
-had nothing to home on. Adds explicit **Ping** and **Ring** actions for a validated
-tracker, and `SHA256SUMS.txt` on every release so an official build can be verified.
+**v0.70** - **Looking at a detection no longer destroys it.** Opening any device's
+detail screen took the ESP link down on the way in, so Wi-Fi, BLE, deauth and GPS
+were all offline while you read it, and pressing Back cleared the table you had
+just been looking at. Affected every scan screen, and v0.69's fix for it did not
+hold. There is now a `.fap` per firmware, so Unleashed and RogueMaster users no
+longer get "app is old" from a file that was never built for them.
+
+**v0.69** - **Ping and Ring for a validated tracker**, plus `SHA256SUMS.txt` on
+every release so an official build can be verified. Its headline fix, a tagged
+device surviving a Back press, did not actually work; that is fixed in v0.70.
 
 **v0.68** - **The Locator now gives a usable closer/farther reading.** It showed the
 last raw RSSI sample, which swings too hard to follow; it shows the smoothed level
