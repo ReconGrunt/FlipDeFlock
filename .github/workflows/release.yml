@@ -156,21 +156,42 @@ jobs:
           # failed on an asset that had been present the whole time.
           GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-          WANT: flipdeflock_companion_esp32wroom.bin
+          # EVERY asset attached by esp32.yml, one per line. The C5 image is not
+          # optional here just because it is experimental: it is a download, so a
+          # SHA256SUMS.txt without it is the exact "looks complete but is not"
+          # file this job exists to avoid.
+          #
+          # The two images come from DIFFERENT jobs in esp32.yml (build-bin and
+          # build-core3), which start together but do not finish together, so
+          # waiting on the WROOM image says nothing about the C5 one. On v0.69 the
+          # C5 image happened to land first and got hashed; nothing made that
+          # happen, and it would have been omitted silently if it had not.
+          WANT: |
+            flipdeflock_companion_esp32wroom.bin
+            flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
         run: |
           set -euo pipefail
           for i in $(seq 1 40); do
-            if gh release view "$TAG" --json assets --jq '.assets[].name' \
-                 | grep -qx "$WANT"; then
-              echo "$WANT present after $((i-1)) polls."
+            # `|| true`: a transient API error must read as "not there yet" and be
+            # retried, not kill the job. Under `set -e` an unguarded assignment
+            # from a failing command would exit on the first hiccup.
+            have="$(gh release view "$TAG" --json assets --jq '.assets[].name' || true)"
+            missing=""
+            while read -r want; do
+              [ -z "$want" ] && continue
+              printf '%s\n' "$have" | grep -qx "$want" || missing="$missing $want"
+            done <<< "$WANT"
+
+            if [ -z "$missing" ]; then
+              echo "every expected asset present after $((i-1)) polls."
               break
             fi
             if [ "$i" -eq 40 ]; then
-              echo "::error::$WANT never appeared on $TAG (waited 10 min)." \
-                   "Refusing to publish a SHA256SUMS.txt that omits it."
+              echo "::error::never appeared on $TAG (waited 10 min):$missing." \
+                   "Refusing to publish a SHA256SUMS.txt that omits them."
               exit 1
             fi
-            echo "waiting for $WANT ($i/40)"
+            echo "waiting for$missing ($i/40)"
             sleep 15
           done
 
