@@ -23,10 +23,10 @@ jobs:
     name: "Build flock_companion .bin"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup arduino-cli
-        uses: arduino/setup-arduino-cli@v2
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
 
       - name: Install ESP32 core
         run: |
@@ -86,7 +86,7 @@ jobs:
           PY
 
       - name: Upload firmware binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: flock_companion-esp32-bin
           path: |
@@ -102,7 +102,7 @@ jobs:
       # an existing release for the tag and won't fail the run on a miss.
       - name: Attach companion firmware to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: build_esp/flipdeflock_companion_esp32wroom.bin
           fail_on_unmatched_files: false
@@ -124,10 +124,10 @@ jobs:
     name: "Core 3.x compat + ESP32-C5"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Setup arduino-cli
-        uses: arduino/setup-arduino-cli@v2
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
 
       - name: Install ESP32 core 3.x
         run: |
@@ -174,7 +174,7 @@ jobs:
             build_c5_raw esp32c5 build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
 
       - name: Upload C5 firmware (experimental)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: flock_companion-esp32c5-experimental
           path: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
@@ -186,7 +186,7 @@ jobs:
       # warning that travels with the download.
       - name: Attach C5 firmware to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
           fail_on_unmatched_files: false

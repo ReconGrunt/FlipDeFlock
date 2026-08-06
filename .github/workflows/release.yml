@@ -36,11 +36,11 @@ jobs:
             index: https://up.momentum-fw.dev/firmware/directory.json
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Build with ufbt
         id: build-app
-        uses: flipperdevices/flipperzero-ufbt-action@v0.1
+        uses: flipperdevices/flipperzero-ufbt-action@e7cd34914e61ddc056acd8daaab96d8b4d4d9f55 # v0.1.4
         with:
           sdk-index-url: ${{ matrix.index }}
           sdk-channel: release
@@ -59,7 +59,7 @@ jobs:
           target: ${{ matrix.target }}
 
       - name: Upload .fap for the release job
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fap-${{ matrix.target }}
           path: ${{ steps.fap.outputs.path }}
@@ -71,13 +71,13 @@ jobs:
     name: "Attach .fap files to release"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       # All three builds, into one directory, so the attach below is a single call.
       # Attaching from inside the matrix instead would race three jobs against one
       # release, and generate_release_notes would fire three times.
       - name: Collect the built .fap files
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: fap-*
           merge-multiple: true
@@ -113,7 +113,7 @@ jobs:
       #   (does not create a duplicate).
       # - The maintainer may also upload/release manually; this just automates it.
       - name: Attach .fap to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             faps/*.fap
