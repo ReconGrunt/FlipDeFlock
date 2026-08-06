@@ -11,10 +11,16 @@ name: "FAP: Release"
 # is present (and creates one only if it is absent), and we set
 # fail_on_unmatched_files: false so a transient miss won't turn the run red.
 #
-# RUN IT BY HAND TO REHEARSE A RELEASE. A workflow_dispatch run does everything
-# except publish: it builds all three targets, uploads them, downloads them back,
-# checks the collected set, and packs the asset pack. Only the attach and the
-# checksum job are tag-only.
+# RUN IT BY HAND TO REHEARSE A RELEASE. Started from the Actions tab against a
+# BRANCH, this does everything except publish: it builds all three targets,
+# uploads them, downloads them back, checks the collected set, and packs the asset
+# pack. Publishing is gated on a tag ref, so nothing is attached.
+#
+# Started against a TAG, it publishes. That is deliberate and it is the recovery
+# path: v0.69's release run failed partway, and being able to re-attach to an
+# existing tag without inventing a new one is worth keeping. The run says which
+# of the two it is doing before it does anything (see the first step below), so
+# the dropdown you picked is never something you have to remember.
 #
 # That matters because this workflow is otherwise ONLY exercised by tagging, and
 # a tag is a bad place to discover that it broke. Dependabot moved checkout,
@@ -82,6 +88,22 @@ jobs:
     needs: build
     name: "Attach .fap files to release"
     steps:
+      # Say it up front. Whether this run publishes depends on the ref, and a
+      # hand-started run can be pointed at either a branch or a tag from the same
+      # dropdown, so "will this publish" should not be something you work out from
+      # the trigger after the fact.
+      - name: Say whether this run publishes
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          if [ "$IS_TAG" = "true" ]; then
+            echo "PUBLISHING. $EVENT against tag $REF_NAME: the .fap files will be attached to that release."
+          else
+            echo "REHEARSAL. $EVENT against $REF_NAME, which is not a tag: everything builds and is checked, nothing is published."
+          fi
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -117,21 +139,27 @@ jobs:
           import struct, pathlib, sys
 
           FAP_MANIFEST_MAGIC = 0x52474448
+          ELF32_HEADER_LEN = 52  # e_shstrndx is the last field this reads
+          ELF32_SHDR_LEN = 40    # one section header entry
+          FAP_MANIFEST_MIN = 12  # magic + version + api minor/major
 
-          for p in sorted(pathlib.Path("faps").glob("*.fap")):
-              d = p.read_bytes()
+
+          def api_version(d):
+              """(major, minor) out of the .fap's own .fapmeta, or raise."""
               if d[:4] != b"\x7fELF":
-                  sys.exit(f"::error::{p.name} is not an ELF. The artifact is corrupt.")
+                  raise ValueError("not an ELF")
+              if len(d) < ELF32_HEADER_LEN:
+                  raise ValueError(f"ELF header is truncated at {len(d)} bytes")
 
-              # Minimal ELF32 section walk to find .fapmeta.
               shoff, = struct.unpack_from("<I", d, 0x20)
               shentsize, shnum, shstrndx = struct.unpack_from("<HHH", d, 0x2E)
 
-              # Bounds-check before walking. A half-downloaded .fap keeps a valid
-              # ELF header, so without this the walk reads off the end and the job
-              # fails with a Python traceback instead of saying what is wrong.
-              if shnum == 0 or shstrndx >= shnum or shoff + shnum * shentsize > len(d):
-                  sys.exit(f"::error::{p.name} is truncated: the section table runs past the end of the file.")
+              if shentsize < ELF32_SHDR_LEN:
+                  raise ValueError(f"section header entry size {shentsize} is below the ELF32 minimum")
+              if shnum == 0 or shstrndx >= shnum:
+                  raise ValueError("section table is empty, or its string-table index is out of range")
+              if shoff + shnum * shentsize > len(d):
+                  raise ValueError("section table runs past the end of the file")
 
               def section(i):
                   o = shoff + i * shentsize
@@ -139,22 +167,35 @@ jobs:
                   return name, off, size
 
               stroff = section(shstrndx)[1]
-              meta = None
               for i in range(shnum):
                   nm, off, size = section(i)
                   end = d.index(b"\x00", stroff + nm)
-                  if d[stroff + nm:end] == b".fapmeta":
-                      meta = d[off:off + size]
-                      break
+                  if d[stroff + nm:end] != b".fapmeta":
+                      continue
+                  meta = d[off:off + size]
+                  if len(meta) < FAP_MANIFEST_MIN:
+                      raise ValueError(f".fapmeta is {len(meta)} bytes, too short to hold a manifest")
+                  magic, _mver, api_minor, api_major = struct.unpack_from("<IIHH", meta, 0)
+                  if magic != FAP_MANIFEST_MAGIC:
+                      raise ValueError(f"manifest magic is {magic:#x}, expected {FAP_MANIFEST_MAGIC:#x}")
+                  return api_major, api_minor
 
-              if meta is None:
-                  sys.exit(f"::error::{p.name} has no .fapmeta section.")
+              raise ValueError("no .fapmeta section")
 
-              magic, _mver, api_minor, api_major = struct.unpack_from("<IIHH", meta, 0)
-              if magic != FAP_MANIFEST_MAGIC:
-                  sys.exit(f"::error::{p.name} manifest magic is {magic:#x}, expected {FAP_MANIFEST_MAGIC:#x}.")
 
-              print(f"{p.name}: API {api_major}.{api_minor}, {len(d):,} bytes")
+          for p in sorted(pathlib.Path("faps").glob("*.fap")):
+              d = p.read_bytes()
+              try:
+                  major, minor = api_version(d)
+              except Exception as e:
+                  # Catch-all on purpose, and not a substitute for the explicit
+                  # checks above. These artifacts come from our own build minutes
+                  # earlier, so the realistic fault is a corrupt or truncated
+                  # download, not a crafted file. Every way that can fail means the
+                  # same thing to the reader, and it should be a sentence naming
+                  # the file rather than a Python traceback.
+                  sys.exit(f"::error::{p.name}: {e}. This is not a usable .fap.")
+              print(f"{p.name}: API {major}.{minor}, {len(d):,} bytes")
           PY
 
       # Pack the desktop asset pack and attach it too.
