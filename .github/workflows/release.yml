@@ -19,9 +19,21 @@ permissions:
   contents: write   # required to create/update the Release and upload assets
 
 jobs:
-  release:
+  # One .fap per firmware family. Mirrors build.yml's matrix exactly, so a tagged
+  # build matches what CI builds on main -- keep the two lists in step.
+  build:
     runs-on: ubuntu-latest
-    name: "Build .fap and attach to release"
+    name: "Build .fap (${{ matrix.target }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: ofw
+            index: https://update.flipperzero.one/firmware/directory.json
+          - target: unleashed
+            index: https://up.unleashedflip.com/directory.json
+          - target: momentum
+            index: https://up.momentum-fw.dev/firmware/directory.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,25 +42,27 @@ jobs:
         id: build-app
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
-          # Mirror build.yml: floating official release SDK. Kept identical so a
-          # tagged build matches what CI builds on main. (See the API drift guard
-          # in build.yml if the SDK ever moves off API 87.1.)
+          sdk-index-url: ${{ matrix.index }}
           sdk-channel: release
 
       # ufbt's fap-artifacts output lists EVERY image it built, which since v0.51
       # includes the QR plugin's flipdeflock_qr.fal. That .fal already ships
       # INSIDE flipdeflock.fap as an embedded file asset, so attaching it to the
       # release as well only invites "do I need to copy this too?" -- the answer
-      # is no, and the install is meant to be one file. Filter to the .fap(s).
+      # is no, and the install is meant to be one file. Filter to the .fap.
       #
       # Fails loudly on an empty result on purpose. The attach step below used to
       # run with fail_on_unmatched_files: false, which would have published a
       # release with NO app in it if the artifact path ever moved, and stayed
       # green while doing it.
-      - name: Select release assets (.fap only)
-        id: assets
+      #
+      # The ofw build keeps the bare `flipdeflock.fap` name. Every install guide,
+      # forum post and bookmark out there points at that filename, and renaming it
+      # would break all of them to gain nothing -- the other two are the new files.
+      - name: Name the .fap for this firmware
         env:
           FAP_ARTIFACTS: ${{ steps.build-app.outputs.fap-artifacts }}
+          TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
           faps="$(printf '%s\n' "$FAP_ARTIFACTS" | grep '\.fap$' || true)"
@@ -56,13 +70,50 @@ jobs:
             echo "::error::ufbt produced no .fap -- refusing to publish an empty release."
             exit 1
           fi
-          echo "Attaching:"
-          echo "$faps"
-          {
-            echo 'files<<FAPEOF'
-            echo "$faps"
-            echo 'FAPEOF'
-          } >> "$GITHUB_OUTPUT"
+          # Exactly one, or the copy below silently picks a winner.
+          n="$(printf '%s\n' "$faps" | wc -l)"
+          if [ "$n" -ne 1 ]; then
+            echo "::error::expected one .fap from ufbt, got $n:"
+            printf '%s\n' "$faps"
+            exit 1
+          fi
+
+          mkdir -p out
+          if [ "$TARGET" = "ofw" ]; then
+            dest="out/flipdeflock.fap"
+          else
+            dest="out/flipdeflock-$TARGET.fap"
+          fi
+          cp "$faps" "$dest"
+          ls -l "$dest"
+
+      - name: Upload .fap for the release job
+        uses: actions/upload-artifact@v4
+        with:
+          name: fap-${{ matrix.target }}
+          path: out/*.fap
+          if-no-files-found: error
+
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    name: "Attach .fap files to release"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # All three builds, into one directory, so the attach below is a single call.
+      # Attaching from inside the matrix instead would race three jobs against one
+      # release, and generate_release_notes would fire three times.
+      - name: Collect the built .fap files
+        uses: actions/download-artifact@v4
+        with:
+          pattern: fap-*
+          merge-multiple: true
+          path: faps
+
+      - name: Show what will be attached
+        run: ls -l faps
 
       # Pack the desktop asset pack and attach it too.
       #
@@ -94,7 +145,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            ${{ steps.assets.outputs.files }}
+            faps/*.fap
             flipdeflock_asset_pack.zip
           fail_on_unmatched_files: true
           # Auto-generate "What's Changed" notes when THIS workflow creates the
