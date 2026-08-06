@@ -111,7 +111,10 @@ bool recon_scene_flock_detail_on_event(void* context, SceneManagerEvent event) {
             app->locate_kind = (e->ftype == 'L') ? 'b' : 'w';
             app->locate_ch = e->channel;
             if(e->ssid[0]) {
-                snprintf(app->locate_label, sizeof(app->locate_label), "Flock %s", e->ssid);
+                // %.21s, not %s: "Flock " + 21 + NUL is exactly the 28 bytes of
+                // locate_label, so the bound is stated rather than left to
+                // snprintf's own clamp. Same truncation point as before.
+                snprintf(app->locate_label, sizeof(app->locate_label), "Flock %.21s", e->ssid);
             } else {
                 snprintf(
                     app->locate_label,
