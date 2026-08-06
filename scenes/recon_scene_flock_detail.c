@@ -128,8 +128,16 @@ bool recon_scene_flock_detail_on_event(void* context, SceneManagerEvent event) {
         // ReconSceneLocatorHome show its own Marauder guard screen rather than
         // duplicating that check here. Backing out of the HUD lands back on this
         // screen, and one more Back returns to the Flock list, whose on_enter
-        // restarts the general sweep (the Locator's on_exit stopped the scan
-        // session) -- the round trip issue #6 asked for.
+        // re-sends `flockcombo` and so restarts the general sweep -- the round
+        // trip issue #6 asked for.
+        //
+        // That kickoff is deliberately NOT gated on a fresh session. It used to
+        // be, and it worked only because the Locator's on_exit tore the whole
+        // link down, which made the return look like a new session. The link now
+        // survives the round trip (see helpers/scan_session.h), so the only thing
+        // that still needs undoing is the `stop` the Locator sent the companion.
+        // Gate the kickoff again and this path silently returns to a live link
+        // attached to an idle board: a Flock screen that scans nothing.
         if(valid) scene_manager_next_scene(app->scene_manager, ReconSceneLocatorHome);
         return true;
     }
