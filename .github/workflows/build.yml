@@ -53,10 +53,17 @@ jobs:
           # `"api"` field in the ufbt state json.
           API_VER=""
 
-          # 1) api_symbols.csv: header row "api_symbol,..." with a Version,<x.y> row
+          # 1) api_symbols.csv. Columns are "entry,status,name,type,params", so the
+          #    version row reads:
+          #        Version,+,87.1,,
+          #    The version is field 3. This used to cut field 2 and got back the
+          #    status column, a literal "+", which never equals 87.1 -- so the step
+          #    has been printing a drift warning on every run since it was added,
+          #    and could not have detected real drift either. continue-on-error is
+          #    why nobody noticed.
           CSV=$(find "$UFBT_STATE_DIR" -name 'api_symbols.csv' 2>/dev/null | head -n1)
           if [ -n "$CSV" ]; then
-            API_VER=$(grep -m1 -iE '^Version,' "$CSV" 2>/dev/null | cut -d',' -f2 | tr -d ' \r')
+            API_VER=$(grep -m1 -iE '^Version,' "$CSV" 2>/dev/null | cut -d',' -f3 | tr -d ' \r')
           fi
 
           # 2) ufbt state json (e.g. .ufbt/current/.data or sdk_state) -> "api" field
