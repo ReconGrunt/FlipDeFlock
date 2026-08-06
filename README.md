@@ -18,8 +18,9 @@ transmitted unless you press it. Detections are indicators, not proof: OUI-only
 matches are possible, not confirmed, so verify by eye. Use it only where you are
 authorized to.
 
-Builds against Flipper API 87.1, shared by current stock OFW and
-[Momentum](https://github.com/Next-Flip/Momentum-Firmware).
+Built for stock OFW, [Unleashed](https://github.com/DarkFlippers/unleashed-firmware),
+[Momentum](https://github.com/Next-Flip/Momentum-Firmware) and RogueMaster. Pick the
+file that matches your firmware; see [Install](#install).
 
 **Free, and staying that way.** If FlipDeFlock is useful to you, crypto donations fund
 development, test hardware, and the legal costs of mapping surveillance infrastructure.
@@ -41,19 +42,33 @@ Bitcoin is also scannable from the Flipper itself: **FlipDeFlock → Support**.
 
 ## Install
 
-Download `flipdeflock.fap` from the [latest release](../../releases/latest), copy
-it to `apps/Tools/` on your Flipper's SD card, and launch **FlipDeFlock** from the
-Tools menu. Every push also builds a fresh `.fap` as a CI artifact under the
-**Actions** tab.
+Grab the file for your firmware from the [latest release](../../releases/latest),
+copy it to `apps/Tools/` on your Flipper's SD card, and launch **FlipDeFlock** from
+the Tools menu.
+
+| Your firmware | Download | API |
+|---|---|---|
+| Official (OFW) | `flipdeflock.fap` | 87.1 |
+| Momentum | `flipdeflock-momentum.fap` | 87.1 |
+| Unleashed | `flipdeflock-unleashed.fap` | 88.2 |
+| RogueMaster | `flipdeflock-unleashed.fap` | 88.2 |
+
+A `.fap` records the API version it was built against, and the firmware refuses to
+load one that does not match. **If your Flipper says the app is old, you have the
+wrong file, not an old app.** It is the API that is old, not the release. Take the
+matching row above. RogueMaster tracks Unleashed and reports the same API, so the
+Unleashed build is the one to use there.
+
+Every push also builds all three as CI artifacts under the **Actions** tab.
 
 Releases also carry `SHA256SUMS.txt`. If you got your copy anywhere other than this
 repository's releases page, check it — `sha256sum -c SHA256SUMS.txt` — and see
 [TRADEMARK.md](TRADEMARK.md#verifying-an-official-build).
 
-If a newer firmware bumps the API and the app refuses to load ("API mismatch"),
-rebuild it with `ufbt` — see [Build from source](#build-from-source). Other common
-problems — UART busy, no detections, GPS no-fix, flasher errors — are covered in
-[Troubleshooting](docs/TROUBLESHOOTING.md).
+If your firmware is not listed, or it bumps its API before the next release here,
+build it yourself with `ufbt`; see [Build from source](#build-from-source). Other
+common problems (UART busy, no detections, GPS no-fix, flasher errors) are covered
+in [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 ## Hardware
 
@@ -524,7 +539,8 @@ field data. The most useful contributions are **field reports and signatures** (
 Flock/ALPR OUIs, SSID/BLE patterns, probe IE fingerprints — and detections that
 misfired), **board support** reports, and code.
 
-Ground rules: passive recon only, correctness over features, API 87.1, and keep it lean.
+Ground rules: passive recon only, correctness over features, it builds on every SDK in
+the release matrix, and keep it lean.
 Full details, the DCO sign-off requirement, and contribution licensing are in
 [CONTRIBUTING.md](CONTRIBUTING.md).
 

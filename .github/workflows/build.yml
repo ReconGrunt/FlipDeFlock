@@ -9,7 +9,31 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: "Build .fap (ufbt)"
+    name: "Build .fap (${{ matrix.target }})"
+    # One build per firmware family, because they do NOT share an API version.
+    # A .fap carries the API it was built against and the loader refuses one that
+    # does not match, so a single build only ever served whoever happened to be on
+    # 87.1. Unleashed and RogueMaster are on 88.2 and were being told the app is
+    # old -- correctly, from the loader's point of view.
+    #
+    # fail-fast is off on purpose: one firmware moving its API should not cancel
+    # the builds for the others. That is precisely when you most want the rest.
+    #
+    # RogueMaster has no ufbt SDK index of its own. It tracks Unleashed and reports
+    # the same 88.2, so the Unleashed build is the one to install there.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: ofw
+            api: "87.1"
+            index: https://update.flipperzero.one/firmware/directory.json
+          - target: unleashed
+            api: "88.2"
+            index: https://up.unleashedflip.com/directory.json
+          - target: momentum
+            api: "87.1"
+            index: https://up.momentum-fw.dev/firmware/directory.json
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,30 +42,34 @@ jobs:
         id: build-app
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         with:
-          # Stable official SDK. Switch to "rc" or "dev" if you track those,
-          # or to a Momentum SDK index via the action's `sdk-index-url`.
+          sdk-index-url: ${{ matrix.index }}
           sdk-channel: release
 
       - name: Upload .fap artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.event.repository.name }}-${{ steps.build-app.outputs.suffix }}
+          name: ${{ github.event.repository.name }}-${{ matrix.target }}-${{ steps.build-app.outputs.suffix }}
           path: ${{ steps.build-app.outputs.fap-artifacts }}
           if-no-files-found: error
 
       # --- API drift guard (advisory) ------------------------------------------
-      # build.yml uses `sdk-channel: release`, which floats: when the official SDK
-      # bumps its API version, this app (targeted at API 87.1) keeps building
-      # against whatever ships. This step reads the API version ufbt resolved and
-      # WARNS on a mismatch with 87.1. It is advisory (continue-on-error) BECAUSE
-      # the SDK is not pinned -- making it required would turn CI red every time the
-      # floating `release` SDK drifts. Pin the SDK (sdk-index-url) to API 87.1
-      # first, then this can be promoted to a required gate.
-      - name: API 87.1 drift check (advisory)
+      # Each target tracks its firmware's `release` channel, which floats: when a
+      # firmware bumps its API version, that build follows it silently. This step
+      # reads the API ufbt actually resolved and WARNS when it is not the version
+      # recorded in the matrix, so a bump shows up as a line in the log rather than
+      # as users being told the app is old.
+      #
+      # Still advisory (continue-on-error), for the original reason: the SDKs are
+      # not pinned, so a required gate would turn CI red on somebody else's release
+      # schedule. What the warning now means is "update matrix.api and the README
+      # table", which is a deliberate edit rather than a mystery.
+      - name: API drift check (advisory)
         continue-on-error: true
+        env:
+          EXPECTED_API: ${{ matrix.api }}
         run: |
           set +e
-          EXPECTED="87.1"
+          EXPECTED="$EXPECTED_API"
 
           # ufbt stores the resolved SDK state under its toolchain/SDK home.
           # UFBT_HOME is exported by the ufbt-action; fall back to the default.
@@ -78,17 +106,19 @@ jobs:
 
           echo "Detected SDK API version: $API_VER (expected $EXPECTED)"
           if [ "$API_VER" != "$EXPECTED" ]; then
-            echo "::warning title=API drift::ufbt built against API $API_VER but this app targets API $EXPECTED. The floating 'release' SDK has drifted; pin it (sdk-index-url) to API $EXPECTED to make this a required gate, or bump the target deliberately. (Advisory -- build not failed.)"
+            echo "::warning title=API drift::the ${{ matrix.target }} SDK now reports API $API_VER, but the matrix records $EXPECTED. Update matrix.api and the firmware table in README.md. (Advisory -- build not failed.)"
           else
             echo "API version matches expected $EXPECTED."
           fi
           exit 0
 
-      # Advisory: the first-party tree is clang-format clean under the SDK this app
-      # targets (API 87.1). Promote to a required gate once the CI SDK is PINNED to
-      # 87.1 -- a floating `release` SDK ships a different clang-format version that
-      # can format the same code differently and cause spurious violations.
+      # Advisory, and only once. clang-format ships WITH the SDK, so three SDKs
+      # means three formatter versions disagreeing about the same file; running it
+      # per target would report the same code as three different verdicts. The
+      # official SDK is the one CONTRIBUTING.md tells people to format against, so
+      # that is the one that speaks.
       - name: Lint sources (advisory)
+        if: matrix.target == 'ofw'
         uses: flipperdevices/flipperzero-ufbt-action@v0.1
         continue-on-error: true
         with:
