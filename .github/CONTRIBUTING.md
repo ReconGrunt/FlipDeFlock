@@ -4,19 +4,19 @@ This is a community counter-surveillance effort; it improves with more boards an
 field data. Thanks for being here.
 
 What the project is working toward — and the things it deliberately refuses to build —
-are in [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md). Worth a read before proposing
+are in [docs/PROJECT_PLAN.md](../docs/PROJECT_PLAN.md). Worth a read before proposing
 anything substantial.
 
 ## Most useful contributions
 
 - **Field reports & signatures** — new Flock/ALPR OUIs, SSID/BLE patterns, or false
   positives and misses. Test a candidate in your own `signatures.json` first (see the
-  [signatures guide](docs/signatures.md)), then send the ones that hold up. A report
+  [signatures guide](../docs/signatures.md)), then send the ones that hold up. A report
   that a detection *misfired* is as valuable as a new signature.
 - **Probe IE fingerprints** captured from a corroborated Flock unit. Each detection's
   detail screen shows its `IE-fp:` for exactly this purpose. Only vetted fingerprints
   get promoted into the compiled-in table; signatures loaded from SD are capped at the
-  `Class?` rung by design (see the [signatures guide](docs/signatures.md)).
+  `Class?` rung by design (see the [signatures guide](../docs/signatures.md)).
 - **Board support** — try it on your ESP32 and report wiring quirks, baud issues, or
   boards that need nonstandard ports.
 - **Code** — bug fixes, report formats, and features. Please open an issue before
@@ -71,7 +71,7 @@ for continued development.
 
 **What clause 2 does not do.** It does not let anyone take FlipDeFlock closed. The public
 project stays free and GPL-3.0-or-later — see the pledge in
-[README.md](README.md#support) and [SUPPORTERS.md](SUPPORTERS.md). Clause 2 grants an
+[README.md](../README.md#support) and [SUPPORTERS.md](../SUPPORTERS.md). Clause 2 grants an
 *additional* license; it does not revoke the
 GPL one. Every version ever published under the GPL remains available under the GPL,
 permanently, and that cannot be undone.

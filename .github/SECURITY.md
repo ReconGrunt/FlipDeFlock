@@ -7,7 +7,7 @@ FlipDeFlock is a security tool, so it should be held to the standard it audits a
 **Please do not open a public issue for a security problem.**
 
 Use GitHub's private vulnerability reporting:
-**[Security → Report a vulnerability](../../security/advisories/new)**. That opens a
+**[Security → Report a vulnerability](https://github.com/ReconGrunt/FlipDeFlock/security/advisories/new)**. That opens a
 private advisory visible only to you and the maintainer.
 
 Expect an acknowledgement within a week. This is a single-maintainer project, so please
@@ -43,7 +43,8 @@ Only the **latest release** receives fixes. There are no long-term support branc
 
 ## Verifying what you run
 
-Official binaries come only from this repository's [Releases](../../releases) or from
+Official binaries come only from this repository's
+[Releases](https://github.com/ReconGrunt/FlipDeFlock/releases) or from
 per-push CI artifacts under the **Actions** tab. There are exactly two of them:
 
 | Artifact | What it is | Approx. size |
@@ -59,4 +60,4 @@ Release is a strong sign you are not on the official repository.
 
 If you find a third-party repository distributing something as "FlipDeFlock", please
 report it to GitHub and let us know. See the name reservation in
-[README.md](README.md#license).
+[README.md](../README.md#license).

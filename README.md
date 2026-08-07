@@ -556,7 +556,7 @@ misfired), **board support** reports, and code.
 Ground rules: passive recon only, correctness over features, it builds on every SDK in
 the release matrix, and keep it lean.
 Full details, the DCO sign-off requirement, and contribution licensing are in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](.github/CONTRIBUTING.md).
 
 Questions, board reports and ideas are welcome in
 [Discussions](https://github.com/ReconGrunt/FlipDeFlock/discussions). Bugs and feature
@@ -564,7 +564,7 @@ requests belong in [Issues](https://github.com/ReconGrunt/FlipDeFlock/issues/new
 please open a **new** one even if a closed issue looks related, since closed threads
 are not watched.
 
-Found a security issue? Please follow [SECURITY.md](SECURITY.md) rather than opening a
+Found a security issue? Please follow [SECURITY.md](.github/SECURITY.md) rather than opening a
 public issue.
 
 ## Support

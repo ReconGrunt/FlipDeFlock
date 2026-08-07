@@ -35,7 +35,7 @@ Credited in the source next to the data they contributed:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Note that **data-only contributions** —
+See [CONTRIBUTING.md](.github/CONTRIBUTING.md). Note that **data-only contributions** —
 field reports, new OUIs, SSID/BLE patterns, probe fingerprints,
 board-compatibility reports, bug reports, test cases — carry no copyright
 entanglement, so they need no sign-off and are the easiest way to help. Code
