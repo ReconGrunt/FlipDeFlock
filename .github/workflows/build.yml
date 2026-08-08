@@ -44,6 +44,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing after this checkout runs an authenticated git command.
+          persist-credentials: false
 
       - name: Build with ufbt
         id: build-app
@@ -227,6 +230,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing after this checkout runs an authenticated git command.
+          persist-credentials: false
 
       - name: Build + run host tests
         run: make -C test
