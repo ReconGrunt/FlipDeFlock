@@ -1,0 +1,70 @@
+name: Detection signature / field data
+description: A missed camera, a new OUI, an SSID or BLE pattern, or a probe fingerprint.
+title: "[Data] "
+labels: ["signature", "field data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **This needs no sign-off.** Field data — OUIs, SSID and BLE patterns, probe
+        IE fingerprints, board-compatibility reports, test cases — carries no
+        copyright entanglement, so unlike a code PR it does not require the DCO
+        trailer or the licensing grant in
+        [CONTRIBUTING.md](../blob/main/.github/CONTRIBUTING.md).
+
+        It is also the most valuable kind of contribution this project takes. The
+        detection tables can only be verified against hardware and radio
+        environments the maintainer does not have.
+
+        A signature only gets added if it can be justified as **precise**. A
+        pattern that would also match ordinary consumer hardware raises the false
+        positive rate for everyone, so expect questions about what else it could
+        match — that is the bar, not scepticism about your report.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of data
+      options:
+        - A camera the app did NOT detect
+        - New OUI prefix
+        - SSID naming pattern
+        - BLE manufacturer ID / GATT pattern
+        - Probe request IE fingerprint
+        - Board compatibility report
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: data
+    attributes:
+      label: The data
+      description: >
+        OUI prefixes, SSID patterns, fingerprints, or the app's own export. If you
+        have a redacted export, **Reports → False Positive Report** produces one
+        with no GPS and no full MACs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: confirmation
+    attributes:
+      label: How do you know it is a camera?
+      description: >
+        Visual confirmation, a photo, a known install, a manufacturer's own
+        documentation. This is the part that decides whether a signature can be
+        added, because a detection is only as good as the ground truth behind it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: false-match
+    attributes:
+      label: What else could this match?
+      description: >
+        If it is an OUI, is the prefix shared with other hardware on the same
+        chipset? Most of the OUI table is shared silicon-vendor prefixes, which is
+        why a bare OUI hit is only ever "Possible".
+    validations:
+      required: false

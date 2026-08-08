@@ -1,0 +1,84 @@
+name: Bug report
+description: Something in the app or the companion firmware misbehaves.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please open a **new** issue even if a closed one looks related — closed
+        threads do not get watched.
+
+        Most of this project is verified in CI rather than on hardware, and much
+        of it runs on boards and radio environments the maintainer does not have.
+        A precise report from someone who *does* have that board is often the only
+        way a bug gets found at all.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: >
+        Shown on the main menu and in About. If you are on a nightly, say so and
+        give the short commit from the release title.
+      placeholder: v0.71
+    validations:
+      required: true
+
+  - type: input
+    id: companion
+    attributes:
+      label: Companion firmware
+      description: >
+        Which `.bin`, from which release — or Marauder. Several bugs have turned
+        out to be an app newer than the companion it was talking to.
+      placeholder: flipdeflock_companion_esp32wroom.bin from v0.71
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: Board
+      placeholder: ESP32-WROOM devboard / ESP32-C5 / Flipper Wi-Fi devboard
+    validations:
+      required: true
+
+  - type: dropdown
+    id: flipper-fw
+    attributes:
+      label: Flipper firmware
+      options: [Official, Momentum, Unleashed, RogueMaster, Other]
+    validations:
+      required: true
+
+  - type: textarea
+    id: settings
+    attributes:
+      label: Relevant settings
+      description: >
+        Board Mode, ESP Port and baud, and anything else you changed. For GPS
+        problems include GPS From and ESP GPS Pin. This is usually the fastest
+        path to an answer.
+      placeholder: |
+        Board mode: Companion
+        ESP port: USART 13/14
+        ESP baud: 115200
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: A photo of the screen is fine and is often enough on its own.
+    validations:
+      required: false

@@ -1,0 +1,73 @@
+name: False positive / wrong detection
+description: FlipDeFlock flagged something that is not a Flock or ALPR camera.
+title: "[FP] "
+labels: ["false positive"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Precision matters more than recall here — a false positive is worse than
+        a missed detection, so this is one of the most useful reports you can file.
+
+        **Export the redacted report first.** In the app: **Reports → False
+        Positive Report**. It writes to `apps_data/flipdeflock/reports/` and
+        deliberately contains **no GPS coordinates, no full MAC addresses and no
+        timestamps**; network names are reduced to a shape unless the name itself
+        is what matched. Attach that file rather than typing rows out by hand.
+
+        If something in the export still looks too revealing to post publicly,
+        follow [SECURITY.md](../blob/main/.github/SECURITY.md) instead.
+
+  - type: textarea
+    id: report
+    attributes:
+      label: Redacted report
+      description: Attach the `falsepos_*.md` file, or paste the rows.
+      placeholder: Drag the file in here, or paste the table rows.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reality
+    attributes:
+      label: What was it actually?
+      description: >
+        If you know what the device really was, say so. "Neighbour's doorbell",
+        "the router in the café", "no idea, but there is no camera on this street"
+        are all useful answers.
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Shown on the main menu and in About.
+      placeholder: v0.71
+    validations:
+      required: true
+
+  - type: input
+    id: companion
+    attributes:
+      label: Companion firmware
+      description: Which `.bin` you flashed, and from which release. Or Marauder.
+      placeholder: flipdeflock_companion_esp32wroom.bin from v0.71
+    validations:
+      required: true
+
+  - type: input
+    id: board
+    attributes:
+      label: Board
+      placeholder: ESP32-WROOM devboard / ESP32-C5 / Flipper Wi-Fi devboard with Marauder
+    validations:
+      required: true
+
+  - type: dropdown
+    id: flipper-fw
+    attributes:
+      label: Flipper firmware
+      options: [Official, Momentum, Unleashed, RogueMaster, Other]
+    validations:
+      required: true

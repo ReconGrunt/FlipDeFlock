@@ -70,6 +70,57 @@ jobs:
           path: ${{ steps.fap.outputs.path }}
           if-no-files-found: error
 
+      # --- Size report (advisory) ----------------------------------------------
+      # The .fap loads ENTIRELY into the ~256 KB the Flipper shares between
+      # firmware and app, and nothing was reporting how close to that it was.
+      # A user on heavier firmware has already been refused outright with "Not
+      # enough RAM to run the app" (issue #5), and a BLE transfer failed for the
+      # same reason during field testing, so this is a lived limit rather than a
+      # theoretical one.
+      #
+      # ADVISORY, and .fap size is NOT heap headroom -- the file carries debug
+      # and relocation data that the loaded image does not, and the real answer
+      # needs measuring on hardware. What this catches is the direction of
+      # travel: a step change in a diff, printed where a reviewer sees it, rather
+      # than discovered by somebody's app failing to start.
+      #
+      # The section breakdown is the useful part. .bss and .data are the ones
+      # that cost RAM per byte for the whole life of the app; .text costs it too
+      # here (the whole .fap is loaded), but a jump in .bss is almost always a
+      # capacity constant like RECON_FLOCK_MAX having been raised.
+      - name: Size report (advisory)
+        if: matrix.target == 'ofw'
+        continue-on-error: true
+        env:
+          FAP_PATH: ${{ steps.fap.outputs.path }}
+        run: |
+          set -euo pipefail
+          BUDGET=262144   # ~256 KB, the figure the project budgets against
+          bytes=$(stat -c%s "$FAP_PATH")
+          pct=$(( bytes * 100 / BUDGET ))
+          echo "### .fap size" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$(basename "$FAP_PATH")\`: **$(printf "%'d" "$bytes") bytes** (${pct}% of the ${BUDGET}-byte budget)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo ".fap size is not heap headroom -- it includes data the loaded image drops. Direction of travel only." >> "$GITHUB_STEP_SUMMARY"
+          echo "$(basename "$FAP_PATH"): $bytes bytes (${pct}% of budget)"
+
+          # Per-section figures out of the unstripped ELF that ufbt keeps beside
+          # the .fap. Absent on a cache hit or a layout change, so it is optional
+          # rather than a failure: the total above is the number that must always
+          # appear.
+          ELF="$(find . -name 'flipdeflock_d.elf' -o -name 'flipdeflock.elf' 2>/dev/null | head -n1)"
+          if [ -n "$ELF" ] && command -v size >/dev/null 2>&1; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            size -A "$ELF" | grep -E '^\.(text|rodata|data|bss)|^section|^Total' >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          if [ "$pct" -ge 80 ]; then
+            echo "::warning title=.fap size::$bytes bytes is ${pct}% of the ${BUDGET}-byte budget. Measure heap on hardware before adding more."
+          fi
+
       # --- API drift guard (advisory) ------------------------------------------
       # Each target tracks its firmware's `release` channel, which floats: when a
       # firmware bumps its API version, that build follows it silently. This step

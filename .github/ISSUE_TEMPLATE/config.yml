@@ -1,0 +1,21 @@
+# Templates are a starting point, not a gate: blank issues stay enabled so a
+# report that fits none of them is still easy to file. The templates exist
+# because free-form reports kept needing three or four round-trips just to
+# establish board, firmware version and settings.
+blank_issues_enabled: true
+contact_links:
+  - name: Question, idea, or field report discussion
+    url: https://github.com/ReconGrunt/FlipDeFlock/discussions
+    about: >
+      Open-ended things live better here than in an issue. Most of the app's UI
+      came out of one of these threads.
+  - name: Security issue
+    url: https://github.com/ReconGrunt/FlipDeFlock/blob/main/.github/SECURITY.md
+    about: >
+      Please do not open a public issue for a security problem. SECURITY.md has
+      the private route.
+  - name: Troubleshooting first
+    url: https://github.com/ReconGrunt/FlipDeFlock/blob/main/docs/TROUBLESHOOTING.md
+    about: >
+      UART busy, no detections, GPS no-fix, flasher errors, and "the app says it
+      is old" are covered here.
