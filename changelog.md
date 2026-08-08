@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.71
+**Nightly builds, so a fix can be tested before it is frozen into a tag.**
+No app behaviour changes in this release; it is release plumbing and docs.
+
+### Added
+
+- **A nightly channel.** `main` is now built and published daily to a rolling
+  `nightly` prerelease whenever something has changed, carrying the same three
+  `.fap` files under the same names as a tagged build. This exists because v0.69
+  shipped a fix that did not hold: between it and the correction in v0.70 the only
+  published build was the broken one, and "wait for the next tag" was the only
+  advice available. It also runs the other way, letting whoever reported a bug
+  confirm the fix before it is tagged.
+
+  Nightlies are marked as prereleases, so `/releases/latest` still resolves to the
+  newest tag and the README install link is unaffected. The companion firmware is
+  not rebuilt for a nightly; pair it with the `.bin` from the newest tag. Skipped
+  entirely on a day when `main` has not moved, so the publish date always means
+  something changed.
+
+### Fixed
+
+- **Superseded CI runs are cancelled instead of queued.** A second push to a
+  branch left the first ESP32 run sitting in the queue behind its own replacement
+  — one on PR #18 sat there for 25 hours, on a result nobody was waiting for.
+  Tag builds are exempt, because a cancelled tag run is a release missing its
+  companion firmware with nothing red to show for it.
+
+### Changed
+
+- **`CONTRIBUTING.md` and `SECURITY.md` moved into `.github/`**, where GitHub
+  surfaces them in the PR and advisory flows. Every link that pointed at them was
+  updated; the licensing grant's original publication date still governs, since a
+  relocation is not a republication.
+- **The asset pack download link and filename** were corrected.
+- **[@nickk02](https://github.com/nickk02) is credited in `CONTRIBUTORS.md`** for
+  the v0.70 release-engineering work.
+
 ## v0.70
 **Opening a detail screen stopped the scan and cleared the table behind it.**
 Every scan screen, not just BLE. v0.69 aimed at this and missed; the entry below
