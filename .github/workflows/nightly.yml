@@ -1,0 +1,224 @@
+name: "FAP: Nightly"
+
+# A rolling prerelease built from main, so there is always a working fallback
+# that is NOT the newest tag.
+#
+# WHY THIS EXISTS: v0.69 shipped a fix that did not hold and had to be corrected
+# in v0.70. Between those two tags the only published build was the broken one,
+# and "wait for the next tag" was the only advice available. A nightly gives the
+# other direction too -- a fix can be tested by the person who reported it before
+# it is frozen into a tag.
+#
+# THE STABLE CHANNEL IS UNAFFECTED, and that is the whole design constraint:
+# every release here is marked `prerelease`, which keeps it out of
+# /releases/latest. Anyone following the README's "latest release" link keeps
+# getting the newest TAG, not this. Nothing about this workflow can change what a
+# normal user downloads.
+#
+# .fap ONLY. The companion firmware is a separate ~4 minute arduino-cli build in
+# esp32.yml and is not rebuilt here, so a nightly .fap pairs with the companion
+# image from the newest tag. The proto version handshake already detects a
+# genuine mismatch and says so, rather than misbehaving quietly.
+on:
+  schedule:
+    # 07:00 UTC daily. After a normal evening of commits in the Americas, and it
+    # is a fixed wall-clock time rather than "every push", so a run of doc
+    # commits does not publish five nightlies in an afternoon.
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write # create/replace the rolling `nightly` release and its tag
+
+# Two runs must never interleave: publish below DELETES the nightly release and
+# recreates it, so an overlapping pair can leave no nightly at all. Queue instead
+# of cancelling -- a cancelled run mid-delete is the state we are avoiding.
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  # Is there anything new to publish? The nightly release records the commit it
+  # was built from, so re-publishing an identical build every morning is both
+  # avoidable and actively misleading: a moving date on an unchanged binary
+  # reads as progress.
+  #
+  # Also the fork guard. Scheduled workflows run on a fork's default branch once
+  # its owner enables Actions, and this one writes releases -- so pin it to this
+  # repository rather than letting a fork publish "FlipDeFlock nightly".
+  check:
+    runs-on: ubuntu-latest
+    if: github.repository == 'ReconGrunt/FlipDeFlock'
+    name: "Anything new since the last nightly?"
+    outputs:
+      should-build: ${{ steps.check.outputs.should-build }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Compare main against the published nightly
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          # A hand-run should always publish. That is what the button is for:
+          # you press it because you want a nightly out of the current main,
+          # not to be told nothing changed.
+          FORCED: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          if [ "$FORCED" = "true" ]; then
+            echo "manual run: building regardless of what is already published."
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # `|| true`: no nightly release yet is the FIRST-RUN case, not an
+          # error. Under `set -e` this assignment would otherwise kill the job
+          # on the one day it most needs to succeed.
+          published="$(gh release view nightly --json targetCommitish --jq .targetCommitish 2>/dev/null || true)"
+
+          if [ -z "$published" ]; then
+            echo "no nightly published yet; building the first one."
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+          elif [ "$published" = "$SHA" ]; then
+            echo "nightly already points at $SHA; nothing new to build."
+            echo "should-build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "main moved: $published -> $SHA."
+            echo "should-build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Same matrix and the same shared naming action as build.yml and release.yml,
+  # so a nightly .fap is named exactly like the tagged one and lands in the same
+  # place on the SD card. A user testing a nightly and then going back to stable
+  # should be overwriting one file, not learning a second filename.
+  build:
+    needs: check
+    if: needs.check.outputs.should-build == 'true'
+    runs-on: ubuntu-latest
+    name: "Build .fap (${{ matrix.target }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: ofw
+            index: https://update.flipperzero.one/firmware/directory.json
+          - target: unleashed
+            index: https://up.unleashedflip.com/directory.json
+          - target: momentum
+            index: https://up.momentum-fw.dev/firmware/directory.json
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build with ufbt
+        id: build-app
+        uses: flipperdevices/flipperzero-ufbt-action@e7cd34914e61ddc056acd8daaab96d8b4d4d9f55 # v0.1.4
+        with:
+          sdk-index-url: ${{ matrix.index }}
+          sdk-channel: release
+
+      - name: Name the .fap for this firmware
+        id: fap
+        uses: ./.github/actions/name-fap
+        with:
+          fap-artifacts: ${{ steps.build-app.outputs.fap-artifacts }}
+          target: ${{ matrix.target }}
+
+      - name: Upload .fap for the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-fap-${{ matrix.target }}
+          path: ${{ steps.fap.outputs.path }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    name: "Publish the rolling nightly"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the notes below list what has landed since the newest
+          # tag, which needs the tags and the commits between them.
+          fetch-depth: 0
+
+      - name: Collect the built .fap files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: nightly-fap-*
+          merge-multiple: true
+          path: faps
+
+      # The same set check release.yml runs. A nightly that publishes two .fap
+      # files instead of three is a nightly that silently drops a firmware
+      # family, and the person it drops is the one testing an unreleased fix.
+      - name: Check the collected .fap set
+        run: |
+          set -euo pipefail
+          n="$(find faps -maxdepth 1 -name '*.fap' | wc -l)"
+          if [ "$n" -ne 3 ]; then
+            echo "::error::expected 3 .fap files from the build matrix, got $n."
+            ls -lR faps || true
+            exit 1
+          fi
+          ls -l faps
+
+      # Delete-then-create rather than an update in place. A rolling tag has to
+      # MOVE to the new commit, and the release actions that attach to an
+      # existing tag leave the tag where it was -- which would publish today's
+      # binaries under a tag pointing at last week's source. Deleting the tag
+      # with the release is what makes `--target` below meaningful.
+      - name: Replace the nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          latest_tag="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          short="$(git rev-parse --short "$SHA")"
+
+          {
+            echo "**Untested build from \`main\`.** This is not a release."
+            echo
+            echo "Built from \`$short\`. Use it to test a fix before it is tagged,"
+            echo "or as a fallback when the newest tag has a problem. For normal use"
+            echo "take the [latest release](../../releases/latest) instead."
+            echo
+            echo "Install is identical to a tagged build: take the \`.fap\` matching"
+            echo "your firmware from the table in the README."
+            echo
+            echo "**The companion firmware is not rebuilt here.** Flash the"
+            echo "\`.bin\` from the newest tagged release. If the app and the"
+            echo "companion ever disagree on the protocol, the app says so on the"
+            echo "scan screen rather than misreporting."
+            echo
+            if [ -n "$latest_tag" ]; then
+              echo "### Since \`$latest_tag\`"
+              echo
+              git log --no-merges --format='- %s' "$latest_tag..$SHA" || true
+            fi
+          } > notes.md
+          cat notes.md
+
+          # `|| true`: there is no nightly to delete on the first run, and that
+          # must not fail the job.
+          gh release delete nightly --yes --cleanup-tag 2>/dev/null || true
+
+          # --prerelease is the load-bearing flag. Without it this becomes
+          # /releases/latest and every README install link starts serving an
+          # untested build.
+          gh release create nightly \
+            --prerelease \
+            --target "$SHA" \
+            --title "Nightly ($short)" \
+            --notes-file notes.md \
+            faps/*.fap
+
+          gh release view nightly --json isPrerelease,targetCommitish,assets \
+            --jq '"prerelease=\(.isPrerelease) target=\(.targetCommitish) assets=\([.assets[].name]|join(", "))"'

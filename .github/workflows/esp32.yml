@@ -14,6 +14,19 @@ on:
 permissions:
   contents: write # attach the firmware image to the tag's Release
 
+# This is the slowest workflow in the repo (an esp32 core download plus three
+# compiles), so superseded runs are the ones that clog the queue. PR #18 pushed
+# twice in quick succession and the first run sat QUEUED FOR 25 HOURS behind its
+# own replacement, on a branch whose result nobody was waiting for any more.
+#
+# Tags are exempt from cancellation on purpose: a cancelled tag run never
+# attaches the companion firmware, and the release is then missing the largest
+# download with nothing red to show for it. Tags are pushed once and superseding
+# one is not a thing that happens.
+concurrency:
+  group: esp32-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   build-bin:
     # Release artefact only: tags and manual runs. Day-to-day portability is
