@@ -9,16 +9,15 @@
  * contiguous allocation the loader must find at launch -- the failure users
  * were hitting (issue #5).
  *
- * ONLY THE QR ENCODER USES THIS TODAY (`flipdeflock_qr`, ~8.7 KB out of the
- * image). This comment previously also named the ESP32 flasher, which was
- * aspirational rather than true: `application.fam` declares one PLUGIN App(),
- * and `esp_loader_*` / `esp_flasher_*` are linked straight into the .fap.
+ * Two plugins use this: `flipdeflock_qr` (the QR encoder) and
+ * `flipdeflock_flasher` (the ESP32 flasher, moved out of the app image in the
+ * v0.72 cycle for a measured 10,230 bytes -- see plugins/flasher_plugin_api.h
+ * for the before/after section table and why the obvious .o-sum figure is
+ * nearly three times too large).
  *
- * The flasher is by far the biggest candidate left -- measured at ~27.6 KB,
- * about 26% of the app's code and constants, and reached only from the firmware
- * screen. Moving it here is worth roughly four times what pulling Net Guardian
- * and the Wi-Fi audit out would save (~6.3 KB combined). Do not re-add a claim
- * that it already lives here without checking `nm` on the built .elf.
+ * Before claiming anything else "is already a plugin", check `nm` on the built
+ * .elf. This comment previously said the flasher lived here when it did not,
+ * and the only thing that settled it was looking at the symbol table.
  *
  * FAIL-SAFE BY CONTRACT: every function here returns NULL/void on any problem
  * -- missing asset directory, version mismatch, corrupt .fal -- and never
