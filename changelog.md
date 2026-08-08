@@ -1,5 +1,39 @@
 # Changelog
 
+## Unreleased
+
+On `main` and in the [`nightly`](../../releases/tag/nightly) build. **Not tagged
+yet: the export below has not been run on hardware by anyone.**
+
+### Added
+
+- **A redacted false-positive export.** **Reports → False Positive Report** writes
+  a Markdown file you can attach to an issue without publishing where you were.
+  Reporting a wrong detection previously meant handing over the detection log,
+  and that log is a record of your movements and the networks around you.
+
+  Kept: the confidence rung, the indicator that actually fired, the OUI, frame
+  type, channel, RSSI, sighting count and IE fingerprint. Removed: GPS
+  coordinates and heading, the low three octets of every MAC, the sighting
+  timestamp, and any SSID that did not itself match a Flock naming rule.
+
+  An SSID that *did* match is kept as-is, because that is a camera's own name.
+  Anything else becomes a shape (`A`=upper `a`=lower `d`=digit), since an SSID is
+  routinely a surname or a street address and is independently geolocatable
+  through public wardriving databases. The shape still answers the question that
+  matters — was this a MAC-shaped name, or a person's network?
+
+- **Issue templates** for false positives, bugs, and detection signatures. The
+  signature form states plainly that field data needs no DCO sign-off.
+
+- **A `.fap` size report in CI**, against the ~256 KB budget. Currently **58%**.
+  Advisory, and `.fap` size is not heap headroom — the real figure still needs
+  measuring on hardware.
+
+### Fixed
+
+- **Superseded CI runs are cancelled rather than queued.**
+
 ## v0.71
 **Nightly builds, so a fix can be tested before it is frozen into a tag.**
 No app behaviour changes in this release; it is release plumbing and docs.
