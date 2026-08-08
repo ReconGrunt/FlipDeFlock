@@ -96,29 +96,46 @@ jobs:
         run: |
           set -euo pipefail
           BUDGET=262144   # ~256 KB, the figure the project budgets against
-          bytes=$(stat -c%s "$FAP_PATH")
-          pct=$(( bytes * 100 / BUDGET ))
-          echo "### .fap size" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "\`$(basename "$FAP_PATH")\`: **$(printf "%'d" "$bytes") bytes** (${pct}% of the ${BUDGET}-byte budget)" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo ".fap size is not heap headroom -- it includes data the loaded image drops. Direction of travel only." >> "$GITHUB_STEP_SUMMARY"
-          echo "$(basename "$FAP_PATH"): $bytes bytes (${pct}% of budget)"
+          fap=$(stat -c%s "$FAP_PATH")
 
-          # Per-section figures out of the unstripped ELF that ufbt keeps beside
-          # the .fap. Absent on a cache hit or a layout change, so it is optional
-          # rather than a failure: the total above is the number that must always
-          # appear.
+          # MEASURE THE LOADED IMAGE, NOT THE FILE. The .fap also carries
+          # embedded .fal plugins as file assets, and those are extracted to the
+          # SD card rather than loaded into the contiguous allocation. So moving
+          # code INTO a plugin makes the .fap bigger while making the thing that
+          # actually fails smaller -- exactly what happened when the ESP32
+          # flasher moved out (.fap +4,248, loaded image -10,230). Reporting
+          # .fap size alone would have called that a regression.
           ELF="$(find . -name 'flipdeflock_d.elf' -o -name 'flipdeflock.elf' 2>/dev/null | head -n1)"
-          if [ -n "$ELF" ] && command -v size >/dev/null 2>&1; then
+          SIZE_BIN=""
+          for c in arm-none-eabi-size size; do
+            command -v "$c" >/dev/null 2>&1 && { SIZE_BIN="$c"; break; }
+          done
+
+          echo "### Size" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$(basename "$FAP_PATH")\` on disk: **$(printf "%'d" "$fap") bytes** (download size, includes embedded plugins)" >> "$GITHUB_STEP_SUMMARY"
+          echo "$(basename "$FAP_PATH"): $fap bytes on disk"
+
+          if [ -n "$ELF" ] && [ -n "$SIZE_BIN" ]; then
+            loaded=$("$SIZE_BIN" -A "$ELF" | awk '
+              $1 ~ /^\.(text|rodata|data|bss)$/ { t += $2 } END { print t+0 }')
+            pct=$(( loaded * 100 / BUDGET ))
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Loaded image (.text+.rodata+.data+.bss): **$(printf "%'d" "$loaded") bytes**, ${pct}% of the ${BUDGET}-byte budget. **This is the number that matters** -- it is what the loader must place in one contiguous allocation." >> "$GITHUB_STEP_SUMMARY"
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            size -A "$ELF" | grep -E '^\.(text|rodata|data|bss)|^section|^Total' >> "$GITHUB_STEP_SUMMARY" || true
+            "$SIZE_BIN" -A "$ELF" | grep -E '^\.(text|rodata|data|bss)|^section' >> "$GITHUB_STEP_SUMMARY" || true
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          if [ "$pct" -ge 80 ]; then
-            echo "::warning title=.fap size::$bytes bytes is ${pct}% of the ${BUDGET}-byte budget. Measure heap on hardware before adding more."
+            echo "loaded image: $loaded bytes (${pct}% of budget)"
+            if [ "$pct" -ge 80 ]; then
+              echo "::warning title=Loaded image size::$loaded bytes is ${pct}% of the ${BUDGET}-byte budget. Move a rarely-reached module to a .fal plugin, or measure heap on hardware, before adding more."
+            fi
+          else
+            # Say so rather than quietly reporting only the file size, which
+            # would read as the budget figure and is the misleading one.
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "_Loaded-image size unavailable (no ELF or no \`size\` binary), so no budget percentage this run._" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Size report::could not measure the loaded image (ELF='$ELF', size bin='$SIZE_BIN'); only the on-disk .fap size was reported."
           fi
 
       # --- API drift guard (advisory) ------------------------------------------
