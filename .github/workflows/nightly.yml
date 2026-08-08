@@ -198,10 +198,18 @@ jobs:
             echo "companion ever disagree on the protocol, the app says so on the"
             echo "scan screen rather than misreporting."
             echo
-            if [ -n "$latest_tag" ]; then
+            # Only when there is actually something between the tag and here.
+            # Right after a release the nightly IS the tagged commit, and an
+            # empty "Since v0.71" heading reads like the list failed to
+            # generate rather than like there is nothing in it.
+            since="$(git log --no-merges --format='- %s' "$latest_tag..$SHA" 2>/dev/null || true)"
+            if [ -n "$latest_tag" ] && [ -n "$since" ]; then
               echo "### Since \`$latest_tag\`"
               echo
-              git log --no-merges --format='- %s' "$latest_tag..$SHA" || true
+              printf '%s\n' "$since"
+            elif [ -n "$latest_tag" ]; then
+              echo "Identical to [\`$latest_tag\`](../../releases/tag/$latest_tag)."
+              echo "Nothing has landed on \`main\` since that release."
             fi
           } > notes.md
           cat notes.md
