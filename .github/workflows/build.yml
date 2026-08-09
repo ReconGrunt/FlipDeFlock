@@ -74,23 +74,28 @@ jobs:
           if-no-files-found: error
 
       # --- Size report (advisory) ----------------------------------------------
-      # The .fap loads ENTIRELY into the ~256 KB the Flipper shares between
-      # firmware and app, and nothing was reporting how close to that it was.
-      # A user on heavier firmware has already been refused outright with "Not
-      # enough RAM to run the app" (issue #5), and a BLE transfer failed for the
-      # same reason during field testing, so this is a lived limit rather than a
-      # theoretical one.
+      # The app image goes into the ~256 KB the Flipper shares between firmware
+      # and app, and nothing was reporting how close to that it was. A user on
+      # heavier firmware has already been refused outright with "Not enough RAM
+      # to run the app" (issue #5), and a BLE transfer failed for the same reason
+      # during field testing, so this is a lived limit rather than a theoretical
+      # one.
       #
-      # ADVISORY, and .fap size is NOT heap headroom -- the file carries debug
-      # and relocation data that the loaded image does not, and the real answer
-      # needs measuring on hardware. What this catches is the direction of
-      # travel: a step change in a diff, printed where a reviewer sees it, rather
-      # than discovered by somebody's app failing to start.
+      # THE HEADLINE NUMBER IS THE LOADED IMAGE, NOT THE FILE. The .fap on disk
+      # also carries embedded .fal plugins, which the firmware extracts to the SD
+      # card instead of loading, plus debug and relocation data the loaded image
+      # drops. Those diverge in the direction that matters: moving code into a
+      # plugin makes the file bigger and the contiguous allocation smaller. The
+      # budget percentage and the warning below therefore come from the ELF's
+      # .text+.rodata+.data+.bss, and the file size is reported only as the
+      # download size.
       #
-      # The section breakdown is the useful part. .bss and .data are the ones
-      # that cost RAM per byte for the whole life of the app; .text costs it too
-      # here (the whole .fap is loaded), but a jump in .bss is almost always a
-      # capacity constant like RECON_FLOCK_MAX having been raised.
+      # Still ADVISORY: the loaded image is what the loader must place in one
+      # contiguous block, but it is not the same question as free heap at launch,
+      # which only hardware can answer. What this catches is a step change in a
+      # diff, printed where a reviewer sees it, rather than found by somebody's
+      # app failing to start. A jump in .bss is almost always a capacity constant
+      # like RECON_FLOCK_MAX having been raised.
       - name: Size report (advisory)
         if: matrix.target == 'ofw'
         continue-on-error: true
