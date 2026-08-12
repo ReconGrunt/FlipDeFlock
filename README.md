@@ -22,6 +22,11 @@ Built for stock OFW, [Unleashed](https://github.com/DarkFlippers/unleashed-firmw
 [Momentum](https://github.com/Next-Flip/Momentum-Firmware) and RogueMaster. Pick the
 file that matches your firmware; see [Install](#install).
 
+> [!TIP]
+> Want an unreleased fix before it's tagged? Grab a [nightly build](../../releases/tag/nightly)
+> instead of the [latest release](../../releases/latest) — untested, rebuilt from `main`. Details
+> in [Stable and nightly](#stable-and-nightly).
+
 **Free, and staying that way.** If FlipDeFlock is useful to you, crypto donations fund
 development, test hardware, and the legal costs of mapping surveillance infrastructure.
 [Donations never gate a feature](SUPPORTERS.md).
