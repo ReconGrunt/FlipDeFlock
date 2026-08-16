@@ -38,6 +38,10 @@ jobs:
           - target: unleashed
             api: "88.3"
             index: https://up.unleashedflip.com/directory.json
+          # RM doesn't have a directory.json, however its close enough to unleashed
+          - target: roguemaster
+            api: "88.3"
+            index: https://up.unleashedflip.com/directory.json
           - target: momentum
             api: "87.1"
             index: https://up.momentum-fw.dev/firmware/directory.json

@@ -60,8 +60,10 @@ runs:
         # bookmark out there points at flipdeflock.fap, and renaming it would
         # break all of them to gain nothing: the other two are the new files.
         mkdir -p "$OUT_DIR"
-        if [ "$TARGET" = "ofw" ]; then
+                if [ "$TARGET" = "ofw" ]; then
           dest="$OUT_DIR/flipdeflock.fap"
+        elif [ "$TARGET" = "roguemaster" ]; then
+          dest="$OUT_DIR/deflock.fap"
         else
           dest="$OUT_DIR/flipdeflock-$TARGET.fap"
         fi
