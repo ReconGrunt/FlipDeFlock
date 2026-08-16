@@ -204,6 +204,35 @@ void suite_flock_store(void) {
         check_roundtrip(&alpr); // both default to 0
         CHECK(flock_store_fmt_line(line, sizeof(line), &alpr) > 0);
         CHECK_STR_CONTAINS(line, ",1785000000,0,0\n");
+
+        // FlockClassBodycam (Axon). The bound below used to be a literal 1, so
+        // adding a third class made the parser reject the whole LINE -- a stored
+        // Axon sighting would not have come back mislabelled, it would not have
+        // come back at all. Round-trip every class the enum can produce.
+        FlockStoreRec bodycam = sample();
+        bodycam.dev_class = 2; // FlockClassBodycam
+        check_roundtrip(&bodycam);
+        CHECK(flock_store_fmt_line(line, sizeof(line), &bodycam) > 0);
+        CHECK_STR_CONTAINS(line, ",1785000000,2,0\n");
+
+        // Every value the enum can hold must survive; anything above the bound
+        // is still rejected, so a corrupt or future-class file cannot be read as
+        // a class this build would then mislabel.
+        for(unsigned c = 0; c <= FLOCK_STORE_MAX_DEV_CLASS; c++) {
+            FlockStoreRec r = sample();
+            r.dev_class = (uint8_t)c;
+            check_roundtrip(&r);
+        }
+        {
+            FlockStoreRec junk;
+            char over[FLOCK_STORE_LINE_MAX];
+            snprintf(
+                over,
+                sizeof(over),
+                "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,%u,0",
+                (unsigned)(FLOCK_STORE_MAX_DEV_CLASS + 1u));
+            CHECK(!flock_store_parse_line(over, &junk));
+        }
     }
 
     // ...and a v1 record (13 columns, neither field) must still load with both

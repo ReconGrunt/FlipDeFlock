@@ -212,6 +212,34 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
 
+    // cls=x -- Axon body-worn / in-car police equipment. A third class, and the
+    // one that must never be reported as a camera on a pole.
+    CHECK_INT_EQ(P("D,0025df010203,-40,6,P,2,name,cls=x"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassBodycam);
+
+    // Same MAC-derived fallback for an older companion that predates cls=x.
+    CHECK_INT_EQ(P("D,0025df010203,-40,6,P,2,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassBodycam);
+
+    // Order-independence applies to the new letter too.
+    CHECK_INT_EQ(P("D,0025df010203,-40,6,P,2,name,fp=deadbeef,cls=x"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassBodycam);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+
+    // An Axon OUI is NOT a Flock OUI, so a built-in IE-fp hit on one must not be
+    // upgraded to Confirmed the way a Flock OUI would be. Nothing seeds the fp
+    // table today, so this pins the intent rather than a reachable path.
+    CHECK_INT_EQ(P("D,0025df010203,-40,6,P,2,name,cls=x"), EspMsgFlock);
+    CHECK(m.u.flock.conf <= FlockConfidenceLikely);
+
+    // A class letter this build does not know must NOT collapse to "camera": it
+    // falls back to the MAC-derived class, so a future companion naming a class
+    // we predate cannot make the app claim an ALPR it never saw.
+    CHECK_INT_EQ(P("D,0025df010203,-40,6,P,2,name,cls=q"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassBodycam);
+    CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name,cls=q"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+
     // An unknown trailing token is ignored, not treated as an error.
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name,zz=9"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);

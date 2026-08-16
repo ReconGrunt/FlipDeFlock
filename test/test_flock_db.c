@@ -8,6 +8,7 @@
 #include "test.h"
 
 #include <stdio.h>
+#include <string.h> // strstr, for the class-label assertion below
 
 void suite_flock_db(void) {
     printf("[flock_db]\n");
@@ -49,6 +50,76 @@ void suite_flock_db(void) {
     CHECK(flock_oui_match(known));
     CHECK(!flock_oui_match(unknown));
     CHECK(!flock_oui_match(NULL));
+
+    // --- Axon Enterprise: a THIRD device class ------------------------------
+    // 00:25:df is Axon's only IEEE registration. What matters here is not just
+    // that it matches, but that it stays OUT of the other two classes: an Axon
+    // body camera moves with a person, so reporting it as an ALPR would claim a
+    // camera on a pole that was never seen.
+    const uint8_t axon[6] = {0x00, 0x25, 0xdf, 0x00, 0x00, 0x01};
+    CHECK(axon_oui_match(axon));
+    CHECK(!axon_oui_match(NULL));
+    CHECK(!flock_oui_match(axon)); // not an ALPR
+    CHECK(!soundthinking_oui_match(axon)); // not an acoustic sensor
+    CHECK_INT_EQ(flock_class_from_mac(axon), FlockClassBodycam);
+    CHECK_STR_EQ(flock_class_str(FlockClassBodycam), "Axon");
+    // The long label must not contain the word "camera" -- see flock_class_long_str.
+    CHECK(strstr(flock_class_long_str(FlockClassBodycam), "camera") == NULL);
+    // An Axon OUI is still an OUI match for method-labelling purposes.
+    CHECK_INT_EQ(flock_method_of(axon, "", 'B', 0), FlockMethodOui);
+
+    // The three tables are DISJOINT in both directions: a Flock or SoundThinking
+    // prefix must never be read as Axon.
+    CHECK(!axon_oui_match(known)); // b4:1e:52 is Flock's own OUI
+    const uint8_t st_disjoint[6] = {0xd4, 0x11, 0xd6, 0x00, 0x00, 0x01};
+    CHECK(!axon_oui_match(st_disjoint));
+    CHECK_INT_EQ(flock_class_from_mac(st_disjoint), FlockClassAcoustic);
+    CHECK_INT_EQ(flock_class_from_mac(known), FlockClassAlpr);
+
+    // NAME-COLLISION GUARD. "Axon Networks Inc" is an unrelated networking
+    // company that also holds IEEE registrations, and a vendor-database search
+    // for "axon" returns it alongside Axona, Axonne, Interaxon, Maxon, Praxon,
+    // Paxonet and Yaxon. None are police equipment. If any of these ever match,
+    // somebody imported by substring instead of verifying at the registry.
+    static const uint8_t not_axon[][6] = {
+        {0x00, 0x58, 0x28, 0, 0, 1}, // Axon Networks Inc
+        {0x00, 0xc0, 0xd4, 0, 0, 1}, // Axon Networks, Inc.
+        {0x84, 0x70, 0x03, 0, 0, 1}, // Axon Networks Inc
+        {0xfc, 0x85, 0x96, 0, 0, 1}, // Axonne Inc.
+        {0x00, 0x24, 0x42, 0, 0, 1}, // Axona Limited
+        {0x00, 0x04, 0xeb, 0, 0, 1}, // Paxonet Communications
+        {0x00, 0x90, 0x6e, 0, 0, 1}, // Praxon, Inc.
+        {0xb4, 0xa3, 0x05, 0, 0, 1}, // Xiamen Yaxon Network
+        {0xf4, 0x46, 0x2a, 0, 0, 1}, // maxon zub
+    };
+    for(size_t i = 0; i < sizeof(not_axon) / sizeof(not_axon[0]); i++) {
+        CHECK(!axon_oui_match(not_axon[i]));
+        CHECK(!flock_oui_match(not_axon[i]));
+        CHECK(!soundthinking_oui_match(not_axon[i]));
+    }
+
+    // MISATTRIBUTION GUARD. A curated "law enforcement OUI" list circulating
+    // upstream was checked prefix-by-prefix against the IEEE registry and 11 of
+    // its 15 entries were wrong. These are the real registrants of prefixes that
+    // list filed as police equipment; every one must stay unmatched.
+    static const uint8_t misattributed[][6] = {
+        {0x00, 0x1f, 0x55, 0, 0, 1}, // claimed Axon/TASER -- really Honeywell Security
+        {0x00, 0x0f, 0x13, 0, 0, 1}, // claimed Axon/TASER -- really Nisca
+        {0x00, 0x11, 0x24, 0, 0, 1}, // claimed Digital Ally -- really Apple
+        {0x00, 0x1b, 0x63, 0, 0, 1}, // claimed Digital Ally -- really Apple
+        {0x00, 0x1a, 0xe9, 0, 0, 1}, // claimed WatchGuard -- really Nintendo
+        {0xe0, 0x13, 0x33, 0, 0, 1}, // claimed Panasonic i-PRO -- really General Motors
+        {0x3c, 0xbb, 0xfd, 0, 0, 1}, // claimed Panasonic i-PRO -- really Samsung
+        {0x50, 0xec, 0x50, 0, 0, 1}, // claimed Getac -- really Xiaomi
+        {0x00, 0x1c, 0x23, 0, 0, 1}, // claimed Getac -- really Dell
+        {0x00, 0x40, 0x8c, 0, 0, 1}, // claimed Flock Safety -- really Axis Communications
+        {0xac, 0xcc, 0x8e, 0, 0, 1}, // claimed Flock Safety -- really Axis Communications
+    };
+    for(size_t i = 0; i < sizeof(misattributed) / sizeof(misattributed[0]); i++) {
+        CHECK(!axon_oui_match(misattributed[i]));
+        CHECK(!flock_oui_match(misattributed[i]));
+        CHECK(!soundthinking_oui_match(misattributed[i]));
+    }
 
     // --- RETRACTED prefixes must never match --------------------------------
     // Upstream tracked each of these and then withdrew it. Re-adding one is

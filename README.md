@@ -177,7 +177,9 @@ firmware; in Marauder mode they explain what's missing.
   while a deauth/disassoc flood is active and clears when it stops. Set **Alert on
   hit** in Settings (Vibrate / Beep / both) to be told about a camera you aren't
   watching the screen for — it fires once per device, and never for an OUI-only
-  "Possible" lead.
+  "Possible" lead. Three device classes are distinguished rather than lumped
+  together: Flock/ALPR cameras, SoundThinking acoustic sensors (`ST`), and Axon
+  body-worn / in-car police equipment (`AX`).
 - **Flock Map** — a live map around your GPS position: you're at center, cameras
   are plotted by bearing and distance, dot size is confidence, with a heading tick
   and a scale bar. Left/Right zoom, OK re-fits. Needs a GPS fix; ungeotagged
@@ -293,6 +295,7 @@ exact dB. `-33dB` closer to 0 means physically closer.
 - **ch / frames / hits** — channel · 802.11 frames captured · Flock detections, counted this session (reset each time you open the screen)
 - **row tag** — `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only · `*` marked
 - **`ST` after the tag** — a SoundThinking (ShotSpotter) acoustic sensor, not an ALPR camera. Untagged rows are cameras; the detail screen names the class in full
+- **`AX` after the tag** — Axon body-worn or in-car police equipment. Not fixed infrastructure: it moves with a person or a vehicle, so it says nothing about a camera on a pole
 - **GPS badge** - filled `GPS 9` = locked with 9 satellites, filled `GPS` = locked but nothing reported a satellite count (normal on the `Phone` source), hollow `GPS` = on and searching. A fault names what to fix and never says "GPS", because a filled badge starting with those three letters reads as a lock: `!PORT` = GPS and the ESP are on the same UART (put GPS on the other one, LPUART / pins 15-16), `!PIN` = the companion refused that ESP GPS Pin, `!FW` = the companion never answered so reflash it — or, on the `Phone` source, this firmware has no location service (needs Unleashed). Phone-only faults: `!APP` = nothing paired, open qUnleashed · `!PERM` = the phone denied location permission · `!LOC` = the phone's location is off, or the paired device has no receiver · `!ACC` = fixes are arriving but coarser than 100 m, so go outside · `!ERR` = the companion app reported a fault
 - Marauder mode shows `rx <n>  hits <n>` instead (serial heartbeat + detection count)
 
