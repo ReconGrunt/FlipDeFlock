@@ -36,7 +36,7 @@ jobs:
             api: "87.1"
             index: https://update.flipperzero.one/firmware/directory.json
           - target: unleashed
-            api: "88.2"
+            api: "88.3"
             index: https://up.unleashedflip.com/directory.json
           - target: momentum
             api: "87.1"
@@ -159,65 +159,10 @@ jobs:
       # table", which is a deliberate edit rather than a mystery.
       - name: API drift check (advisory)
         continue-on-error: true
-        env:
-          EXPECTED_API: ${{ matrix.api }}
-        run: |
-          set +e
-          EXPECTED="$EXPECTED_API"
-
-          # ufbt stores the resolved SDK state under its toolchain/SDK home.
-          # UFBT_HOME is exported by the ufbt-action; fall back to the default.
-          UFBT_STATE_DIR="${UFBT_HOME:-$HOME/.ufbt}"
-
-          # The SDK's api_symbols.csv header / sdk.opts / .ufbt state records the
-          # API version. We try a few known locations and parse the first hit.
-          # Pattern: lines like `Version,87.1` in api_symbols.csv, or an
-          # `"api"` field in the ufbt state json.
-          API_VER=""
-
-          # 1) api_symbols.csv. Columns are "entry,status,name,type,params", so the
-          #    version row reads:
-          #        Version,+,87.1,,
-          #    The version is field 3. This used to cut field 2 and got back the
-          #    status column, a literal "+", which never equals 87.1 -- so the step
-          #    has been printing a drift warning on every run since it was added,
-          #    and could not have detected real drift either. continue-on-error is
-          #    why nobody noticed.
-          CSV=$(find "$UFBT_STATE_DIR" -name 'api_symbols.csv' 2>/dev/null | head -n1)
-          if [ -n "$CSV" ]; then
-            API_VER=$(grep -m1 -iE '^Version,' "$CSV" 2>/dev/null | cut -d',' -f3 | tr -d ' \r')
-          fi
-
-          # 2) ufbt state json (e.g. .ufbt/current/.data or sdk_state) -> "api" field
-          if [ -z "$API_VER" ]; then
-            JSON=$(find "$UFBT_STATE_DIR" -name '*.json' 2>/dev/null | head -n5)
-            for f in $JSON; do
-              V=$(grep -oiE '"api"[[:space:]]*:[[:space:]]*"?[0-9]+\.[0-9]+' "$f" 2>/dev/null \
-                    | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
-              if [ -n "$V" ]; then API_VER="$V"; break; fi
-            done
-          fi
-
-          if [ -z "$API_VER" ]; then
-            # Could not reliably determine the API version. Do NOT guess and do
-            # NOT fail — just note it so a human can investigate if needed.
-            echo "::warning title=API drift check::Could not determine the SDK API version ufbt built against (searched '$UFBT_STATE_DIR'). Skipping drift comparison. Expected API $EXPECTED."
-            exit 0
-          fi
-
-          echo "Detected SDK API version: $API_VER (expected $EXPECTED)"
-          if [ "$API_VER" != "$EXPECTED" ]; then
-            echo "::warning title=API drift::the ${{ matrix.target }} SDK now reports API $API_VER, but the matrix records $EXPECTED. Update matrix.api and the firmware table in README.md. (Advisory -- build not failed.)"
-          else
-            echo "API version matches expected $EXPECTED."
-          fi
-          exit 0
-
-      # Advisory, and only once. clang-format ships WITH the SDK, so three SDKs
-      # means three formatter versions disagreeing about the same file; running it
-      # per target would report the same code as three different verdicts. The
-      # official SDK is the one .github/CONTRIBUTING.md tells people to format
-      # against, so that is the one that speaks.
+        uses: ./.github/actions/api-drift
+        with:
+          expected-api: ${{ matrix.api }}
+          target: ${{ matrix.target }}
       - name: Lint sources (advisory)
         if: matrix.target == 'ofw'
         uses: flipperdevices/flipperzero-ufbt-action@e7cd34914e61ddc056acd8daaab96d8b4d4d9f55 # v0.1.4

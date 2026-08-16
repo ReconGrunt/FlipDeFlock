@@ -107,10 +107,13 @@ jobs:
       matrix:
         include:
           - target: ofw
+            api: "87.1"
             index: https://update.flipperzero.one/firmware/directory.json
           - target: unleashed
+            api: "88.3"
             index: https://up.unleashedflip.com/directory.json
           - target: momentum
+            api: "87.1"
             index: https://up.momentum-fw.dev/firmware/directory.json
     steps:
       - name: Checkout
@@ -125,6 +128,17 @@ jobs:
         with:
           sdk-index-url: ${{ matrix.index }}
           sdk-channel: release
+
+      # The nightly is the job that tracks a MOVING upstream -- it rebuilds daily
+      # against each firmware's live release channel, so it sees an API bump the
+      # day it lands. build.yml only runs on push, which is why unlshd-091's
+      # 88.2 -> 88.3 went unreported for two nightlies.
+      - name: API drift check (advisory)
+        continue-on-error: true
+        uses: ./.github/actions/api-drift
+        with:
+          expected-api: ${{ matrix.api }}
+          target: ${{ matrix.target }}
 
       - name: Name the .fap for this firmware
         id: fap

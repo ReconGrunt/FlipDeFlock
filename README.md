@@ -55,14 +55,20 @@ the Tools menu.
 |---|---|---|
 | Official (OFW) | `flipdeflock.fap` | 87.1 |
 | Momentum | `flipdeflock-momentum.fap` | 87.1 |
-| Unleashed | `flipdeflock-unleashed.fap` | 88.2 |
-| RogueMaster | `flipdeflock-unleashed.fap` | 88.2 |
+| Unleashed | `flipdeflock-unleashed.fap` | 88.3 |
+| RogueMaster | `flipdeflock-unleashed.fap` | 88.3 |
 
 A `.fap` records the API version it was built against, and the firmware refuses to
-load one that does not match. **If your Flipper says the app is old, you have the
-wrong file, not an old app.** It is the API that is old, not the release. Take the
-matching row above. RogueMaster tracks Unleashed and reports the same API, so the
-Unleashed build is the one to use there.
+load one whose **major** version does not match — the number before the dot. **If
+your Flipper says the app is old, you have the wrong file, not an old app.** It is
+the API that is old, not the release. Take the matching row above. RogueMaster
+tracks Unleashed and reports the same API, so the Unleashed build is the one to use
+there.
+
+The minor version — the number after the dot — is **not** checked by the firmware,
+so a build made against 88.2 still loads on 88.3. A minor bump only adds symbols.
+That is why the table can lag a fresh firmware release by a few days without
+anything actually breaking for you.
 
 Every push also builds all three as CI artifacts under the **Actions** tab.
 
@@ -183,7 +189,12 @@ firmware; in Marauder mode they explain what's missing.
   flagged `!FOLLOWING` (anti-stalking); open it for the track. `SEP state` is an
   advertisement state marker, not proof of ownership or stalking. Labels a
   **Flock Raven (audio sensor)** only when it sees the Raven's own Bluetooth
-  services — it never guesses "camera" by elimination. On a validated tracker you
+  services — it never guesses "camera" by elimination. Those services arrived in
+  **Raven firmware 1.2.0**; a unit still on **1.1.7** publishes only generic
+  Bluetooth services that millions of ordinary devices also publish, so it cannot
+  be positively identified as a Raven and will not carry that label. Matching the
+  generic services instead would flag half the consumer electronics in range, which
+  is not a trade this project makes. On a validated tracker you
   can also send **Ping** (a one-shot reachability check) or **Ring** (a non-owner
   sound request, Apple/Find My only) — the only actions in the app that transmit,
   and only when you press them.

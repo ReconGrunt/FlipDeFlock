@@ -1,0 +1,79 @@
+name: "API drift check"
+description: >
+  Compare the API version of the SDK ufbt just built against with the version
+  this repo believes that firmware exposes. Advisory: warns, never fails.
+
+# Shared by build.yml and nightly.yml, for the reason this repo keeps relearning:
+# a check that exists in only one place is a check that is not running when it
+# matters. This block lived inline in build.yml alone, which runs on push -- so
+# when Unleashed shipped unlshd-091 (API 88.2 -> 88.3) on 2026-08-15, the nightly
+# built against it two days running and said nothing, because the last push had
+# been three days earlier. The nightly is the job that tracks a moving upstream;
+# it is exactly the one that needed this.
+#
+# It is also 50 lines of shell that has already had one silent bug (it cut field
+# 2 of api_symbols.csv, getting the literal status column "+", so it warned on
+# every run and could not have detected real drift). Copying it into a second
+# workflow would mean fixing the next such bug twice -- the same hand-synced
+# duplicate problem the OUI tables have, which took five releases to notice.
+inputs:
+  expected-api:
+    description: "The API version this repo records for this firmware target."
+    required: true
+  target:
+    description: "Firmware target name, used in the warning text."
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        EXPECTED_API: ${{ inputs.expected-api }}
+        TARGET: ${{ inputs.target }}
+      run: |
+        set +e
+        EXPECTED="$EXPECTED_API"
+
+        # ufbt stores the resolved SDK state under its toolchain/SDK home.
+        # UFBT_HOME is exported by the ufbt-action; fall back to the default.
+        UFBT_STATE_DIR="${UFBT_HOME:-$HOME/.ufbt}"
+
+        API_VER=""
+
+        # 1) api_symbols.csv. Columns are "entry,status,name,type,params", so the
+        #    version row reads:
+        #        Version,+,87.1,,
+        #    The version is field 3. Cutting field 2 returns the status column, a
+        #    literal "+", which never equals the expected value -- that bug made
+        #    this step warn on every run for a while, and it could not have
+        #    detected real drift either. continue-on-error is why nobody noticed.
+        CSV=$(find "$UFBT_STATE_DIR" -name 'api_symbols.csv' 2>/dev/null | head -n1)
+        if [ -n "$CSV" ]; then
+          API_VER=$(grep -m1 -iE '^Version,' "$CSV" 2>/dev/null | cut -d',' -f3 | tr -d ' \r')
+        fi
+
+        # 2) ufbt state json (e.g. .ufbt/current/.data or sdk_state) -> "api" field
+        if [ -z "$API_VER" ]; then
+          JSON=$(find "$UFBT_STATE_DIR" -name '*.json' 2>/dev/null | head -n5)
+          for f in $JSON; do
+            V=$(grep -oiE '"api"[[:space:]]*:[[:space:]]*"?[0-9]+\.[0-9]+' "$f" 2>/dev/null \
+                  | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+            if [ -n "$V" ]; then API_VER="$V"; break; fi
+          done
+        fi
+
+        if [ -z "$API_VER" ]; then
+          # Could not reliably determine the API version. Do NOT guess and do
+          # NOT fail -- just note it so a human can investigate if needed.
+          echo "::warning title=API drift check::Could not determine the SDK API version ufbt built against (searched '$UFBT_STATE_DIR'). Skipping drift comparison. Expected API $EXPECTED."
+          exit 0
+        fi
+
+        echo "Detected SDK API version: $API_VER (expected $EXPECTED)"
+        if [ "$API_VER" != "$EXPECTED" ]; then
+          echo "::warning title=API drift::the $TARGET SDK now reports API $API_VER, but this repo records $EXPECTED. Update the api field in build.yml/nightly.yml and the firmware table in README.md. (Advisory -- build not failed.)"
+        else
+          echo "API version matches expected $EXPECTED."
+        fi
+        exit 0
