@@ -1,9 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.73
 
-On `main` and in the [`nightly`](../../releases/tag/nightly) build. **Not tagged
-yet, and none of it has been run against a radio.**
+The v0.72 RogueMaster load failure is fixed. **Not run against a radio.**
 
 ### Added
 
@@ -43,6 +42,11 @@ yet, and none of it has been run against a radio.**
   the build.
 
 ### Fixed
+
+- **RogueMaster no longer fails at launch with `Missing Imports`.** The optional
+  phone-GPS calls are resolved only when the Phone source starts, so firmware
+  variants that share an API version without exporting that optional service can
+  load the app and report Phone GPS as unsupported instead.
 
 - **A stored Axon detection would not have survived a restart.** The `hits.csv`
   parser bounded the device-class column at the old maximum, so a line carrying the
