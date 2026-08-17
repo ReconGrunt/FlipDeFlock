@@ -13,7 +13,7 @@ inputs:
     description: "The ufbt action's fap-artifacts output (newline separated)."
     required: true
   target:
-    description: "Firmware target: ofw, unleashed or momentum."
+    description: "Firmware target: ofw, unleashed, momentum or roguemaster."
     required: true
   out-dir:
     description: "Directory to write the named .fap into."
@@ -58,10 +58,13 @@ runs:
 
         # The ofw build keeps the bare name. Every install guide, forum post and
         # bookmark out there points at flipdeflock.fap, and renaming it would
-        # break all of them to gain nothing: the other two are the new files.
+        # break all of them to gain nothing: the other firmware targets use
+        # explicit names.
         mkdir -p "$OUT_DIR"
         if [ "$TARGET" = "ofw" ]; then
           dest="$OUT_DIR/flipdeflock.fap"
+        elif [ "$TARGET" = "roguemaster" ]; then
+          dest="$OUT_DIR/deflock.fap"
         else
           dest="$OUT_DIR/flipdeflock-$TARGET.fap"
         fi

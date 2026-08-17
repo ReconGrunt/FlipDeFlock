@@ -11,7 +11,7 @@ name: "FAP: Release"
 # is present (and creates one only if it is absent), and we set
 # fail_on_unmatched_files: false so a transient miss won't turn the run red.
 #
-# RUN IT BY HAND TO REHEARSE A RELEASE. A workflow_dispatch run builds all three
+# RUN IT BY HAND TO REHEARSE A RELEASE. A workflow_dispatch run builds all four
 # targets, moves them through the artifact handoff, checks the result and packs
 # the asset pack, then stops. ONLY A PUSHED TAG publishes. To re-publish a tag,
 # push the tag again.
@@ -43,6 +43,9 @@ jobs:
             index: https://up.unleashedflip.com/directory.json
           - target: momentum
             index: https://up.momentum-fw.dev/firmware/directory.json
+          # RM doesn't have a directory.json, however its close enough to unleashed
+          - target: roguemaster
+            index: https://up.unleashedflip.com/directory.json
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -102,9 +105,9 @@ jobs:
           # Nothing after this checkout runs an authenticated git command.
           persist-credentials: false
 
-      # All three builds, into one directory, so the attach below is a single call.
-      # Attaching from inside the matrix instead would race three jobs against one
-      # release, and generate_release_notes would fire three times.
+      # All four builds, into one directory, so the attach below is a single call.
+      # Attaching from inside the matrix instead would race four jobs against one
+      # release, and generate_release_notes would fire four times.
       - name: Collect the built .fap files
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -117,16 +120,16 @@ jobs:
       # .fap's own manifest, which is the thing users actually get wrong and the
       # reason the matrix exists.
       #
-      # Deliberately does NOT assert the three APIs differ. They differ today
-      # (87.1, 87.1, 88.2), but if the firmwares ever converge on one API that is
+      # Deliberately does NOT assert the four APIs differ. If the firmwares ever
+      # converge on one API that is
       # a legitimate state, not a build fault. The printout is for a human; the
       # hard failures below are the ones that mean something broke.
       - name: Check the collected .fap set
         run: |
           set -euo pipefail
           n="$(find faps -maxdepth 1 -name '*.fap' | wc -l)"
-          if [ "$n" -ne 3 ]; then
-            echo "::error::expected 3 .fap files from the build matrix, got $n."
+          if [ "$n" -ne 4 ]; then
+            echo "::error::expected 4 .fap files from the build matrix, got $n."
             ls -lR faps || true
             exit 1
           fi

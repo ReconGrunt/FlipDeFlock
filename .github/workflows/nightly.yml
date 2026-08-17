@@ -112,6 +112,10 @@ jobs:
           - target: unleashed
             api: "88.3"
             index: https://up.unleashedflip.com/directory.json
+          # RM doesn't have a directory.json, however its close enough to unleashed
+          - target: roguemaster
+            api: "88.3"
+            index: https://up.unleashedflip.com/directory.json
           - target: momentum
             api: "87.1"
             index: https://up.momentum-fw.dev/firmware/directory.json
@@ -175,15 +179,15 @@ jobs:
           merge-multiple: true
           path: faps
 
-      # The same set check release.yml runs. A nightly that publishes two .fap
-      # files instead of three is a nightly that silently drops a firmware
+      # The same set check release.yml runs. A nightly that publishes three .fap
+      # files instead of four is a nightly that silently drops a firmware
       # family, and the person it drops is the one testing an unreleased fix.
       - name: Check the collected .fap set
         run: |
           set -euo pipefail
           n="$(find faps -maxdepth 1 -name '*.fap' | wc -l)"
-          if [ "$n" -ne 3 ]; then
-            echo "::error::expected 3 .fap files from the build matrix, got $n."
+          if [ "$n" -ne 4 ]; then
+            echo "::error::expected 4 .fap files from the build matrix, got $n."
             ls -lR faps || true
             exit 1
           fi

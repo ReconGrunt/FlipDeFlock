@@ -56,21 +56,21 @@ the Tools menu.
 | Official (OFW) | `flipdeflock.fap` | 87.1 |
 | Momentum | `flipdeflock-momentum.fap` | 87.1 |
 | Unleashed | `flipdeflock-unleashed.fap` | 88.3 |
-| RogueMaster | `flipdeflock-unleashed.fap` | 88.3 |
+| RogueMaster | `deflock.fap` | 88.3 |
 
 A `.fap` records the API version it was built against, and the firmware refuses to
 load one whose **major** version does not match — the number before the dot. **If
 your Flipper says the app is old, you have the wrong file, not an old app.** It is
 the API that is old, not the release. Take the matching row above. RogueMaster
-tracks Unleashed and reports the same API, so the Unleashed build is the one to use
-there.
+tracks Unleashed and reports the same API, but uses its own conventional
+`deflock.fap` filename. Use that row's file there.
 
 The minor version — the number after the dot — is **not** checked by the firmware,
 so a build made against 88.2 still loads on 88.3. A minor bump only adds symbols.
 That is why the table can lag a fresh firmware release by a few days without
 anything actually breaking for you.
 
-Every push also builds all three as CI artifacts under the **Actions** tab.
+Every push also builds all four as CI artifacts under the **Actions** tab.
 
 ### Stable and nightly
 
