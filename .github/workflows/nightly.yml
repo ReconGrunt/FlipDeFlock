@@ -179,8 +179,8 @@ jobs:
           merge-multiple: true
           path: faps
 
-      # The same set check release.yml runs. A nightly that publishes two .fap
-      # files instead of three is a nightly that silently drops a firmware
+      # The same set check release.yml runs. A nightly that publishes three .fap
+      # files instead of four is a nightly that silently drops a firmware
       # family, and the person it drops is the one testing an unreleased fix.
       - name: Check the collected .fap set
         run: |

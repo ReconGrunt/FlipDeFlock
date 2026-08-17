@@ -20,14 +20,14 @@ jobs:
     # One build per firmware family, because they do NOT share an API version.
     # A .fap carries the API it was built against and the loader refuses one that
     # does not match, so a single build only ever served whoever happened to be on
-    # 87.1. Unleashed and RogueMaster are on 88.2 and were being told the app is
+    # 87.1. Unleashed and RogueMaster are on 88.3 and were being told the app is
     # old -- correctly, from the loader's point of view.
     #
     # fail-fast is off on purpose: one firmware moving its API should not cancel
     # the builds for the others. That is precisely when you most want the rest.
     #
     # RogueMaster has no ufbt SDK index of its own. It tracks Unleashed and reports
-    # the same 88.2, so the Unleashed build is the one to install there.
+    # the same 88.3 API, so this matrix builds the same SDK under RM's filename.
     strategy:
       fail-fast: false
       matrix:
@@ -61,8 +61,8 @@ jobs:
 
       # Named with the SAME action release.yml uses, so what you download from a
       # CI run is the file the README tells you to look for. Uploading ufbt's raw
-      # artifact list instead would put three identically-named flipdeflock.fap
-      # files in three artifacts, plus the .fal that is already embedded in each.
+      # artifact list instead would put identically-named flipdeflock.fap files in
+      # four artifacts, plus the .fal that is already embedded in each.
       - name: Name the .fap for this firmware
         id: fap
         uses: ./.github/actions/name-fap
