@@ -333,6 +333,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.73** - **RogueMaster no longer fails at launch with `Missing Imports`.**
+Optional phone-GPS symbols are resolved only when the Phone source is used, so
+firmware variants without that optional service can still load the app and show
+`!FW` when Phone GPS is unavailable.
+
 **v0.72** - **A retracted false-positive OUI is out of the tables again.**
 `f8:a2:d6` was withdrawn upstream ("hit on a Sony Media Player") and dropped for
 v0.44, but a commit that reflowed the OUI tables put it back, and it shipped in
