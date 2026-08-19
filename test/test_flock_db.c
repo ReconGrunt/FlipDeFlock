@@ -121,6 +121,35 @@ void suite_flock_db(void) {
         CHECK(!soundthinking_oui_match(misattributed[i]));
     }
 
+    // --- DEMOTED prefixes: out of the built-ins, into the seed file ---------
+    // 48:27:ea is registered to SAMSUNG ELECTRONICS and a4:cf:12 to Espressif,
+    // and upstream rates both "low confidence, WiGLE crowdsource" -- its weakest
+    // tier. While they were compiled in, any Samsung- or ESP32-based device that
+    // sent a wildcard probe (i.e. scanned for a network, which every client does)
+    // scored LIKELY. That is the reported T-Mobile hotspot false positive.
+    //
+    // They are NOT on the retracted denylist below: nothing says they are wrong,
+    // only that they are unverified, so they live in docs/signatures.seed.json
+    // and a user can opt back into them. This asserts they are out of the
+    // BUILT-INS, which is the claim of field corroboration they failed.
+    static const uint8_t demoted[][6] = {
+        {0x48, 0x27, 0xea, 0x00, 0x00, 0x01}, // Samsung Electronics
+        {0xa4, 0xcf, 0x12, 0x00, 0x00, 0x01}, // Espressif
+    };
+    for(size_t i = 0; i < sizeof(demoted) / sizeof(demoted[0]); i++) {
+        CHECK(!flock_oui_match(demoted[i]));
+        CHECK(!soundthinking_oui_match(demoted[i]));
+        CHECK(!axon_oui_match(demoted[i]));
+    }
+    // ...but a user file can still opt back in, which is the point of demoting
+    // rather than retracting.
+    static const uint8_t optin[][3] = {{0x48, 0x27, 0xea}};
+    FlockDbExtras ex_demoted = {.ouis = optin, .oui_count = 1};
+    flock_db_set_extras(&ex_demoted);
+    CHECK(flock_oui_match(demoted[0]));
+    flock_db_set_extras(NULL);
+    CHECK(!flock_oui_match(demoted[0]));
+
     // --- RETRACTED prefixes must never match --------------------------------
     // Upstream tracked each of these and then withdrew it. Re-adding one is
     // always a bug, never a rediscovery: the older flat OUI list still carries
@@ -164,7 +193,7 @@ void suite_flock_db(void) {
     // here as well as in the CI parity gate. If you intentionally change the
     // table, update this number AND both files' count comments in the same
     // commit -- that is the drift 93beede left behind for five releases.
-    CHECK_INT_EQ((int)flock_oui_count(), 31);
+    CHECK_INT_EQ((int)flock_oui_count(), 29);
 
     // --- extra OUIs (user signatures merged OVER the built-ins) --------------
     static const uint8_t extra[][3] = {{0x11, 0x22, 0x33}};

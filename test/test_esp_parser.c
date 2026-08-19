@@ -212,6 +212,24 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
 
+    // pr= -- the companion's observed probe count for this transmitter. An
+    // observation carried through to the operator, never a confidence input:
+    // the same line with and without it must score identically.
+    CHECK_INT_EQ(P("D,70c94e010203,-40,6,P,2,name,pr=7"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.probe_rate, 7);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,70c94e010203,-40,6,P,2,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.probe_rate, 0); // absent on an older companion
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely); // same rung either way
+    // Order-independent, and clamped rather than wrapping.
+    CHECK_INT_EQ(P("D,70c94e010203,-40,6,P,2,name,pr=999,fp=deadbeef"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.probe_rate, 255);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+    // An SSID that literally begins "pr=" is an SSID, not the field.
+    CHECK_INT_EQ(P("D,70c94e010203,-40,6,P,2,pr=9"), EspMsgFlock);
+    CHECK_STR_EQ(m.u.flock.ssid, "pr=9");
+    CHECK_INT_EQ(m.u.flock.probe_rate, 0);
+
     // cls=x -- Axon body-worn / in-car police equipment. A third class, and the
     // one that must never be reported as a camera on a pole.
     CHECK_INT_EQ(P("D,0025df010203,-40,6,P,2,name,cls=x"), EspMsgFlock);
