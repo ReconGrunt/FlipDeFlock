@@ -1,5 +1,86 @@
 # Changelog
 
+## v0.75
+
+**The probe-rate gate is removed.** It shipped in v0.74 and should not have.
+
+v0.74 required 3 probe requests from one transmitter inside 2000 ms before a
+Flock OUI plus probe behaviour could score *Likely*. That threshold was not
+strict, it was **impossible**. The companion watches any single channel for
+300 ms out of every 3900 ms, so a camera probing every ~125 ms can put at most 2
+probes into one window, and consecutive windows are 3900 ms apart. The condition
+could never be met by anything, including a real camera, and it sat on the rung
+upstream says finds most fielded cameras.
+
+Widening the window to span sweeps was tried next. On the bench that still
+produced **zero** probe-sourced detections, while beacons from the same board
+detected normally -- so the receive path was fine and the probe rung was not.
+Whether the remaining cause was the gate or the test rig's own MAC spoofing was
+never established, and a filter on the primary detection path that cannot be
+shown to pass a true positive is worse than the false positive it prevents.
+
+So the gate is gone and the behaviour returns to what upstream runs and field
+tested at 11 of 12 cameras with 2 false positives. **The reported T-Mobile false
+positive stays fixed**, because its actual cause was never the cadence: it was
+`48:27:ea` (Samsung Electronics) and `a4:cf:12` (Espressif) sitting in the
+built-in OUI table. Those remain demoted to the seed file.
+
+What survives is the **measurement**. The per-transmitter probe counter is still
+there and still reports `pr=<n>` on the wire -- as an observation, never a
+confidence input. A future threshold should come from that data rather than from
+reasoning about cadence, which is now 0 for 2.
+
+**Requires a companion reflash**, like the change it reverses.
+
+### Fixed
+
+- **The bench emitter never transmitted Wi-Fi.** `tools/flock_emitter` passed
+  `en_sys_seq = false` to `esp_wifi_80211_tx()`, while its own comment 200 lines
+  above states the IDF refuses foreign-MAC injection unless that flag is true. The
+  driver logged the objection for every beacon and nothing reached the air. On
+  hardware the Flipper saw 0 Wi-Fi detections across minutes at 36 frames/s while
+  reporting BLE identities from the same board.
+
+  That is why "the emitter has never been run" mattered: it compiles either way,
+  and the only symptom is a detector that stays empty while the serial log
+  narrates identities it never sent. Fixed, and the rig immediately earned its
+  keep -- it is what caught the impossible gate above.
+
+- **Probe identities in the emitter now model a camera.** They held for 3 seconds
+  and fired a single scan, so they were usually off the air when the detector was
+  listening. A fielded camera probes continuously in station mode; the identity
+  now holds across several detector sweeps and re-arms its scan throughout,
+  pinned to the bench channel.
+
+- **The emitter never spoofed a probe MAC.** `esp_wifi_set_mac()` was called on a
+  started interface and with the same address already assigned to the AP, which
+  the ESP32 rejects as `ESP_ERR_WIFI_MAC` (0x3009). The return code was never
+  read, so every probe identity went out from the factory Espressif MAC while the
+  serial log announced a Flock OUI. The detector was right to ignore them: they
+  were not Flock frames.
+
+  The symptom is worth recognising -- **beacons detect, probes never do**. Beacon
+  source addresses are a field in a hand-built frame, so they were always correct;
+  only the interface-level spoof was broken. The rig now stops the interface to
+  set the MAC, leaves the AP address alone for probe identities, and **reads the
+  return code**, warning loudly if it ever fails again.
+
+### Verified on hardware
+
+Run against the emitter on a second ESP32:
+
+| Identity | Expected | Observed |
+|---|---|---|
+| `Flock-A1B2C3` | CONFIRMED | **CONFIRMED** |
+| `test_flck` | CONFIRMED | **CONFIRMED** |
+| `Flock-Guest` | Likely, never CONFIRMED | **Likely** |
+| Flock OUI + wildcard probe | Likely | **Likely**, `Method: OUI + probe req` |
+
+The last row is the one this release is about. It is the rung upstream says finds
+most fielded cameras, it was dead under v0.74's gate, and it had never once been
+checked against a radio. `Flock-Guest` is the v0.46 over-claim, also confirmed on
+the air rather than argued from a unit test.
+
 ## v0.74
 
 **A false positive users actually hit, and a Net Guardian you can point at one

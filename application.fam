@@ -8,7 +8,7 @@
 # that holds right up until it doesn't -- and the failure is silent, showing a
 # confident wrong version to the one person who was asking for it so he could
 # report bugs against the right build.
-FAP_VERSION = "0.74"
+FAP_VERSION = "0.75"
 
 App(
     appid="flipdeflock",

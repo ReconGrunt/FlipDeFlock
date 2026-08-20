@@ -591,11 +591,23 @@ static void buf_appendf(char* buf, size_t bufsz, size_t* pos, const char* fmt, .
 // device built on the same silicon, doing nothing but looking for a network, was
 // scoring LIKELY. A user reported exactly that for a T-Mobile hotspot.
 //
-// WHAT SEPARATES THEM IS RATE, NOT BEHAVIOUR. A fielded Flock camera runs in
-// station mode and sprays wildcard probes roughly every 125 ms -- about eight a
-// second, continuously, because it is trying to phone home. A phone or a hotspot
-// scanning emits a short burst on each channel and then goes quiet for tens of
-// seconds. Same frame type, completely different cadence.
+// THE GATE THIS BUILT WAS REMOVED. Twice it was set to a value that could not be
+// demonstrated to pass a camera, and a filter on the primary detection path that
+// cannot be shown to pass a true positive is worse than the false positive it
+// prevents. What remains is the COUNTER, reported as `pr=<n>`, so a future
+// threshold can be derived from measurement instead of from reasoning.
+//
+// The reasoning was: a fielded camera sprays wildcard probes roughly every 125 ms
+// while a phone emits a burst and goes quiet, so rate should separate them. The
+// first attempt asked for 3 probes in 2000 ms, which the radio's own duty cycle
+// makes impossible -- it watches one channel for 300 ms out of every 3900 ms, so
+// a camera can only ever put 2 into one window. The second widened the window to
+// span sweeps; on the bench that still produced zero probe-sourced detections
+// while beacons from the same board detected fine, and whether the cause was the
+// gate or the rig's MAC spoofing was never established.
+//
+// The reported false positive is addressed where it actually came from: 48:27:ea
+// (Samsung) and a4:cf:12 (Espressif) are out of the built-in table.
 //
 // So: require several probes from the same transmitter inside a short window
 // before OUI+probe may reach conf=2. Because the radio only watches any one
@@ -640,7 +652,9 @@ static void buf_appendf(char* buf, size_t bufsz, size_t* pos, const char* fmt, .
 // hardware. The observed count rides the wire as `pr=<n>` so it can be measured
 // rather than reasoned about a third time.
 #define PROBE_WINDOW_MS 8000 // ~2 full channel sweeps, so persistence accumulates
-#define PROBE_BURST_MIN 3 // probes within the window to count as "sustained"
+// No PROBE_BURST_MIN any more: nothing thresholds this count. It is reported
+// as `pr=<n>` and weighed by a human, which is the only honest use for it
+// until someone measures a real camera against a real phone.
 
 struct ProbeTrack {
     uint8_t mac[6];
@@ -884,23 +898,21 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     // suppresses repeats. Only the transmitter is rate-tracked: on an oui_rx hit
     // the frame was sent TO the Flock-OUI device by someone else, so the cadence
     // belongs to that someone else and says nothing about the receiver.
+    // Counted for REPORTING ONLY -- see the note on probe_rate_bump(). This used
+    // to gate the OUI+probe rungs below; it does not any more.
     uint8_t probe_rate = 0;
     if(is_probe) probe_rate = probe_rate_bump(p + 10); // addr2 = transmitter
-    bool sustained = probe_rate >= PROBE_BURST_MIN;
 
     int conf = 0;
     if(s_score == 3)
         conf = 3; // confirmed Flock SSID name
-    else if(oui_tx && wildcard && sustained)
-        conf = 2; // OUI + SUSTAINED wildcard probing -> "likely". The rate gate is
-                  // what makes this usable: FLOCK_OUIS is mostly chip vendors
-                  // (21 Liteon entries), so without it any consumer device on the
-                  // same silicon scored LIKELY just for scanning -- the reported
-                  // T-Mobile hotspot false positive. A real camera probes ~8x a
-                  // second and clears the gate almost instantly.
-                  // Reserve conf=3 for an SSID-name / IE-fp match.
-    else if(oui_tx && is_probe && sustained)
-        conf = 2; // same rule for a directed probe from the OUI device itself
+    else if(oui_tx && wildcard)
+        conf = 2; // OUI + wildcard probe -> "likely". FLOCK_OUIS is mostly shared
+                  // silicon-vendor ranges, so reserve conf=3 for an SSID-name or
+                  // IE-fp match. This is what upstream runs, and what its field
+                  // test measured at 11/12 cameras with 2 false positives.
+    else if(oui_tx && is_probe)
+        conf = 2; // same for a directed probe from the OUI device itself
     else if(oui_rx && is_probe)
         conf = 2; // OUI on the SILENT RECEIVER: a frame addressed to a Flock-OUI
                   // device by some other station. Deliberately NOT rate-gated --

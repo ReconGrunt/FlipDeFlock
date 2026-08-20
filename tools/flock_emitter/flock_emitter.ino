@@ -25,7 +25,8 @@
  * Flipper shows something other than the "expect" column, that is a real bug.
  *
  * ---------------------------------------------------------------------------
- * WiFi identities (rotates every WIFI_ROTATE_MS)
+ * WiFi identities (beacons rotate every WIFI_ROTATE_MS; probe identities
+ * hold for PROBE_HOLD_MS so they outlive a detector channel sweep)
  *
  *   # Identity                          Expect on the Flipper
  *   0 Flock OUI, beacon, named SSID      p Possible   (OUI only)
@@ -85,6 +86,23 @@
 // Rotation periods. WiFi is slower because switching identity restarts the
 // driver (~600 ms); BLE only swaps an advert payload.
 #define WIFI_ROTATE_MS 3000
+
+// A PROBE IDENTITY MUST OUTLIVE A CHANNEL SWEEP, or it cannot test the thing it
+// exists to test. The detector watches any one channel for 300 ms out of every
+// 3900 ms, so a 3-second identity that fires a single scan is usually not on the
+// air when the radio is listening -- and when it is, one scan puts 1-2 probes in
+// the window, below the sustained-probe threshold that the OUI+probe rung needs.
+//
+// A fielded camera does not behave like that. It sits in station mode probing
+// roughly every 125 ms, continuously, so it is still probing on the detector's
+// next visit and the one after. That persistence IS the signal. Modelling it
+// takes two things: hold the identity across several sweeps, and keep probing
+// for the whole hold rather than once at the start.
+//
+// Without this the rig reported a clean run while never exercising the branch --
+// the same shape of failure as the beacon injection flag above.
+#define PROBE_HOLD_MS  12000 // ~3 detector sweeps
+#define PROBE_REARM_MS 150 // re-arm the scan this often, approximating ~125 ms
 #define BLE_ROTATE_MS  1500
 #define BEACON_MS      120 // beacon interval while an identity is active
 
@@ -223,6 +241,7 @@ static int g_ble_idx = -1;
 static uint32_t g_last_wifi_rotate = 0;
 static uint32_t g_last_ble_rotate = 0;
 static uint32_t g_last_beacon = 0;
+static uint32_t g_last_probe = 0; /**< re-arm clock for probe identities */
 
 static BLEAdvertising* g_adv = nullptr;
 
@@ -322,9 +341,42 @@ static void send_beacon(const WifiIdentity* id) {
 }
 
 /** Switch the STA interface MAC, then scan, which sprays probe requests. */
-static void start_probe_burst(const WifiIdentity* id) {
+/**
+ * Point the STA interface at `id`s MAC. Returns the drivers verdict.
+ *
+ * THE INTERFACE MUST BE STOPPED FIRST. esp_wifi_set_mac() refuses while Wi-Fi is
+ * started, and it refuses QUIETLY unless the return code is read -- which is how
+ * this rig spent a bench session emitting probe requests from the ESP32 factory
+ * Espressif MAC while its serial log announced a spoofed Flock OUI. The detector
+ * was right to ignore them: they genuinely were not Flock frames.
+ *
+ * Symptom to recognise: beacon identities detect normally (they are hand-built
+ * frames, so the source MAC is whatever we write into the buffer) while every
+ * probe identity is invisible. If that returns, check this return code before
+ * suspecting the detector.
+ */
+static esp_err_t set_sta_mac(const WifiIdentity* id) {
+    esp_wifi_stop();
     esp_wifi_set_mode(WIFI_MODE_APSTA);
-    esp_wifi_set_mac(WIFI_IF_STA, (uint8_t*)id->mac);
+    esp_err_t rc = esp_wifi_set_mac(WIFI_IF_STA, (uint8_t*)id->mac);
+    esp_wifi_start();
+    return rc;
+}
+
+static void start_probe_burst(const WifiIdentity* id) {
+    uint8_t actual[6] = {0};
+    esp_wifi_get_mac(WIFI_IF_STA, actual);
+    // Only restart the interface when the MAC is actually wrong -- doing it on
+    // every re-arm would tear down the scan we are trying to sustain.
+    if(memcmp(actual, id->mac, 6) != 0) {
+        esp_err_t rc = set_sta_mac(id);
+        esp_wifi_get_mac(WIFI_IF_STA, actual);
+        if(memcmp(actual, id->mac, 6) != 0) {
+            Serial.printf(
+                "[WARN] STA MAC spoof FAILED rc=%d, probes go out as %02x:%02x:%02x\n",
+                (int)rc, actual[0], actual[1], actual[2]);
+        }
+    }
 
     wifi_scan_config_t cfg = {};
     cfg.ssid = NULL; // wildcard probe: no SSID IE, the phone-home shape
@@ -335,11 +387,19 @@ static void start_probe_burst(const WifiIdentity* id) {
     esp_wifi_scan_start(&cfg, false);
 }
 
+
 static void apply_wifi_identity(int idx) {
     const WifiIdentity* id = &WIFI_IDS[idx];
 
     esp_wifi_scan_stop();
-    esp_wifi_set_mac(WIFI_IF_AP, (uint8_t*)id->mac);
+    // ONLY BEACON IDENTITIES TAKE THE AP MAC. The ESP32 rejects a STA MAC that
+    // equals the AP MAC with ESP_ERR_WIFI_MAC (0x3009), so setting both to the
+    // identity made every probe identity fall back to the factory Espressif
+    // address -- which is not in any Flock table, so the detector correctly saw
+    // nothing. Beacons were unaffected because their source MAC is a field in a
+    // hand-built frame, not an interface property, which is exactly why the
+    // symptom was 'beacons detect, probes never do'.
+    if(id->kind == EmitBeacon) esp_wifi_set_mac(WIFI_IF_AP, (uint8_t*)id->mac);
     esp_wifi_set_channel(EMIT_CHANNEL, WIFI_SECOND_CHAN_NONE);
 
     if(id->kind == EmitProbe) start_probe_burst(id);
@@ -427,7 +487,10 @@ void setup() {
 void loop() {
     uint32_t now = millis();
 
-    if(now - g_last_wifi_rotate >= WIFI_ROTATE_MS) {
+    // Probe identities hold longer than beacon ones -- see PROBE_HOLD_MS.
+    uint32_t hold =
+        (WIFI_IDS[g_wifi_idx].kind == EmitProbe) ? PROBE_HOLD_MS : WIFI_ROTATE_MS;
+    if(now - g_last_wifi_rotate >= hold) {
         g_last_wifi_rotate = now;
         g_wifi_idx = (g_wifi_idx + 1) % WIFI_ID_COUNT;
         apply_wifi_identity(g_wifi_idx);
@@ -439,11 +502,18 @@ void loop() {
         apply_ble_identity(g_ble_idx);
     }
 
-    // Beacon identities need a steady stream; probe identities are driven by the
-    // scan started at rotation time.
+    // Beacon identities need a steady stream.
     if(WIFI_IDS[g_wifi_idx].kind == EmitBeacon && now - g_last_beacon >= BEACON_MS) {
         g_last_beacon = now;
         send_beacon(&WIFI_IDS[g_wifi_idx]);
+    }
+
+    // Probe identities need one too, for the same reason: a camera phoning home
+    // does it continuously, not once. Re-arming is cheap and a scan already in
+    // flight simply refuses the call, so this needs no completion tracking.
+    if(WIFI_IDS[g_wifi_idx].kind == EmitProbe && now - g_last_probe >= PROBE_REARM_MS) {
+        g_last_probe = now;
+        start_probe_burst(&WIFI_IDS[g_wifi_idx]);
     }
 
     delay(10);
