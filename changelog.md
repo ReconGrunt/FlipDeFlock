@@ -1,64 +1,21 @@
 # Changelog
 
-## v0.73
+## v0.74
 
-The v0.72 RogueMaster load failure is fixed.
+**A false positive users actually hit, and a Net Guardian you can point at one
+network.**
 
-**Partly hardware-verified, for once.** Run on a Flipper Zero (Momentum
-`mntm-dev`, API 87.1) with the ESP32 companion attached: Net Guardian's network
-targeting was exercised end to end, and the v0.70 Detail-round-trip fix was
-confirmed on real hardware for the first time (a tagged tracker survived Back,
-and the device table grew 25 -> 28 rather than resetting). **The probe-rate gate
-below was NOT verified** -- it runs on the companion and the attached board is
-still on older firmware. See the note under that entry.
+**Partly hardware-verified.** Run on a Flipper Zero (Momentum `mntm-dev`, API
+87.1) with the ESP32 companion attached and reflashed to this build. Net
+Guardian's network targeting was exercised end to end, the Axon device class was
+confirmed rendering on a real screen, and the v0.70 Detail-round-trip fix was
+verified on hardware for the first time (a tagged tracker survived Back, and the
+device table grew 25 -> 28 rather than resetting). **The probe-rate gate's
+thresholds are still unmeasured** -- no Flock hardware was present to exercise a
+true positive, so the gate is known to stop the reported false positive and is
+NOT known to pass a real camera. See the note under that entry.
 
-### Fixed
-
-- **A T-Mobile hotspot was being reported as a likely ALPR camera.** Reported from
-  the field, and the cause is two-part.
-
-  First, the built-in OUI table is mostly **chip vendors, not Flock**. Checked
-  against the IEEE registry, 21 of its entries are registered to **Liteon**, and
-  only `b4:1e:52` belongs to Flock Safety itself. Two of them were worse: `48:27:ea`
-  is **Samsung Electronics** and `a4:cf:12` is **Espressif**, and upstream rates
-  both *"low confidence, WiGLE crowdsource"* — its weakest tier. Both are now
-  **demoted to `docs/signatures.seed.json`**, where you can opt back in. They are
-  not retracted; nothing says they are wrong, only that nobody corroborated them.
-
-  Second, and the general fix: the companion scored *Flock OUI + wildcard probe
-  request* as **Likely**, and a wildcard probe is the single most ordinary frame a
-  Wi-Fi client emits — it is what scanning for a network looks like. So any device
-  on shared silicon scored Likely for doing nothing at all. The companion now
-  requires a **sustained probe rate** before that rung: a fielded Flock camera runs
-  in station mode and probes roughly every **125 ms**, while a phone or hotspot
-  emits a short burst and then goes quiet for tens of seconds. Same frame, very
-  different cadence — the rate is what separates them.
-
-  The counter is keyed on the transmitter and updated *before* the sequence-run
-  coalescer, which deliberately suppresses repeats; counting after it would always
-  see one probe and the gate would reject real cameras too. The **silent-receiver**
-  path is deliberately left ungated — there the frame was sent *to* the Flock-OUI
-  device by someone else, so the cadence is the sender's and says nothing about the
-  receiver, and that path is upstream's key technique for catching a dormant camera.
-
-  **The thresholds are not field-tuned.** 125 ms is upstream's figure; the
-  client-side distribution has never been measured here, so they are set loosely to
-  clear the reported false positive without risking a real camera. The observed
-  count now rides the wire as `pr=<n>` and reaches the app as an observation —
-  never a confidence input — precisely so it can be tuned from real captures
-  instead of guessed at twice.
-
-  **BOTH HALVES NEED A COMPANION REFLASH**, and the demotion is the less obvious
-  one. The OUI table is compiled into the companion as well, so a board running
-  older firmware still matches `48:27:ea` and still reports it -- and the app
-  trusts the companion for every rung below Confirmed, because those depend on
-  probe behaviour it cannot re-derive. Updating the `.fap` alone will not clear
-  this false positive. Flash `flipdeflock_companion_esp32wroom.bin` from the same
-  release.
-
-  **Not verified on hardware.** The gate is companion-side and the board attached
-  during testing was on older firmware, so nothing exercised it. The thresholds
-  remain unmeasured guesses until someone runs a camera and a phone past it.
+### Added
 
 - **Net Guardian can guard ONE network instead of everything in range.** Press
   **Right** on the Guardian screen to pick an access point; the bottom line then
@@ -110,6 +67,67 @@ still on older firmware. See the note under that entry.
   the active target is marked with `*` on re-entry, hidden APs list as `(hidden)`,
   and the choice round-tripped through `settings.txt` as `guard_bssid` +
   `guard_ssid` and reloaded on restart.
+
+### Changed
+
+- **RogueMaster gets its own release artifact, `deflock.fap`.** RogueMaster names
+  the app that way, so anyone installing there had been renaming the Unleashed
+  file by hand. It now builds as a fourth CI target and ships under the name that
+  firmware expects. Contributed by [@h00die](https://github.com/h00die) in
+  [#21](https://github.com/ReconGrunt/FlipDeFlock/pull/21); it uses the Unleashed
+  SDK, since RogueMaster tracks it and reports the same API.
+
+### Fixed
+
+- **A T-Mobile hotspot was being reported as a likely ALPR camera.** Reported from
+  the field, and the cause is two-part.
+
+  First, the built-in OUI table is mostly **chip vendors, not Flock**. Checked
+  against the IEEE registry, 21 of its entries are registered to **Liteon**, and
+  only `b4:1e:52` belongs to Flock Safety itself. Two of them were worse: `48:27:ea`
+  is **Samsung Electronics** and `a4:cf:12` is **Espressif**, and upstream rates
+  both *"low confidence, WiGLE crowdsource"* — its weakest tier. Both are now
+  **demoted to `docs/signatures.seed.json`**, where you can opt back in. They are
+  not retracted; nothing says they are wrong, only that nobody corroborated them.
+
+  Second, and the general fix: the companion scored *Flock OUI + wildcard probe
+  request* as **Likely**, and a wildcard probe is the single most ordinary frame a
+  Wi-Fi client emits — it is what scanning for a network looks like. So any device
+  on shared silicon scored Likely for doing nothing at all. The companion now
+  requires a **sustained probe rate** before that rung: a fielded Flock camera runs
+  in station mode and probes roughly every **125 ms**, while a phone or hotspot
+  emits a short burst and then goes quiet for tens of seconds. Same frame, very
+  different cadence — the rate is what separates them.
+
+  The counter is keyed on the transmitter and updated *before* the sequence-run
+  coalescer, which deliberately suppresses repeats; counting after it would always
+  see one probe and the gate would reject real cameras too. The **silent-receiver**
+  path is deliberately left ungated — there the frame was sent *to* the Flock-OUI
+  device by someone else, so the cadence is the sender's and says nothing about the
+  receiver, and that path is upstream's key technique for catching a dormant camera.
+
+  **The thresholds are not field-tuned.** 125 ms is upstream's figure; the
+  client-side distribution has never been measured here, so they are set loosely to
+  clear the reported false positive without risking a real camera. The observed
+  count now rides the wire as `pr=<n>` and reaches the app as an observation —
+  never a confidence input — precisely so it can be tuned from real captures
+  instead of guessed at twice.
+
+  **BOTH HALVES NEED A COMPANION REFLASH**, and the demotion is the less obvious
+  one. The OUI table is compiled into the companion as well, so a board running
+  older firmware still matches `48:27:ea` and still reports it -- and the app
+  trusts the companion for every rung below Confirmed, because those depend on
+  probe behaviour it cannot re-derive. Updating the `.fap` alone will not clear
+  this false positive. Flash `flipdeflock_companion_esp32wroom.bin` from the same
+  release.
+
+  **Not verified on hardware.** The gate is companion-side and the board attached
+  during testing was on older firmware, so nothing exercised it. The thresholds
+  remain unmeasured guesses until someone runs a camera and a phone past it.
+
+## v0.73
+
+The v0.72 RogueMaster load failure is fixed. **Not run against a radio.**
 
 ### Added
 
