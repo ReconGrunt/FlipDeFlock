@@ -300,7 +300,25 @@ static void send_beacon(const WifiIdentity* id) {
     frame[n++] = 0x01;
     frame[n++] = EMIT_CHANNEL;
 
-    esp_wifi_80211_tx(WIFI_IF_AP, frame, n, false);
+    // en_sys_seq MUST be true. The IDF will not send a frame whose source MAC is
+    // not one of the interface MACs unless it owns the sequence number, and every
+    // identity here is a spoofed OUI -- that is the whole point of the rig. Passed
+    // as false, the driver logs
+    //     E wifi:en_sys_seq should be true to avoid side-effect to WiFi connection
+    // for every single beacon and nothing reaches the air.
+    //
+    // That is how it shipped, and it is why "the emitter has never been run" was
+    // load-bearing: it compiles either way, and the failure is only visible on a
+    // detector that stays empty while the serial log cheerfully narrates
+    // identities it never actually transmitted. Verified on hardware -- with false
+    // the Flipper saw 0 Wi-Fi detections across several minutes at 36 frames/s
+    // while happily reporting the BLE identities from the same board.
+    //
+    // The driver overwriting the sequence number costs this rig nothing: the
+    // identities are distinct MACs, not a MAC-cycling burst, so nothing here
+    // depends on controlling seq. (The companion's sequence-run coalescer is
+    // exercised by real MAC-cycling hardware, not by this.)
+    esp_wifi_80211_tx(WIFI_IF_AP, frame, n, true);
 }
 
 /** Switch the STA interface MAC, then scan, which sprays probe requests. */

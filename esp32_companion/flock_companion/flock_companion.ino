@@ -598,9 +598,10 @@ static void buf_appendf(char* buf, size_t bufsz, size_t* pos, const char* fmt, .
 // seconds. Same frame type, completely different cadence.
 //
 // So: require several probes from the same transmitter inside a short window
-// before OUI+probe may reach conf=2. A camera clears PROBE_BURST_MIN in well
-// under a second; a client sweeping channels rarely puts that many on OUR channel
-// inside the window.
+// before OUI+probe may reach conf=2. Because the radio only watches any one
+// channel for 300 ms at a time, a camera does NOT clear this inside a single
+// dwell -- it clears it by still probing on the next sweep, which a phone that
+// has finished scanning does not do. See the arithmetic on PROBE_WINDOW_MS.
 //
 // THRESHOLDS ARE NOT FIELD-TUNED. 125 ms is upstream's figure, but the client-side
 // distribution has never been measured here, so these are deliberately loose --
@@ -608,9 +609,38 @@ static void buf_appendf(char* buf, size_t bufsz, size_t* pos, const char* fmt, .
 // camera, not to be optimal. The observed count is reported on the wire as
 // `pr=<n>` precisely so it can be tuned from real captures instead of guessed at
 // again. Widen the window or lower the threshold only with data.
-#define PROBE_TRACK_N     24   // transmitters tracked (LRU); urban scans are busy
-#define PROBE_WINDOW_MS   2000 // sliding window a burst must land inside
-#define PROBE_BURST_MIN   3    // probes within the window to count as "sustained"
+#define PROBE_TRACK_N   24 // transmitters tracked (LRU); urban scans are busy
+// THE WINDOW MUST SPAN SEVERAL CHANNEL SWEEPS. This is not a tuning preference,
+// it is arithmetic, and getting it wrong once already shipped a gate that could
+// never open:
+//
+//   channel dwell            300 ms   (the hop below)
+//   2.4 GHz sweep     13 x 300 = 3900 ms
+//   so any one channel is watched for 300 ms out of every 3900 ms
+//   a fielded camera probes every ~125 ms -> 300/125 = 2 probes seen per dwell
+//
+// v0.74 asked for 3 probes inside 2000 ms. A camera can only ever put 2 into one
+// dwell, and consecutive dwells are 3900 ms apart, so two dwells never share a
+// 2000 ms window. The threshold was unreachable BY CONSTRUCTION -- not strict,
+// impossible -- and it silently disabled the OUI+probe path that finds most
+// fielded cameras. Caught by tools/flock_emitter on the bench, which is exactly
+// why that rig exists.
+//
+// What actually separates a camera from a phone at this dwell is PERSISTENCE
+// ACROSS SWEEPS, not burst rate inside one. A camera in station mode is probing
+// on every single visit, forever. A phone scanning emits a burst and then goes
+// quiet for tens of seconds. So the window spans ~2 sweeps and the threshold is
+// what a camera accumulates over them:
+//
+//   camera  ~2 per dwell x 2 dwells in 8000 ms = ~4  -> passes
+//   phone    1-2 probes total in one burst          -> blocked
+//
+// STILL NOT VALIDATED AGAINST A REAL CAMERA. 125 ms is upstream's figure and the
+// arithmetic above follows from it; nobody has held this against fielded
+// hardware. The observed count rides the wire as `pr=<n>` so it can be measured
+// rather than reasoned about a third time.
+#define PROBE_WINDOW_MS 8000 // ~2 full channel sweeps, so persistence accumulates
+#define PROBE_BURST_MIN 3 // probes within the window to count as "sustained"
 
 struct ProbeTrack {
     uint8_t mac[6];
