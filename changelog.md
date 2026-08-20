@@ -96,6 +96,14 @@ still on older firmware. See the note under that entry.
   label on this screen is now short enough to render whole — a half-read
   instruction is worse than none.
 
+  **The row under the cursor is the row you get.** Rebuilding the list to show new
+  scan results reset the submenu selection to the top, so while a scan was
+  delivering, the list shifted between reading a row and pressing OK — and a
+  different network got guarded than the one that was highlighted. Caught on
+  hardware: `Kestral` was chosen and the neighbouring `WiFi` ended up targeted,
+  with nothing on screen to say so. The cursor is now carried across the rebuild.
+  Silently guarding the wrong network is worse than not offering the feature.
+
   **Verified on hardware**, not just in CI: the picker opens on Right, an empty AP
   list renders safely, the in-place scan was run and repopulated the list live, a
   real AP was selected, the HUD showed `>Kestral` in place of the `OK=sus` hint,
