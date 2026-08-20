@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (c) 2026 ReconGrunt
 """
 Generate the FlipDeFlock "glitch / scanner HUD" desktop animation as a Flipper
 asset pack (128x64, 1-bit). Output:

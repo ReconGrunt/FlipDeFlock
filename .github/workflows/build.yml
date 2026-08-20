@@ -199,3 +199,21 @@ jobs:
       # bug, and it is invisible at runtime.
       - name: OUI table parity (app vs ESP companion)
         run: python tools/check_oui_parity.py
+
+      # Provenance. This project has already been copied wholesale once -- a v0.41
+      # snapshot re-uploaded under the same name with no attribution -- and no DMCA
+      # route existed because per-file SPDX headers only arrived with the GPL
+      # relicense, after that copy was taken. The headers are what make the next
+      # verbatim re-upload provably a stripped derivative, so one untagged file is a
+      # hole in that argument. Five had drifted in before this gate existed.
+      - name: Licence header + attribution on every source
+        run: python tools/check_provenance.py
+
+      # Same idea for the artwork: authorship metadata, written without touching a
+      # pixel. Strippable by anyone who thinks to, which is stated plainly in the
+      # tool -- its value is against the casual verbatim copy this repo has actually
+      # met, not against a determined one.
+      - name: Asset authorship metadata
+        run: |
+          python -m pip install --quiet pillow
+          python tools/stamp_assets.py --check

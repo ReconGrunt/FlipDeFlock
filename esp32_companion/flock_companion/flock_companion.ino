@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (c) 2026 ReconGrunt
 /*
  * Flock Companion - universal ESP32 Wi-Fi sniffer for the Flipper Zero
  * "Recon Site Survey" app.
