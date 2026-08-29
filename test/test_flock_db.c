@@ -337,6 +337,164 @@ void suite_flock_db(void) {
     CHECK_INT_EQ(flock_method_of(oui_mac, "", 'F', 0), FlockMethodOui);
     flock_db_set_extras(NULL);
 
+
+    // --- vendor attribution (v0.77) ----------------------------------------
+    //
+    // THE CONTRACT THIS SUITE EXISTS TO PROTECT: the app must never print the
+    // word "Flock" over hardware that is not Flock's. Before the vendor field
+    // every ALPR-class detection rendered as "Flock / ALPR camera", so an Axon
+    // Outpost, a Ubicquia streetlight node and a MAC in no table at all were all
+    // announced as Flock Safety cameras. These rows are the guard.
+    {
+        const uint8_t ubicquia[6] = {0x94, 0x7b, 0xbe, 0x11, 0x22, 0x33};
+        const uint8_t motorola[6] = {0x00, 0x04, 0x7d, 0x11, 0x22, 0x33};
+        const uint8_t moto_my[6] = {0x9c, 0x86, 0x2b, 0x11, 0x22, 0x33};
+        const uint8_t verkada[6] = {0xe0, 0xa7, 0x00, 0x11, 0x22, 0x33};
+        const uint8_t genetec[6] = {0x0c, 0xbf, 0x15, 0x11, 0x22, 0x33};
+        const uint8_t genetec2[6] = {0x00, 0xbf, 0x15, 0x11, 0x22, 0x33};
+        const uint8_t avigilon[6] = {0x70, 0x1a, 0xd5, 0x11, 0x22, 0x33};
+        const uint8_t flock[6] = {0xb4, 0x1e, 0x52, 0x11, 0x22, 0x33};
+        const uint8_t shotspot[6] = {0xd4, 0x11, 0xd6, 0x11, 0x22, 0x33};
+        const uint8_t axon[6] = {0x00, 0x25, 0xdf, 0x11, 0x22, 0x33};
+        const uint8_t nobody[6] = {0x02, 0x00, 0x00, 0x11, 0x22, 0x33};
+
+        // Each vendor-exclusive prefix resolves to its own vendor...
+        CHECK_INT_EQ(flock_vendor_from_mac(ubicquia), FlockVendorUbicquia);
+        CHECK_INT_EQ(flock_vendor_from_mac(motorola), FlockVendorMotorola);
+        CHECK_INT_EQ(flock_vendor_from_mac(moto_my), FlockVendorMotorola);
+        CHECK_INT_EQ(flock_vendor_from_mac(verkada), FlockVendorVerkada);
+        CHECK_INT_EQ(flock_vendor_from_mac(genetec), FlockVendorGenetec);
+        CHECK_INT_EQ(flock_vendor_from_mac(genetec2), FlockVendorGenetec);
+        CHECK_INT_EQ(flock_vendor_from_mac(avigilon), FlockVendorAvigilon);
+        CHECK_INT_EQ(flock_vendor_from_mac(flock), FlockVendorFlock);
+        CHECK_INT_EQ(flock_vendor_from_mac(shotspot), FlockVendorSoundThinking);
+        CHECK_INT_EQ(flock_vendor_from_mac(axon), FlockVendorAxon);
+        // ...and an unlisted MAC names NOBODY. "Unknown" is the honest answer,
+        // not a fallback to the historical default of Flock.
+        CHECK_INT_EQ(flock_vendor_from_mac(nobody), FlockVendorUnknown);
+        CHECK_INT_EQ(flock_vendor_from_mac(NULL), FlockVendorUnknown);
+
+        // ...and to the "vendor known, kind unknown" class, NOT to ALPR. These
+        // OUIs carry plate readers, building cameras and hand-held radios alike;
+        // calling any of them ALPR would invent a detection.
+        CHECK_INT_EQ(flock_class_from_mac(ubicquia), FlockClassGear);
+        CHECK_INT_EQ(flock_class_from_mac(motorola), FlockClassGear);
+        CHECK_INT_EQ(flock_class_from_mac(verkada), FlockClassGear);
+        CHECK_INT_EQ(flock_class_from_mac(genetec), FlockClassGear);
+        CHECK_INT_EQ(flock_class_from_mac(avigilon), FlockClassGear);
+        // The three original tables keep the classes they shipped with.
+        CHECK_INT_EQ(flock_class_from_mac(flock), FlockClassAlpr);
+        CHECK_INT_EQ(flock_class_from_mac(shotspot), FlockClassAcoustic);
+        CHECK_INT_EQ(flock_class_from_mac(axon), FlockClassBodycam);
+        CHECK_INT_EQ(flock_class_from_mac(nobody), FlockClassAlpr);
+
+        // vendor_exclusive_oui_match() is the ESP's conf=1 gate. It must cover
+        // the five competitor tables and NOTHING else -- widening it to the Flock
+        // tables would resurrect bare-OUI scoring on shared silicon ranges, the
+        // rule that reported a T-Mobile gateway as a possible camera.
+        CHECK(vendor_exclusive_oui_match(ubicquia));
+        CHECK(vendor_exclusive_oui_match(motorola));
+        CHECK(vendor_exclusive_oui_match(verkada));
+        CHECK(vendor_exclusive_oui_match(genetec));
+        CHECK(vendor_exclusive_oui_match(avigilon));
+        CHECK(!vendor_exclusive_oui_match(flock));
+        CHECK(!vendor_exclusive_oui_match(shotspot));
+        CHECK(!vendor_exclusive_oui_match(axon));
+        CHECK(!vendor_exclusive_oui_match(nobody));
+        CHECK(!vendor_exclusive_oui_match(NULL));
+
+        // A vendor-exclusive prefix must report OUI as its method. Before the
+        // new tables were wired into flock_method_of() these fell through to
+        // "ESP probe rule", hiding the one indicator we actually hold.
+        CHECK_INT_EQ(flock_method_of(ubicquia, "", 'B', 0), FlockMethodOui);
+        CHECK_INT_EQ(flock_method_of(motorola, "", 'B', 0), FlockMethodOui);
+        CHECK_INT_EQ(flock_method_of(verkada, "", 'B', 0), FlockMethodOui);
+
+        // SSID evidence outranks the MAC: a Flock provisioning name identifies
+        // Flock even from a randomized or unlisted address.
+        CHECK_INT_EQ(flock_vendor_of(nobody, "Flock-A1B2C3"), FlockVendorFlock);
+        CHECK_INT_EQ(flock_vendor_of(NULL, "test_flck"), FlockVendorFlock);
+        // But a benign name that merely contains "flock" is only Likely, and
+        // that is still Flock-attributable -- it is the CONFIDENCE that stays
+        // low, not the vendor. Guarding the split explicitly so nobody "fixes"
+        // one by weakening the other.
+        CHECK_INT_EQ(flock_vendor_of(nobody, "Flock-Guest"), FlockVendorFlock);
+        CHECK_INT_EQ(flock_ssid_confidence("Flock-Guest"), FlockConfidenceLikely);
+        // No Flock tell anywhere -> the MAC decides, and it names nobody.
+        CHECK_INT_EQ(flock_vendor_of(nobody, "linksys"), FlockVendorUnknown);
+        CHECK_INT_EQ(flock_vendor_of(ubicquia, "linksys"), FlockVendorUbicquia);
+
+        // --- THE REGRESSION ------------------------------------------------
+        // Not one label for a non-Flock vendor may contain the string "Flock".
+        // Asserted by search rather than by exact match so that rewording a
+        // label cannot quietly reintroduce the over-claim.
+        CHECK(strstr(flock_device_long_str(FlockVendorUbicquia, FlockClassGear), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorMotorola, FlockClassGear), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorVerkada, FlockClassGear), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorGenetec, FlockClassGear), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorAvigilon, FlockClassGear), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorAxon, FlockClassBodycam), "Flock") == NULL);
+        CHECK(
+            strstr(flock_device_long_str(FlockVendorSoundThinking, FlockClassAcoustic), "Flock") ==
+            NULL);
+        // The unattributed case is the one that actually shipped wrong: an ALPR
+        // class with no vendor evidence used to render "Flock / ALPR camera".
+        CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassAlpr), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassGear), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassAcoustic), "Flock") == NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassBodycam), "Flock") == NULL);
+
+        // Conversely, real Flock evidence MUST still say Flock -- the fix must
+        // not have been achieved by deleting the attribution everywhere.
+        CHECK(strstr(flock_device_long_str(FlockVendorFlock, FlockClassAlpr), "Flock") != NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorFlock, FlockClassAcoustic), "Flock") != NULL);
+
+        // Axon's label must no longer promise the device MOVES. Axon shipped
+        // Outpost and Lightpost -- fixed pole ALPR -- on this same OUI, so the
+        // old "body/in-car kit" wording is now wrong in the other direction.
+        CHECK(strstr(flock_device_long_str(FlockVendorAxon, FlockClassBodycam), "body") != NULL);
+        CHECK(strstr(flock_device_long_str(FlockVendorAxon, FlockClassBodycam), "fixed") != NULL);
+
+        // WIDTH BUDGET. The detail screen's 128 px row cuts at ~20 characters,
+        // and device identity is the last field that may ever be truncated --
+        // "SoundThinking (acoustic sensor)" was shortened for exactly this.
+        // Every vendor, every class, so a future vendor cannot land untested.
+        for(int v = FlockVendorUnknown; v <= FlockVendorAvigilon; v++) {
+            for(int c = FlockClassAlpr; c <= FlockClassGear; c++) {
+                CHECK(strlen(flock_device_long_str((FlockVendor)v, (FlockDevClass)c)) <= 20);
+            }
+            // The short label shares a narrow report column and a list row.
+            CHECK(strlen(flock_vendor_str((FlockVendor)v)) <= 13);
+        }
+        // An unattributed detection reads as a dash, never as the word "Unknown"
+        // -- a dash says "not attributed" without implying a failed lookup.
+        CHECK_STR_EQ(flock_vendor_str(FlockVendorUnknown), "-");
+
+        // --- MISATTRIBUTION DENYLIST ---------------------------------------
+        // Look-alike prefixes belonging to OTHER companies, which a substring
+        // search of the IEEE registry hands you right next to the real ones.
+        // tools/check_oui_parity.py blocks these at CI; this asserts the shipped
+        // behaviour, because a table can be wrong in ways a grep is not.
+        {
+            // Motorola MOBILITY (a Lenovo company) -- consumer phones.
+            const uint8_t moto_phone_a[6] = {0x50, 0x16, 0xf4, 1, 2, 3};
+            const uint8_t moto_phone_b[6] = {0xc4, 0xa0, 0x52, 1, 2, 3};
+            const uint8_t moto_phone_c[6] = {0xc8, 0x58, 0x95, 1, 2, 3};
+            // GENETEC Corporation (Japan) and Netgenetech -- not Genetec Inc.
+            const uint8_t genetec_jp[6] = {0x00, 0x0a, 0xb1, 1, 2, 3};
+            const uint8_t netgenetech[6] = {0xd8, 0xc0, 0x68, 1, 2, 3};
+            // Axon NETWORKS Inc -- an unrelated networking company.
+            const uint8_t axon_net[6] = {0x00, 0x58, 0x28, 1, 2, 3};
+            const uint8_t* lookalikes[] = {
+                moto_phone_a, moto_phone_b, moto_phone_c, genetec_jp, netgenetech, axon_net};
+            for(size_t i = 0; i < sizeof(lookalikes) / sizeof(lookalikes[0]); i++) {
+                CHECK_INT_EQ(flock_vendor_from_mac(lookalikes[i]), FlockVendorUnknown);
+                CHECK(!vendor_exclusive_oui_match(lookalikes[i]));
+                CHECK(!flock_oui_match(lookalikes[i]));
+            }
+        }
+    }
+
     // --- method label strings ----------------------------------------------
     CHECK_STR_EQ(flock_method_str(FlockMethodSsid), "SSID");
     CHECK_STR_EQ(flock_method_str(FlockMethodIeFp), "IE fp");

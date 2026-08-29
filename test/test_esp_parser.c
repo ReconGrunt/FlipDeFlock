@@ -258,6 +258,82 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,d411d6010203,-40,6,P,2,name,cls=q"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
 
+    // cls=g -- vendor-exclusive competitor gear (Ubicquia / Motorola Solutions /
+    // Verkada / Genetec / Avigilon). Tested HERE, at the wire boundary the
+    // product actually uses, rather than only against flock_db.c in isolation:
+    // that is the lesson of v0.47, where a fully-tested scorer had no production
+    // caller while the shipped path went unguarded.
+    //
+    // ON A MAC IN NO VENDOR TABLE, so the wire token is the ONLY thing that can
+    // produce Gear. Written this way deliberately: the first draft of this block
+    // used a Ubicquia MAC, and deleting the cls=g branch from esp_parser.c left
+    // the suite fully GREEN, because the MAC-derived fallback returned Gear on
+    // its own. It tested the fallback and called it coverage of the parser.
+    // Verified by deleting the branch in a throwaway tree: this row goes red.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name,cls=g"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+
+    CHECK_INT_EQ(P("D,947bbe010203,-40,6,B,1,name,cls=g"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidencePossible);
+
+    // MAC-derived fallback for a companion that predates cls=g -- the class must
+    // come out of the OUI, NOT default to ALPR. Getting this wrong would put a
+    // Motorola hand-held radio on the list as a plate reader.
+    CHECK_INT_EQ(P("D,947bbe010203,-40,6,B,1,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+    CHECK_INT_EQ(P("D,00047d010203,-40,6,B,1,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+    CHECK_INT_EQ(P("D,e0a700010203,-40,6,B,1,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+    CHECK_INT_EQ(P("D,0cbf15010203,-40,6,B,1,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+    CHECK_INT_EQ(P("D,701ad5010203,-40,6,B,1,name"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+
+    // Order-independence for the new letter, same as cls=a and cls=x.
+    CHECK_INT_EQ(P("D,947bbe010203,-40,6,P,1,name,fp=deadbeef,cls=g"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+
+    // An unknown class letter on a vendor-exclusive MAC falls back to Gear, not
+    // to ALPR -- a future companion naming a class we predate must not be able
+    // to make the app claim a camera it never saw.
+    CHECK_INT_EQ(P("D,947bbe010203,-40,6,B,1,name,cls=q"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassGear);
+
+    // THE ATTRIBUTION CONTRACT, end to end from the wire. A competitor MAC must
+    // resolve to its own vendor and must not be labelled as a Flock camera; a
+    // MAC in no table at all must name nobody rather than falling back to Flock.
+    CHECK_INT_EQ(P("D,947bbe010203,-40,6,B,1,name,cls=g"), EspMsgFlock);
+    CHECK_INT_EQ(
+        flock_vendor_of(m.u.flock.mac, m.u.flock.ssid), FlockVendorUbicquia);
+    CHECK(
+        strstr(
+            flock_device_long_str(
+                flock_vendor_of(m.u.flock.mac, m.u.flock.ssid),
+                (FlockDevClass)m.u.flock.dev_class),
+            "Flock") == NULL);
+
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name"), EspMsgFlock);
+    CHECK_INT_EQ(flock_vendor_of(m.u.flock.mac, m.u.flock.ssid), FlockVendorUnknown);
+    CHECK(
+        strstr(
+            flock_device_long_str(
+                flock_vendor_of(m.u.flock.mac, m.u.flock.ssid),
+                (FlockDevClass)m.u.flock.dev_class),
+            "Flock") == NULL);
+
+    // ...and a real Flock provisioning SSID still names Flock, so the fix was
+    // not achieved by simply deleting the attribution everywhere.
+    CHECK_INT_EQ(P("D,b41e52010203,-40,6,B,3,Flock-A1B2C3"), EspMsgFlock);
+    CHECK_INT_EQ(flock_vendor_of(m.u.flock.mac, m.u.flock.ssid), FlockVendorFlock);
+    CHECK(
+        strstr(
+            flock_device_long_str(
+                flock_vendor_of(m.u.flock.mac, m.u.flock.ssid),
+                (FlockDevClass)m.u.flock.dev_class),
+            "Flock") != NULL);
+
     // An unknown trailing token is ignored, not treated as an error.
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name,zz=9"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
