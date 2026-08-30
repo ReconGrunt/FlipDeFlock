@@ -15,10 +15,20 @@ name: "FAP: Nightly"
 # getting the newest TAG, not this. Nothing about this workflow can change what a
 # normal user downloads.
 #
-# .fap ONLY. The companion firmware is a separate ~4 minute arduino-cli build in
-# esp32.yml and is not rebuilt here, so a nightly .fap pairs with the companion
-# image from the newest tag. The proto version handshake already detects a
-# genuine mismatch and says so, rather than misbehaving quietly.
+# THE COMPANION FIRMWARE IS BUILT HERE TOO, as of v0.77. It used to be .fap only,
+# on the reasoning that a nightly .fap could pair with the companion image from
+# the newest tag because "the proto version handshake already detects a genuine
+# mismatch and says so, rather than misbehaving quietly."
+#
+# That reasoning does not cover a DETECTION-TABLE change, and v0.77 is exactly
+# one. Adding five vendor OUI tables changes what the companion reports, not the
+# protocol it speaks, so the handshake sees nothing wrong and stays silent --
+# while an old companion simply never reports the new vendors. The nightly then
+# ships an app whose headline feature is inert, with no indication to the person
+# testing it. That is the quiet misbehaviour the old note believed was ruled out.
+#
+# It costs about four extra minutes of CI per nightly, which is cheap next to
+# shipping a build that cannot do the thing it was cut for.
 on:
   schedule:
     # 07:00 UTC daily. After a normal evening of commits in the Americas, and it
@@ -158,8 +168,67 @@ jobs:
           path: ${{ steps.fap.outputs.path }}
           if-no-files-found: error
 
+  # Mirrors esp32.yml's build-bin, including the 2.0.17 core pin -- the version
+  # the RELEASED WROOM image is built from. A nightly companion built against a
+  # different core than the tagged one would make "flash the nightly, keep your
+  # tagged companion" a comparison of two variables at once.
+  companion:
+    needs: check
+    runs-on: ubuntu-latest
+    name: "Build flock_companion .bin"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing after this checkout runs an authenticated git command.
+          persist-credentials: false
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.17
+
+      - name: Compile (classic ESP32 / WROOM)
+        run: |
+          # huge_app: WiFi + BLE firmware exceeds the default 1.3 MB app partition.
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32:PartitionScheme=huge_app \
+            --output-dir build_esp \
+            esp32_companion/flock_companion
+
+      - name: Merge into a single flashable image
+        run: |
+          python -m pip install --quiet esptool
+          BOOT0=$(find "$HOME/.arduino15" -name boot_app0.bin | head -n1)
+          python -m esptool --chip esp32 merge_bin -o build_esp/flipdeflock_companion_esp32wroom.bin \
+            0x1000  build_esp/flock_companion.ino.bootloader.bin \
+            0x8000  build_esp/flock_companion.ino.partitions.bin \
+            0xe000  "$BOOT0" \
+            0x10000 build_esp/flock_companion.ino.bin
+          # Same unpadded assertion esp32.yml makes: a padded image would be
+          # 4 MB of 0xFF that the Flipper dutifully writes over UART.
+          python - <<'PY'
+          import pathlib
+          p = pathlib.Path("build_esp/flipdeflock_companion_esp32wroom.bin")
+          d = p.read_bytes()
+          assert d[0x1000] == 0xE9, f"bootloader magic missing at 0x1000 (got {d[0x1000]:#04x})"
+          assert len(d) < 3_000_000, f"image looks padded to flash size: {len(d):,} bytes"
+          print(f"WROOM image OK: {len(d):,} bytes, bootloader magic at 0x1000")
+          PY
+
+      - name: Upload the companion image for the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-companion-bin
+          path: build_esp/flipdeflock_companion_esp32wroom.bin
+          if-no-files-found: error
+
   publish:
-    needs: build
+    needs: [build, companion]
     runs-on: ubuntu-latest
     name: "Publish the rolling nightly"
     steps:
@@ -178,6 +247,25 @@ jobs:
           pattern: nightly-fap-*
           merge-multiple: true
           path: faps
+
+      - name: Collect the companion image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-companion-bin
+          path: faps
+
+      # The .bin has to be here or the release is the half-build this job was
+      # changed to stop publishing. Checked separately from the .fap count so
+      # the error names which half went missing.
+      - name: Check the companion image is present
+        run: |
+          set -euo pipefail
+          if [ ! -s faps/flipdeflock_companion_esp32wroom.bin ]; then
+            echo "::error::companion image missing; the nightly would ship an app whose new detections cannot fire."
+            ls -lR faps || true
+            exit 1
+          fi
+          ls -l faps/flipdeflock_companion_esp32wroom.bin
 
       # The same set check release.yml runs. A nightly that publishes three .fap
       # files instead of four is a nightly that silently drops a firmware
@@ -219,10 +307,15 @@ jobs:
             echo "Install is identical to a tagged build: take the \`.fap\` matching"
             echo "your firmware from the table in the README."
             echo
-            echo "**The companion firmware is not rebuilt here.** Flash the"
-            echo "\`.bin\` from the newest tagged release. If the app and the"
-            echo "companion ever disagree on the protocol, the app says so on the"
-            echo "scan screen rather than misreporting."
+            echo "**Flash the companion firmware from this release too.**"
+            echo "\`flipdeflock_companion_esp32wroom.bin\` is built from the same"
+            echo "commit as the \`.fap\` above and is attached here."
+            echo
+            echo "This matters more than it used to. Detection tables live on the"
+            echo "companion, so an app change that adds new detections does"
+            echo "nothing at all until the companion is reflashed, and the"
+            echo "protocol handshake will NOT warn you: the protocol is"
+            echo "unchanged, only what the companion looks for."
             echo
             # Only when there is actually something between the tag and here.
             # Right after a release the nightly IS the tagged commit, and an
