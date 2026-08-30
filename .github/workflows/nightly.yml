@@ -345,7 +345,8 @@ jobs:
             --target "$SHA" \
             --title "Nightly ($short)" \
             --notes-file notes.md \
-            faps/*.fap
+            faps/*.fap \
+            faps/flipdeflock_companion_esp32wroom.bin
 
           gh release view nightly --json isPrerelease,targetCommitish,assets \
             --jq '"prerelease=\(.isPrerelease) target=\(.targetCommitish) assets=\([.assets[].name]|join(", "))"'
