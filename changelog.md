@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.78
+
+**The app powers the companion instead of making you go do it.** The Flipper's
+GPIO 5V rail is off at boot, so a board wired to the header is dead until
+something turns it on -- which meant visiting **GPIO -> 5V** by hand and then
+launching FlipDeFlock. Reported by [@h00die](https://github.com/h00die) in
+discussion #7: *"when I start my flipper I have to go to gpio, and turn on 5v to
+get my esp card going. Then launch deflock."*
+
+### Added
+
+- **Auto 5V for the companion.** If the board has not answered a couple of
+  seconds into a scan, the app raises the 5V rail itself, once, and drops it
+  again when you exit. New **Settings -> Auto 5V for ESP** (default ON), and a
+  Help section explaining the states.
+
+  **It detects first and powers second, never the other way round.** A board that
+  is already answering is a board powered some other way -- its own USB, most
+  often while being flashed -- and energising the header underneath it would push
+  a second supply into hardware that did not ask for one. So it acts only on
+  silence.
+
+  **It stands down entirely while the Flipper is on USB.** The charger cannot run
+  the 5V boost while a host is supplying power; the two are mutually exclusive on
+  that part. With a cable attached the header takes its 5V from the host anyway,
+  so there is nothing to do and nothing wrong.
+
+  **It never touches a rail you switched on yourself.** The rail is released on
+  exit only if the app was the one that raised it.
+
+### Fixed
+
+- **A false "5V refused" that would have hit every user on a cable.** The first
+  cut of the above read the charger's fault register immediately after enabling.
+  That register latches faults and clears on read, so the first read after any
+  earlier toggling returns a stale bit unrelated to the enable just issued --
+  microseconds before the boost could have settled either way. On the bench it
+  fired every single time, on a device whose rail is fine. A genuine fault is
+  still caught, by the firmware's own power service dropping the rail.
+
+### Needs field testing
+
+- **Nobody has yet watched a board come up on rail power.** Verified here: the
+  setting persists, the whole path runs against a genuinely silent UART, and the
+  USB stand-down works. Not verified: the actual power-on, because that needs a
+  Flipper on battery -- and a Flipper on battery cannot be driven over USB to
+  watch it happen. If you run a header-powered board, this is the release to tell
+  us about.
+
+- **The ESP32-C5 companion image is still unexercised.** The classic-ESP32
+  (`esp32wroom`) build is hardware-tested; the C5 one is compile-verified only.
+
 ## v0.77
 
 **Net Guardian can now tell you what an attack IS, not just that it happened.**
