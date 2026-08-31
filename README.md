@@ -2,7 +2,7 @@
   <img src="media/logo.png" width="560" alt="FlipDeFlock">
 </p>
 
-<p align="center"><em>The Swiss Army knife of ALPR/Anti-Stalking apps.</em></p>
+<p align="center"><em>Find the cameras that are watching you.</em></p>
 
 FlipDeFlock is a Flipper Zero app that pairs the Flipper with an ESP32 board to
 survey the radio around you for surveillance cameras: Flock Safety and other ALPR
@@ -302,13 +302,13 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
-**v0.79** - **A camera detector again.** Net Guardian, the BLE / Tracker scan and
-the Wi-Fi attack detection have been removed. The name says what the app does:
-find ALPR cameras, police body/in-car equipment and acoustic sensors, geotag
-them, and report them. The personal-safety features are moving to a separate
-tool. Camera detection itself is unchanged. Two side effects worth knowing:
-the app is now **receive-only with no exceptions** -- Ping and Ring were the only
-things it ever transmitted -- and your **companion firmware does not need
+**v0.79** - **A camera detector again.** The name says what the app does, so the
+app now does only that: find ALPR cameras, police body/in-car equipment and
+acoustic sensors, geotag them, and report them. The network-defence and
+Bluetooth-device screens have been removed and moved to a separate project.
+Camera detection itself is unchanged. Two side effects worth knowing: the app is
+now **receive-only with no exceptions** -- the two removed screens held the only
+actions that ever transmitted -- and your **companion firmware does not need
 reflashing**, because the firmware was not touched.
 
 **v0.78** - **The app powers the companion for you.** The Flipper's GPIO 5V rail
@@ -335,260 +335,10 @@ Also: a **card that says what just beeped**, with OK to jump straight to it; a
 nameless row shows the vendor instead of a raw MAC (`Flock 00:00:02`, not
 `B4:1E:52:00:00:02`); and Help opens on the row marks rather than on GPS faults.
 
-**v0.74** - **A false positive users actually hit, and a Net Guardian you can
-point at one network.** A T-Mobile hotspot was being reported as a *Likely* ALPR
-camera. Two causes: the built-in OUI list is mostly chip vendors rather than
-Flock — checked against the IEEE registry, 21 entries belong to **Liteon** and
-only `b4:1e:52` to Flock Safety itself — and two of them were worse still,
-`48:27:ea` being **Samsung** and `a4:cf:12` **Espressif**. Both are demoted to the
-seed file. The deeper cause was the ladder: *Flock OUI + wildcard probe* scored
-**Likely**, and a wildcard probe is simply what a phone scanning for Wi-Fi looks
-like. The companion now needs a **sustained probe rate** first — a fielded camera
-probes roughly every 125 ms, a phone emits a burst and goes quiet. **This half
-needs a companion reflash to take effect.**
-
-**Net Guardian can guard one network** instead of everything in range: press
-**Right**, pick an access point, and only deauths aimed at that BSSID and evil
-twins of that SSID feed the score. If no networks are listed yet, a **Scan for
-networks** row runs one and the list fills in place. The choice persists.
-
-Also new: **Axon Enterprise detection** as its own device class, tagged `AX`.
-Registry-verified (IEEE `00:25:df`, Bluetooth SIG `0x034D`) but never
-field-observed, and the docs say so. *(The label shipped here read "body/in-car
-kit" because Axon made only equipment that moved with a person; v0.77 corrected
-it after Axon put fixed ALPR cameras on the same OUI.)*
-
-**v0.73** - **RogueMaster no longer fails at launch with `Missing Imports`.**
-Optional phone-GPS symbols are resolved only when the Phone source is used, so
-firmware variants without that optional service can still load the app and show
-`!FW` when Phone GPS is unavailable.
-
-**v0.72** - **A retracted false-positive OUI is out of the tables again.**
-`f8:a2:d6` was withdrawn upstream ("hit on a Sony Media Player") and dropped for
-v0.44, but a commit that reflowed the OUI tables put it back, and it shipped in
-**v0.67 through v0.71**. On those builds an unrelated consumer device is reported as
-a *Likely* ALPR camera just for sending the wildcard probe requests every Wi-Fi
-client sends. The parity gate stayed green the whole time because it only compared
-the two copies of the table to each other, and both had drifted the same way — so it
-now also fails on a stale count comment and on any retracted prefix reappearing, and
-the host tests assert the same list from the matcher side. Also fixed: the shipped
-`signatures.example.json` no longer contains an SSID pattern that would mark
-`Flock-Guest` as CONFIRMED if you copied the template as instructed.
-
-**v0.71** - **Nightly builds.** `main` is published daily to a rolling `nightly`
-prerelease when something changes, so there is always a build between tags: one to
-test a fix before it is tagged, and one to fall back to when a tag turns out to have
-a problem. Stable is untouched — nightlies never become "latest". No app behaviour
-changes. Also: superseded CI runs are cancelled rather than queued behind their own
-replacements.
-
-**v0.70** - **Looking at a detection no longer destroys it.** Opening any device's
-detail screen took the ESP link down on the way in, so Wi-Fi, BLE, deauth and GPS
-were all offline while you read it, and pressing Back cleared the table you had
-just been looking at. Affected every scan screen, and v0.69's fix for it did not
-hold. There is now a `.fap` per firmware, so Unleashed and RogueMaster users no
-longer get "app is old" from a file that was never built for them.
-
-**v0.69** - **Ping and Ring for a validated tracker**, plus `SHA256SUMS.txt` on
-every release so an official build can be verified. Its headline fix, a tagged
-device surviving a Back press, did not actually work; that is fixed in v0.70.
-
-**v0.68** - **The Locator now gives a usable closer/farther reading.** It showed the
-last raw RSSI sample, which swings too hard to follow; it shows the smoothed level
-now, with retuned smoothing and a wider companion sampling window to suit how rarely
-a channel-hopping target is heard.
-
-**v0.67** - **A bare OUI match is no longer a detection.** The list is mostly shared
-silicon-vendor prefixes, and Flock cameras stopped acting as access points around
-December 2025, so an OUI hit on a beacon was never evidence of a camera. Also adds
-the missing OUI `f8:a2:d6`.
-
-**v0.66** - **"Evil twin" now requires a security downgrade**, not just any auth-mode
-difference. The old rule fired on WPA2/WPA3 transition mode, i.e. ordinary modern
-networks. The Suspicious list also shows which BSSID is the open one instead of just
-naming the SSID.
-
-**v0.65** - **The asset pack now ships with releases** as `flipdeflock_asset_pack.zip`,
-so the desktop animations can actually be installed without cloning the repo.
-
-**v0.64** - **Asset pack gains a hoodie-kicks-the-camera-pole animation**, a tribute
-to [@h00die](https://github.com/h00die). The on-screen version is also derived from
-a single source now, so it can never disagree with the build it came from.
-
-**v0.63** - **Help & Warnings is readable.** It shipped with prose hand-broken
-mid-sentence; every line is now a short standalone phrase, opening with a summary
-table of the GPS badge states.
-
-**v0.62** - **Help & Warnings**, a new main-menu page explaining every mark the app
-can show and how to fix the ones that matter. A GPS fault also now explains itself
-on the scan screen, with the setting to change, dismissible with OK.
-
-**v0.61** - **GPS fault badges no longer start with "GPS"**, which was being read as
-the opposite of what it meant. They now name the fix: `!PORT`, `!PIN`, `!FW`. The
-Wi-Fi glyph is also tightened so it reads as one mark.
-
-**v0.60** - **The Flock header uses the Wi-Fi and Bluetooth glyphs** instead of the
-letters `rx` and `b`, and the sub-line is now measured against the GPS badge so no
-counter can ever grow into it.
-
-**v0.59** - **Settings gains `Test alert`**: press Left/Right to fire the real
-detection alert with your real settings. If it is silent the fault is the Flipper's
-own Notifications settings or Alert on hit being off, not the detection side.
-
-**v0.58** - **The version is on the main menu and About.** The Flock header also gains
-`a<n>`, the count of alerts actually delivered, so "no beep" can be told apart from
-the Flipper's own notification settings swallowing it; and `b-` now means no BLE scan
-has completed yet, as distinct from `b0` meaning one ran and heard nothing.
-
-**v0.57** - **Screen icons in the title bars.** A camera on Flock, a shield on Net
-Guardian, a crosshair on the Locator, with `FLOCK/ALPR` shortened to `FDF` to hand
-header width back to the counters. Also reclaims 156 bytes from the Settings pin
-picker.
-
-**v0.56** - **The Flock header shows live activity, not a total that only grows.**
-`rx<n>/s` is the Wi-Fi frame rate, `b<n>` is BLE adverts this session (the screen
-previously showed nothing about BLE at all), and `!r<n>` means the companion
-restarted - which used to be hidden, appearing only as the count sliding back
-toward zero.
-
-**v0.55** - **ESP32-C5 correctness.** The **GPS pin picker no longer offers pins that
-can cut the link** - it was a hardcoded classic-ESP32 list, and on a C5 four of those
-pins do not exist, two are the flash bus and one is UART0 itself. The board now
-reports its own usable pins. The companion's guard is likewise derived from the
-chip's own headers rather than assuming a pinout. And **Band is now a Settings item
-defaulting to 2.4 GHz**: a C5 previously swept 41 channels by default, revisiting any
-given camera a third as often, which is why cameras were being missed.
-
-**v0.54** — **Three bug fixes, one of them ours.** **Alerts never fired for a camera
-you had already saved**, because restored entries came back with their alert latch
-set and nothing cleared it, so turning on Save Hits silently disabled alerts for
-every device you had driven past. **Net Guardian destroyed your Flock detections** on
-entry and then persisted the empty table over `hits.csv`, so a reboot could not
-recover them; it never needed to clear that table at all. And **`hits.csv` is no
-longer deleted as a side effect of an empty table** — a v0.53 regression that turned
-the Net Guardian bug into permanent data loss. Also, the GPS badge now distinguishes
-`GPS?` (companion never answered — reflash) from `GPS!` (it refused the pin — change
-the pin), instead of sitting on "searching" forever.
-
-**v0.53** — **Two UI requests, both verified on hardware.** You can now **remove a
-detection** from the detail screen (Left, then confirm) — persistence had made a false
-positive permanent, and the delete writes through to the card immediately. Every hit
-also carries a **Wi-Fi or Bluetooth glyph** on the list and detail screens, since which
-radio saw a device was otherwise unknowable from the row. **Fixed:** deleting the last
-stored detection now removes `hits.csv` instead of restoring everything on next launch,
-and long SSIDs no longer run off the right edge of a list row.
-
-**v0.52** — **GPS off the companion board**, plus two bugs that made working features
-look broken. Settings gains a **GPS source** choice (`Flipper` / `Companion`) and the
-ESP pin the module's TX lands on — on boards that wire GPS to the ESP32 there was no
-way to use it before, since the Flipper's UART pins simply are not connected to it
-(needs companion firmware v0.52+). **Fixed:** detection alerts never fired while the
-**Locator** was open, the screen you are most likely to be watching during a hunt; the
-companion dropped every GPS sentence that arrived during a BLE scan, so wardriving lost
-fixes; flashing the companion failed before writing a byte on slower flash chips; and a
-successful flash ended with a `COMMAND_FAILED` line that contradicted the `Verified OK.`
-above it.
-
-**v0.51** — **A quarter of the memory footprint, gone.** Users on heavier firmware were
-being refused at launch with *"Not enough RAM to run the app"*
-([#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5)); the app image is now
-**86,810 → 65,054 bytes (−25.1%)**. **Breaking: the NFC / RFID Audit and WiFi Audit
-screens are removed** — this app detects surveillance hardware, and those were 13.4 KB
-of an image that was failing to load. **Net Guardian is unaffected**: it still runs the
-Wi-Fi sweep and still flags evil-twin APs, because its score only reaches ELEVATED when
-two independent radios agree. The QR encoder now loads on demand from a plugin bundled
-inside the `.fap` (still a single-file install). Cheaper trig and tighter detection
-structs make up the rest. **Fixed:** *Share to DeFlock* had reported "No marked cameras"
-no matter what was marked, since v0.48.
-
-**v0.50** — Finishes a v0.49 fix that only landed on one of the three scanner
-screens. **No detection logic changed.** The WiFi Audit and BLE / Tracker lists were
-still swapping the signal bars for raw `-70dB` text on the selected row, above a
-comment describing the very behaviour v0.49 had removed — so the mixed-notation
-problem [#5](https://github.com/ReconGrunt/FlipDeFlock/issues/5) reported outlived
-the release meant to fix it, and v0.49's claim that *every* list was corrected was
-wrong. Both lists now draw bars on every row; the exact dBm is still on each detail
-screen. README screenshots are also refreshed for the v0.49 UI.
-
-**v0.49** — A UI pass over the Flock/ALPR screens, entirely from a field report by
-[@h00die](https://github.com/h00die) on an ESP32-C5 card. **No detection logic
-changed** — this is about reading and acting on a hit. The detail screen now answers
-*why* something was flagged with a `Method:` line (`OUI + beacon`, `SSID + beacon`,
-`BLE mfg ID`), re-derived locally rather than taken on the companion's word, so an
-OUI-prefix lead and an SSID-pattern match are no longer both just "Possible". That
-screen is a proper view now: one labelled field per line, scrollable, with real
-signal bars — the old run-on line wrapped mid-word. **Lock In** (Right on any
-detection) jumps straight into the Locator's homing HUD for that device instead of
-making you mark it and hunt for it in a list. **Alert level** in Settings picks the
-lowest confidence that may buzz (`Any` / `Likely` / `Confirm`); the default is
-unchanged, and `Any` is opt-in because it will raise false positives. Also: the
-header stopped printing the channel and hit count twice, GPS is a filled/hollow
-badge instead of `G:3`, and signal strength is drawn as bars everywhere — the
-selected row used to fall back to raw dB text because the bars were being forced to
-black and rendered invisible.
-
-**v0.48** — A false positive on the BLE side, and a bug that quietly switched off four
-features. BLE devices were shown as **CONFIRMED** Flock on nothing more than a
-shared silicon-vendor OUI (Espressif, Liteon), so ordinary ESP32 hardware was
-announced as a surveillance camera — the same over-claim as v0.47, on a path that
-fix never covered. **Expect fewer things flagged**: without a Flock-specific tell
-they now read Possible. Separately, a BLE device's freshness timestamp only updated
-when GPS had a fix, and GPS is off by default, so the "Flipper near" signal, the
-Guardian counter, the anomaly window and the "FOLLOWING you" timer all silently
-expired ~90 s into every session. Also: companion hardening (a truncated SSID
-element was reported as a hidden network — reflash to get it), dropped serial bytes
-no longer corrupt a record silently, `flock_score()` deleted for having no callers,
-first-ever tests for the BLE decoder and the whole Marauder backend (639 → 763
-checks), a CI gate so the two OUI tables cannot drift apart, and ~5.9 KB of RAM
-reclaimed. On the companion side: it **builds on Arduino core 3.x again** (it had
-stopped compiling entirely for anyone with a current install — thanks
-[@h00die](https://github.com/h00die)), CI now guards that on every push instead of
-only on tags, and there is an **experimental ESP32-C5 dual-band build** that scans
-5 GHz as well as 2.4. Nobody here owns a C5, so that one is compile-verified only.
-
-**v0.47** — False-positive fix; **upgrade if you're on v0.46**. Networks whose name
-merely contains `flock-` (`Flock-Guest`, `Flock-Safety-Corp`, `Flock-12345`) were
-shown as CONFIRMED — the anchored SSID rule existed and was tested, but nothing on
-the default code path called it. Now fixed on both sides: the companion's matcher is
-anchored, and the app re-derives any claimed CONFIRMED itself, so an already-flashed
-companion is corrected without a reflash.
-
-**v0.46** — Detects **SoundThinking / ShotSpotter acoustic sensors** as a separate
-device class (tagged `ST`, never folded into the camera list), and reports
-**hidden-SSID beaconing** — the behaviour Flock moved to when broadcast-SSID
-scanning stopped working. Hidden is shown as an observation, not scored: consumer
-routers hide SSIDs too. Also six more candidate OUIs in the unverified seed file,
-channel hop extended to 1-13, and a bench emitter that exercises every confidence
-rung so changes stop being verified by compiler alone.
-
-**v0.44** — Signature quality. The OUI list now tracks a curated upstream table with
-per-prefix status instead of a flat one that couldn't record doubt: `f8:a2:d6` is
-dropped (upstream retracted it after a false hit on a Sony media player), and two
-uncorroborated candidates ship in a new `docs/signatures.seed.json` rather than the
-trusted built-ins. A 1,200-prefix bulk scrape was reviewed and rejected.
-
-**v0.43** — Precision, correctness, and a test safety net; no new screens. Only the
-real `Flock-` + 6-hex provisioning name Confirms now, and an OUI + broadcast-probe
-match caps at Likely. Fixes across NFC (verdict binds to the card actually
-presented), GPS (no stale fix, checksum-verified NMEA), and report escaping (a
-hostile SSID/BLE name can't break a CSV column or inject a KML element). Adds a
-291-check host unit-test suite wired into CI and a companion wire-protocol version
-handshake.
-
-**v0.42** — Catch MAC-randomizing cameras via probe IE fingerprints, updatable from
-`signatures.json` (`ie_fps`) without a rebuild; each detection's `IE-fp:` is shown
-so you can harvest it from a confirmed unit.
-
-**v0.41** — Locator (find a marked device by signal) and a Suspicious list on the
-Net Guardian.
-
-**v0.34–v0.39** — Net Guardian: the always-on fused watch face, then Flipper /
-attack-tool / opt-in anomaly detection on top of deauth floods and evil-twin APs.
-
-**v0.25** — Positive Raven (audio sensor) labeling, and the updatable
-`signatures.json` database.
-
-Full history in [changelog.md](changelog.md).
+Older releases (v0.25-v0.74) are in **[changelog.md](changelog.md)** and on the
+[Releases page](../../releases). Builds before v0.79 also carried network-defence
+and Bluetooth-device screens; those moved to a separate project, and this app is
+cameras-only from v0.79 on.
 
 ## Layout
 
@@ -605,7 +355,8 @@ helpers/
   gps_link / gps_parser              NMEA GPS reader (2nd UART)
   gps_rpc / gps_rpc_convert          phone GPS via the Unleashed RPC location service
   recon_report / report_escape       Markdown + GeoJSON + KML writers
-  watchscore / scan_session          camera-pressure score, scan lifecycle
+  scan_session / alerts              scan lifecycle, detection alert gating
+  flock_ble / oui_vendor             BLE Flock signatures, IEEE vendor lookup
 lib/esp-serial-flasher/  vendored Espressif flasher (Apache-2.0)
 lib/qrcodegen/           vendored Nayuki QR Code generator (MIT)
 esp32_companion/         universal ESP32 firmware + flashing guide
