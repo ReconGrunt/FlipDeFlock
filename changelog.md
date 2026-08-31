@@ -1,5 +1,35 @@
 # Changelog
 
+## v0.80
+
+**The Support screen's Bitcoin QR never actually worked.** It fell back to a
+"QR n/a" placeholder every time -- the screen never mapped the QR encoder
+plugin in, the one step every other QR screen in the app performs on enter.
+
+### Fixed
+
+- **Support's QR now renders.** Loads the encoder the same way Share to
+  DeFlock does, and drops it on exit.
+- **The address text shown below a QR, for when the scan fails, was itself
+  broken.** It was positioned a fixed distance from the QR's maximum possible
+  size rather than from where the actual (much smaller) code ends, so at most
+  one line of it was ever visible on this screen's 64px height. Also affected
+  Share to DeFlock's camera-tag summary. Both now measure the real edge of the
+  rendered grid.
+
+### Added
+
+- **Ethereum, Litecoin and Bitcoin Cash donation QRs.** README.md has listed
+  all four addresses for a while; only Bitcoin was ever wired into the app.
+  Support is now a paged list, one QR per currency -- Up/Down or Left/Right to
+  switch, "n/m" in the header.
+
+### Verified
+
+- All four QR codes confirmed encoder-loaded and scan-shaped on a Flipper
+  Zero, and every wrapped address read back off the screen character-by-
+  character against README.md's published values.
+
 ## v0.79
 
 **FlipDeFlock is a camera detector again.** Net Guardian, the BLE / Tracker scan

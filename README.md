@@ -302,6 +302,16 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.80** - **The Support screen's Bitcoin QR never actually worked** -- it fell
+back to a "QR n/a" placeholder every time, because the screen never loaded the QR
+encoder plugin the way every other QR screen does. Fixed, and while fixing it,
+**Ethereum, Litecoin and Bitcoin Cash QRs were added** alongside Bitcoin -- all
+four addresses have been in README.md's funding table for a while, only Bitcoin
+was ever wired into the app. Support is now a paged list (Up/Down or Left/Right).
+Also fixed: the address text shown below a QR for when the scan fails was only
+ever showing one line on this screen's 64px height; it now shows the full
+address.
+
 **v0.79** - **A camera detector again.** The name says what the app does, so the
 app now does only that: find ALPR cameras, police body/in-car equipment and
 acoustic sensors, geotag them, and report them. The network-defence and
