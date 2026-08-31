@@ -127,10 +127,9 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             m->u.flock.hidden);
         break;
     case EspMsgDeauthTarget:
-        recon_app_add_deauth_target(app, m->u.deauth.bssid, m->u.deauth.channel);
-        break;
     case EspMsgAttack:
-        recon_app_set_attack(app, m->u.attack.kind, m->u.attack.value);
+        // Attack detection moved to Aegis. The universal companion still reports
+        // DA/ATK lines; FlipDeFlock (cameras only) ignores them.
         break;
     case EspMsgLocate:
         recon_app_set_locate_rssi(app, m->u.locate.rssi);

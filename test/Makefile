@@ -23,9 +23,9 @@ TESTS   := test_flock_db.c test_watchscore.c test_esp_parser.c \
            test_detect_rules.c test_report_escape.c test_gps_parser.c \
            test_gps_rpc_convert.c test_report_fmt.c \
            test_flock_store.c test_flock_ble.c test_oui_vendor.c test_marauder_scan.c \
-           test_fast_trig.c test_tracker_rules.c test_attack_triage.c test_main.c
+           test_fast_trig.c test_tracker_rules.c test_main.c
 HEADERS := test.h mocks/core/string.h ../helpers/tracker_rules.h \
-           ../esp32_companion/flock_companion/tracker_rules.h ../helpers/attack_triage.h
+           ../esp32_companion/flock_companion/tracker_rules.h
 
 BIN := run_tests
 

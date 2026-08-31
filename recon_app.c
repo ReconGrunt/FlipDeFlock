@@ -12,7 +12,6 @@
 #include "helpers/flock_store.h"
 #include "helpers/tracker_rules.h"
 #include "helpers/scan_session.h"
-#include "helpers/attack_triage.h"
 #include "helpers/report_fmt.h"
 
 #include <math.h>
@@ -622,30 +621,6 @@ void recon_app_ble_end(ReconApp* app) {
     furi_mutex_release(app->mutex);
 }
 
-void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel) {
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    uint32_t now = furi_get_tick();
-    DeauthTarget* t = NULL;
-    for(size_t i = 0; i < app->deauth_count; i++) {
-        if(memcmp(app->deauth[i].bssid, bssid, 6) == 0) {
-            t = &app->deauth[i];
-            break;
-        }
-    }
-    if(!t && app->deauth_count < RECON_DEAUTH_MAX) {
-        t = &app->deauth[app->deauth_count++];
-        memset(t, 0, sizeof(DeauthTarget));
-        memcpy(t->bssid, bssid, 6);
-        t->first_tick = now; // span starts here (attack_triage_status reads it)
-    }
-    if(t) {
-        t->count++;
-        if(channel) t->channel = channel;
-        t->last_tick = now;
-    }
-    furi_mutex_release(app->mutex);
-}
-
 void recon_app_wifi_begin(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->wifi_count = 0;
@@ -739,33 +714,6 @@ void recon_app_wifi_end(ReconApp* app) {
 #define WATCH_ANOMALY_RSSI_MIN (-55)
 #define WATCH_ANOMALY_MIN_SEEN 3
 
-void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value) {
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    uint32_t now = furi_get_tick();
-    // A gap longer than the freshness window means the previous episode ended;
-    // start a new span (and re-arm the evidence log) rather than stretching it.
-    if(app->esp_attack_tick == 0 || (now - app->esp_attack_tick) > WATCH_ATTACK_FRESH_MS) {
-        app->esp_attack_first_tick = now;
-        app->esp_attack_logged = false;
-    }
-    app->esp_attack_tick = now;
-    app->esp_attack_value = value;
-    // BLE-spam is the one BLE-borne signature; beacon/probe floods are Wi-Fi.
-    app->esp_attack_ble = (strncmp(kind, "ble", 3) == 0 || strncmp(kind, "BLE", 3) == 0);
-    // Map the wire kind to a short, screen-friendly label for the breakdown.
-    const char* label = "attack tool";
-    if(strstr(kind, "ble") || strstr(kind, "BLE"))
-        label = "BLE-spam";
-    else if(strstr(kind, "beacon"))
-        label = "beacon flood";
-    else if(strstr(kind, "probe"))
-        label = "probe flood";
-    strncpy(app->esp_attack_kind, label, sizeof(app->esp_attack_kind) - 1);
-    app->esp_attack_kind[sizeof(app->esp_attack_kind) - 1] = '\0';
-    app->esp_connected = true;
-    furi_mutex_release(app->mutex);
-}
-
 bool recon_ble_is_anomaly(const BleDevice* e, uint32_t now) {
     // Unnamed + no manufacturer id + no recognized category + strong + repeatedly
     // seen + fresh. Shared by the scorer and the Guardian sus-list so they agree.
@@ -849,114 +797,6 @@ void recon_app_set_ble_action(
 // How often Net Guardian re-buzzes while an attack stays active, in persistent
 // alert mode. Slow enough not to be maddening, fast enough to notice.
 #define GUARD_ALERT_REPEAT_MS 20000u
-
-/** Append one attack record to attacks.csv (best-effort; a failed write is not
- *  fatal to the scan). Header is written when the file is first created. */
-static void recon_attack_log_line(ReconApp* app, const char* line) {
-    if(!app->storage) return;
-    File* f = storage_file_alloc(app->storage);
-    if(storage_file_open(f, RECON_ATTACKS_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
-        if(storage_file_size(f) == 0) {
-            const char* hdr = "# FlipDeFlock attacks v1\nepoch,kind,target,channel,count,dur_s\n";
-            storage_file_write(f, hdr, strlen(hdr));
-        }
-        storage_file_write(f, line, strlen(line));
-    }
-    storage_file_close(f);
-    storage_file_free(f);
-}
-
-/**
- * Per-tick Net Guardian attack handling: count the ACTIVE (triaged, not just
- * counted) attacks, write any newly-active ones to the evidence log once, and
- * drive the escalated alert. Called from recon_app_watchscore_tick after the
- * fused-score alert. Returns nothing; publishes the active count on the app.
- *
- * The evidence log is the operator's record that "my network was attacked at
- * this time" -- defensive, not a movement trail, so unlike hits.csv it defaults
- * ON. Still a toggle (guard_evidence) for anyone who wants nothing written.
- */
-static void recon_app_guard_attacks(ReconApp* app) {
-    // Snapshot + mark-logged under the lock; write files and buzz outside it.
-    struct {
-        char line[96];
-    } pending[RECON_DEAUTH_MAX + 1];
-    unsigned n_pending = 0, active = 0;
-
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    uint32_t now = furi_get_tick();
-    bool log_on = app->settings.guard_evidence;
-    uint32_t epoch = furi_hal_rtc_get_timestamp();
-
-    for(size_t i = 0; i < app->deauth_count; i++) {
-        DeauthTarget* d = &app->deauth[i];
-        AttackStatus st =
-            attack_triage_status(d->count, d->first_tick, d->last_tick, now, 0, 0, 0);
-        if(st != AttackStatusActive) {
-            if(st == AttackStatusEnded) d->logged = false; // re-arm for a future episode
-            continue;
-        }
-        active++;
-        if(log_on && !d->logged && n_pending < RECON_DEAUTH_MAX) {
-            char mac[18];
-            fmt_mac(mac, sizeof(mac), d->bssid);
-            uint32_t secs = (d->last_tick - d->first_tick) / 1000;
-            snprintf(
-                pending[n_pending].line, sizeof(pending[n_pending].line),
-                "%lu,deauth,%s,%u,%lu,%lu\n", (unsigned long)epoch, mac, d->channel,
-                (unsigned long)d->count, (unsigned long)secs);
-            n_pending++;
-            d->logged = true;
-            app->guard_evidence_n++;
-        }
-    }
-
-    if(app->esp_attack_tick) {
-        AttackStatus st = attack_triage_status(
-            app->esp_attack_value, app->esp_attack_first_tick, app->esp_attack_tick, now, 1, 0, 0);
-        if(st == AttackStatusActive) {
-            active++;
-            if(log_on && !app->esp_attack_logged && n_pending <= RECON_DEAUTH_MAX) {
-                uint32_t secs = (app->esp_attack_tick - app->esp_attack_first_tick) / 1000;
-                char kind[16];
-                strncpy(kind, app->esp_attack_kind, sizeof(kind) - 1);
-                kind[sizeof(kind) - 1] = '\0';
-                snprintf(
-                    pending[n_pending].line, sizeof(pending[n_pending].line),
-                    "%lu,%s,-,0,%lu,%lu\n", (unsigned long)epoch, kind,
-                    (unsigned long)app->esp_attack_value, (unsigned long)secs);
-                n_pending++;
-                app->esp_attack_logged = true;
-                app->guard_evidence_n++;
-            }
-        }
-    }
-
-    uint8_t alert_mode = app->settings.guard_alert;
-    uint32_t last_alert = app->guard_alert_tick;
-    // Update the alert clock under the lock so the read/modify is atomic.
-    bool buzz = false;
-    if(active > 0) {
-        if(last_alert == 0) {
-            buzz = (alert_mode != GuardAlertOff); // rising edge into an active attack
-            app->guard_alert_tick = now;
-        } else if(alert_mode == GuardAlertPersistent && (now - last_alert) >= GUARD_ALERT_REPEAT_MS) {
-            buzz = true;
-            app->guard_alert_tick = now;
-        }
-    } else {
-        app->guard_alert_tick = 0; // cleared; next attack re-arms the edge
-    }
-    app->guard_active_atk = (uint8_t)(active > 255 ? 255 : active);
-    furi_mutex_release(app->mutex);
-
-    for(unsigned i = 0; i < n_pending; i++) recon_attack_log_line(app, pending[i].line);
-
-    if(buzz && app->notifications) {
-        notification_message(app->notifications, &sequence_double_vibro);
-        if(app->settings.sound) notification_message(app->notifications, &sequence_error);
-    }
-}
 
 void recon_app_watchscore_tick(ReconApp* app) {
     WatchInputs in;
@@ -1111,7 +951,6 @@ void recon_app_watchscore_tick(ReconApp* app) {
     }
 
     // Attack triage, evidence log and escalated alert (Net Guardian, passive).
-    recon_app_guard_attacks(app);
 }
 
 // ---- settings ------------------------------------------------------------
@@ -1611,8 +1450,6 @@ static ReconApp* recon_app_alloc(void) {
     flock_map_view_set_app(app->flock_map_view, app);
     app->deflock_qr_view = deflock_qr_view_alloc();
     deflock_qr_view_set_app(app->deflock_qr_view, app);
-    app->guardian_view = guardian_view_alloc();
-    guardian_view_set_app(app->guardian_view, app);
     app->ble_list_view = ble_list_view_alloc();
     ble_list_view_set_app(app->ble_list_view, app);
     app->locator_view = locator_view_alloc();
@@ -1637,8 +1474,6 @@ static ReconApp* recon_app_alloc(void) {
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewDeflockQr, deflock_qr_view_get_view(app->deflock_qr_view));
     view_dispatcher_add_view(
-        app->view_dispatcher, ReconViewGuardian, guardian_view_get_view(app->guardian_view));
-    view_dispatcher_add_view(
         app->view_dispatcher, ReconViewBleList, ble_list_view_get_view(app->ble_list_view));
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewLocator, locator_view_get_view(app->locator_view));
@@ -1657,7 +1492,6 @@ static void recon_app_free(ReconApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlockDetail);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlockMap);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewDeflockQr);
-    view_dispatcher_remove_view(app->view_dispatcher, ReconViewGuardian);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewBleList);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewLocator);
 
@@ -1669,7 +1503,6 @@ static void recon_app_free(ReconApp* app) {
     flock_detail_view_free(app->flock_detail_view);
     flock_map_view_free(app->flock_map_view);
     deflock_qr_view_free(app->deflock_qr_view);
-    guardian_view_free(app->guardian_view);
     ble_list_view_free(app->ble_list_view);
     locator_view_free(app->locator_view);
 

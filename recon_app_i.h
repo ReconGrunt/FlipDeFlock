@@ -26,7 +26,6 @@
 #include "views/flock_detail_view.h"
 #include "views/flock_map_view.h"
 #include "views/deflock_qr_view.h"
-#include "views/guardian_view.h"
 #include "views/ble_list_view.h"
 #include "views/locator_view.h"
 
@@ -99,7 +98,6 @@ typedef enum {
     ReconViewFlockDetail,
     ReconViewFlockMap,
     ReconViewDeflockQr,
-    ReconViewGuardian,
     ReconViewBleList,
     ReconViewLocator,
 } ReconView;
@@ -348,7 +346,6 @@ typedef struct {
     FlockDetailView* flock_detail_view;
     FlockMapView* flock_map_view;
     DeflockQrView* deflock_qr_view;
-    GuardianView* guardian_view;
     BleListView* ble_list_view;
     LocatorView* locator_view;
 
@@ -653,10 +650,8 @@ void recon_app_request_gps_cfg(ReconApp* app);
 void recon_app_gps_cfg_tick(ReconApp* app);
 
 /** Record a deauth attack target BSSID (thread-safe); dedups by BSSID. */
-void recon_app_add_deauth_target(ReconApp* app, const uint8_t bssid[6], uint8_t channel);
 
 /** Record an active attack-tool signature from the companion ATK line (thread-safe). */
-void recon_app_set_attack(ReconApp* app, const char* kind, uint32_t value);
 
 // Net Guardian HUD tallies (nearby Flippers / active attacks) are cached in
 // app->guardian_flip_n / guardian_atk_n by recon_app_watchscore_tick each tick,
