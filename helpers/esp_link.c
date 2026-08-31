@@ -133,19 +133,11 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
     case EspMsgLocate:
         recon_app_set_locate_rssi(app, m->u.locate.rssi);
         break;
-    case EspMsgAction: {
-        BleActionKind kind = BleActionNone;
-        if(strcmp(m->u.action.op, "PING") == 0) {
-            kind = BleActionPing;
-        } else if(strcmp(m->u.action.op, "RING") == 0) {
-            kind = BleActionRing;
-        }
-        if(kind != BleActionNone) {
-            recon_app_set_ble_action(
-                app, kind, m->u.action.status, m->u.action.have_rssi, m->u.action.rssi);
-        }
+    case EspMsgAction:
+        // Ping / Ring went with the tracker screen; FlipDeFlock transmits
+        // nothing at all now. The companion can still answer an ACT, so parse
+        // it and drop it rather than treating it as an unknown line.
         break;
-    }
     case EspMsgGpsNmea:
         // Only when the operator actually selected the companion as the GPS
         // source. A board that relays NMEA must not be able to override a GPS

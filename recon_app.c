@@ -616,6 +616,40 @@ void recon_app_wifi_end(ReconApp* app) {
     furi_mutex_release(app->mutex);
 }
 
+#define LOCATE_TREND_DB 2 /**< dB vs the smoothed average before we call it warmer/colder */
+
+void recon_app_set_locate_rssi(ReconApp* app, int8_t rssi) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->locate_rssi = rssi;
+    app->locate_tick = furi_get_tick();
+    app->locate_have = true;
+    app->esp_connected = true;
+    // Fold peak/EMA/trend on EVERY LOC line, not just on redraw -- LOC arrives
+    // faster than the display ticks, so folding in the draw callback dropped
+    // transient peaks between frames. rssi >= 0 is the reset/invalid sentinel.
+    if(rssi < 0) {
+        if(!app->locate_init) {
+            app->locate_peak = rssi;
+            app->locate_ema = (float)rssi;
+            app->locate_trend = 0;
+            app->locate_init = true;
+        } else {
+            if(rssi > app->locate_peak) app->locate_peak = rssi;
+            float d = (float)rssi - app->locate_ema;
+            app->locate_trend =
+                (int8_t)((d >= LOCATE_TREND_DB) ? 1 : (d <= -LOCATE_TREND_DB ? -1 : 0));
+            // Weighted 50/50, not 70/30. On the primary target -- a Flock camera
+            // -- readings land about once every 1.6 s, because the camera hops
+            // channels while probing and we listen on one. At 0.3 a new sample
+            // took five readings (~8 s) to move the needle, so the meter lagged
+            // far behind where the operator was standing. Each sample is scarce
+            // here, so each one has to count for more.
+            app->locate_ema = app->locate_ema * 0.5f + (float)rssi * 0.5f;
+        }
+    }
+    furi_mutex_release(app->mutex);
+}
+
 // ---- settings ------------------------------------------------------------
 
 static void recon_settings_defaults(ReconApp* app) {

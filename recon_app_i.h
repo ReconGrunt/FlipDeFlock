@@ -61,17 +61,6 @@ typedef enum {
     BleCatAxon = 7, /**< Axon body-worn / in-car police kit (SIG company id 0x034D) */
 } BleCat;
 
-/** How Net Guardian escalates when an attack is ACTIVE (not a blip).
- *  Order is persisted in settings.txt as an integer -- append only. */
-/** Explicit, user-triggered actions for a validated BLE tracker. */
-typedef enum {
-    BleActionNone = 0,
-    BleActionPing,
-    BleActionRing,
-} BleActionKind;
-
-#define RECON_BLE_ACTION_STATUS_LEN 24
-
 #define RECON_APP_FOLDER    EXT_PATH("apps_data/flipdeflock")
 #define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
 #define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
@@ -455,15 +444,6 @@ typedef struct {
     bool ble_scanning;
     bool ble_done;
     int ble_selected;
-    uint8_t ble_action_kind; /**< BleActionKind currently shown in the detail view */
-    bool ble_action_pending; /**< companion is processing the explicit action */
-    bool ble_action_done; /**< a companion result or local rejection is available */
-    bool ble_action_have_rssi;
-    int8_t ble_action_rssi;
-    uint32_t ble_action_tick; /**< timeout clock for the in-flight action */
-    uint32_t ble_action_seq; /**< changes whenever the action status changes */
-    uint32_t ble_action_render_seq; /**< GUI-side rendered sequence */
-    char ble_action_status[RECON_BLE_ACTION_STATUS_LEN];
 
     uint32_t guardian_since; /**< tick the Net Guardian session started (uptime) */
     uint8_t guardian_phase; /**< current rotating-sweep phase (0=flockcombo,1=ble,2=wifi) */
@@ -603,17 +583,6 @@ void recon_app_ble_add(
     size_t mfg_len,
     bool raven_gatt); /**< companion saw Raven-specific GATT services (0x3100-0x3500) */
 void recon_app_ble_end(ReconApp* app);
-
-/** Start an explicit tracker action; called only from a GUI button handler. */
-void recon_app_ble_action_begin(ReconApp* app, BleActionKind kind);
-
-/** Record a companion action result (ACT line), or a local rejection. */
-void recon_app_set_ble_action(
-    ReconApp* app,
-    BleActionKind kind,
-    const char* status,
-    bool have_rssi,
-    int8_t rssi);
 
 /** WiFi security scan results (thread-safe; called from the ESP worker). */
 void recon_app_wifi_begin(ReconApp* app);
