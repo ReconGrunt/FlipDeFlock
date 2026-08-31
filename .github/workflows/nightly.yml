@@ -250,8 +250,69 @@ jobs:
           path: build_esp/flipdeflock_companion_esp32wroom.bin
           if-no-files-found: error
 
+  # The ESP32-C5 (dual-band) companion, built on core 3.x. Separate job from the
+  # classic WROOM one above because the two cannot share a checkout: the WROOM
+  # image is pinned to core 2.0.17 (the field-proven release version) and the C5
+  # target only exists in core 3.x, and arduino-cli holds ONE version of
+  # esp32:esp32 at a time. The reason this is here at all: the C5 image ships in
+  # tagged releases, but the nightly was WROOM-only, so a C5 user testing an
+  # unreleased fix had no image to pair with it -- which is the whole point of a
+  # nightly. Marked EXPERIMENTAL in the filename because no one has run it on
+  # hardware; that warning travels with the download.
+  companion_c5:
+    needs: check
+    runs-on: ubuntu-latest
+    name: "Build flock_companion C5 .bin"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup arduino-cli
+        uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+
+      - name: Install ESP32 core 3.x
+        run: |
+          retry() {
+            local n=1
+            until "$@"; do
+              if [ "$n" -ge 3 ]; then
+                echo "::error::failed after $n attempts: $*"
+                return 1
+              fi
+              echo "attempt $n failed: $* -- retrying in $((n * 10))s"
+              sleep $((n * 10))
+              n=$((n + 1))
+            done
+          }
+          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          retry arduino-cli core update-index
+          retry arduino-cli core install esp32:esp32
+
+      - name: Compile ESP32-C5 and merge (UNVERIFIED on hardware)
+        run: |
+          # Bootloader offset differs on the C5 (0x2000, not 0x1000), so the
+          # merge is driven by the core's flash_args rather than hardcoded
+          # numbers -- merge_esp_image.py reads them from the build path.
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32c5:PartitionScheme=huge_app \
+            --build-path "$PWD/build_c5_raw" \
+            --output-dir build_c5 \
+            esp32_companion/flock_companion
+          python -m pip install --quiet esptool
+          python tools/merge_esp_image.py \
+            build_c5_raw esp32c5 build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+
+      - name: Upload the C5 image for the publish job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-companion-c5-bin
+          path: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+          if-no-files-found: error
+
   publish:
-    needs: [build, companion]
+    needs: [build, companion, companion_c5]
     runs-on: ubuntu-latest
     name: "Publish the rolling nightly"
     steps:
@@ -277,18 +338,26 @@ jobs:
           name: nightly-companion-bin
           path: faps
 
+      - name: Collect the C5 companion image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: nightly-companion-c5-bin
+          path: faps
+
       # The .bin has to be here or the release is the half-build this job was
       # changed to stop publishing. Checked separately from the .fap count so
       # the error names which half went missing.
-      - name: Check the companion image is present
+      - name: Check both companion images are present
         run: |
           set -euo pipefail
-          if [ ! -s faps/flipdeflock_companion_esp32wroom.bin ]; then
-            echo "::error::companion image missing; the nightly would ship an app whose new detections cannot fire."
-            ls -lR faps || true
-            exit 1
-          fi
-          ls -l faps/flipdeflock_companion_esp32wroom.bin
+          for f in flipdeflock_companion_esp32wroom.bin flipdeflock_companion_esp32c5_EXPERIMENTAL.bin; do
+            if [ ! -s "faps/$f" ]; then
+              echo "::error::$f missing; the nightly would ship an app half its users cannot pair a companion to."
+              ls -lR faps || true
+              exit 1
+            fi
+          done
+          ls -l faps/flipdeflock_companion_esp32wroom.bin faps/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
 
       # The same set check release.yml runs. A nightly that publishes three .fap
       # files instead of four is a nightly that silently drops a firmware
@@ -369,7 +438,8 @@ jobs:
             --title "Nightly ($short)" \
             --notes-file notes.md \
             faps/*.fap \
-            faps/flipdeflock_companion_esp32wroom.bin
+            faps/flipdeflock_companion_esp32wroom.bin \
+            faps/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
 
           gh release view nightly --json isPrerelease,targetCommitish,assets \
             --jq '"prerelease=\(.isPrerelease) target=\(.targetCommitish) assets=\([.assets[].name]|join(", "))"'

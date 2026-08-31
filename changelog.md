@@ -40,6 +40,16 @@ get my esp card going. Then launch deflock."*
   fired every single time, on a device whose rail is fine. A genuine fault is
   still caught, by the firmware's own power service dropping the rail.
 
+### Testing
+
+- **Net Guardian's populated attack screen is now hardware-verified.** It was
+  host-tested only -- the triage logic was covered, but the on-device screen
+  with a live attack on it had never been rendered. `tools/flock_emitter` gained
+  a serial-toggled beacon-flood mode (`atk on` / `atk off`) for exactly this, and
+  the detail screen was confirmed against a real flood at both the `brief` and
+  the `ACTIVE` verdict (rate, a growing span, the Marauder/Pineapple attribution
+  and the advice text all rendering correctly).
+
 ### Needs field testing
 
 - **Nobody has yet watched a board come up on rail power.** Verified here: the
@@ -49,8 +59,12 @@ get my esp card going. Then launch deflock."*
   watch it happen. If you run a header-powered board, this is the release to tell
   us about.
 
-- **The ESP32-C5 companion image is still unexercised.** The classic-ESP32
-  (`esp32wroom`) build is hardware-tested; the C5 one is compile-verified only.
+- **The ESP32-C5 companion image has not been run on hardware.** It is now built
+  and attached to nightlies as well as tagged releases (it was tag-only before),
+  so a C5 user testing an unreleased fix finally has an image to pair with the
+  nightly `.fap`. But no one on the project owns a C5, so it is still
+  compile-verified only -- the classic-ESP32 (`esp32wroom`) build is the
+  hardware-tested one.
 
 ## v0.77
 
