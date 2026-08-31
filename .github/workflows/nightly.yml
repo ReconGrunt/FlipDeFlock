@@ -188,9 +188,32 @@ jobs:
 
       - name: Install ESP32 core
         run: |
+          # RETRY THE INDEX FETCH. downloads.arduino.cc reset the connection
+          # mid-release on 2026-08-30 ("Download failed: performing HEAD request
+          # ... read: connection reset by peer", then "Some indexes could not be
+          # updated"). That failed the C5 job, which meant its asset never
+          # attached, which made the SHA256SUMS job correctly refuse to publish a
+          # manifest with a missing file -- so one dropped TCP connection took out
+          # the whole release and needed a human to notice and re-run it.
+          #
+          # Nothing about that failure was our code, and nothing about it was
+          # worth a red release. Three attempts with a backoff, and the step still
+          # fails loudly if the index is genuinely unreachable.
+          retry() {
+            local n=1
+            until "$@"; do
+              if [ "$n" -ge 3 ]; then
+                echo "::error::failed after $n attempts: $*"
+                return 1
+              fi
+              echo "attempt $n failed: $* -- retrying in $((n * 10))s"
+              sleep $((n * 10))
+              n=$((n + 1))
+            done
+          }
           arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32@2.0.17
+          retry arduino-cli core update-index
+          retry arduino-cli core install esp32:esp32@2.0.17
 
       - name: Compile (classic ESP32 / WROOM)
         run: |
