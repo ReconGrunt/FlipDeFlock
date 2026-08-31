@@ -104,10 +104,7 @@ PluginHost* plugin_host_load(const char* app_id, uint32_t api_version, const voi
         // legitimate state. The caller shows "unavailable"; the log above now
         // names every path that was tried.
         FURI_LOG_E(
-            TAG,
-            "%s: no plugin in any of %u asset dirs",
-            app_id,
-            (unsigned)PLUGIN_ASSET_DIR_COUNT);
+            TAG, "%s: no plugin in any of %u asset dirs", app_id, (unsigned)PLUGIN_ASSET_DIR_COUNT);
         plugin_manager_free(manager);
         return NULL;
     }

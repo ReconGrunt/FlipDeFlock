@@ -120,8 +120,8 @@ void recon_scene_firmware_run_on_enter(void* context) {
     // user gets told the feature is unavailable and can back out. The likeliest
     // real cause is a card the firmware has not extracted app assets onto yet.
     g_fw_api = NULL;
-    g_fw_plugin =
-        plugin_host_load(FLASHER_PLUGIN_APP_ID, FLASHER_PLUGIN_API_VERSION, (const void**)&g_fw_api);
+    g_fw_plugin = plugin_host_load(
+        FLASHER_PLUGIN_APP_ID, FLASHER_PLUGIN_API_VERSION, (const void**)&g_fw_api);
     if(!g_fw_plugin || !g_fw_api) {
         plugin_host_free(g_fw_plugin);
         g_fw_plugin = NULL;

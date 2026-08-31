@@ -172,8 +172,7 @@ static const uint8_t axon_ouis[][3] = {
 bool axon_oui_match(const uint8_t* mac) {
     if(!mac) return false;
     for(size_t i = 0; i < AXON_OUI_COUNT; i++) {
-        if(mac[0] == axon_ouis[i][0] && mac[1] == axon_ouis[i][1] &&
-           mac[2] == axon_ouis[i][2]) {
+        if(mac[0] == axon_ouis[i][0] && mac[1] == axon_ouis[i][1] && mac[2] == axon_ouis[i][2]) {
             return true;
         }
     }
@@ -275,8 +274,13 @@ static const uint8_t ubicquia_ouis[][3] = {
  * NOT Motorola Mobility (Lenovo) -- see the trap list above.
  */
 static const uint8_t motorola_ouis[][3] = {
-    {0x00, 0x04, 0x7d}, {0x00, 0x18, 0x85}, {0x00, 0x1f, 0x92}, {0x4c, 0xcc, 0x34},
-    {0x10, 0x74, 0x6f}, {0xb8, 0xe2, 0x8c}, {0x9c, 0x86, 0x2b},
+    {0x00, 0x04, 0x7d},
+    {0x00, 0x18, 0x85},
+    {0x00, 0x1f, 0x92},
+    {0x4c, 0xcc, 0x34},
+    {0x10, 0x74, 0x6f},
+    {0xb8, 0xe2, 0x8c},
+    {0x9c, 0x86, 0x2b},
 };
 
 #define MOTOROLA_OUI_COUNT (sizeof(motorola_ouis) / sizeof(motorola_ouis[0]))
@@ -311,7 +315,8 @@ static const uint8_t verkada_ouis[][3] = {
  * NOT GENETEC Corporation (00:0a:b1) and NOT Netgenetech (d8:c0:68).
  */
 static const uint8_t genetec_ouis[][3] = {
-    {0x00, 0xbf, 0x15}, {0x0c, 0xbf, 0x15},
+    {0x00, 0xbf, 0x15},
+    {0x0c, 0xbf, 0x15},
 };
 
 #define GENETEC_OUI_COUNT (sizeof(genetec_ouis) / sizeof(genetec_ouis[0]))
@@ -373,8 +378,7 @@ static const FlockVendorTable* vendor_row_for_mac(const uint8_t* mac) {
     for(size_t t = 0; t < FLOCK_VENDOR_TABLE_COUNT; t++) {
         const FlockVendorTable* vt = &flock_vendor_tables[t];
         for(size_t i = 0; i < vt->count; i++) {
-            if(mac[0] == vt->ouis[i][0] && mac[1] == vt->ouis[i][1] &&
-               mac[2] == vt->ouis[i][2]) {
+            if(mac[0] == vt->ouis[i][0] && mac[1] == vt->ouis[i][1] && mac[2] == vt->ouis[i][2]) {
                 return vt;
             }
         }

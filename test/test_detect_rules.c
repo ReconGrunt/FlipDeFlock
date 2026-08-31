@@ -2,7 +2,7 @@
 // Copyright (c) 2026 ReconGrunt
 //
 // Tests for the pure detection rules extracted from recon_app.c (R3): geotag
-// hysteresis, the anti-stalking waypoint/span track, and the "following" AND-gate.
+// hysteresis and the Flock detection alert gate.
 #include "detect_rules.h"
 #include "test.h"
 
@@ -29,53 +29,6 @@ void suite_detect_rules(void) {
     CHECK(!flock_geotag_should_update(true, true, -44, -50)); // exactly +6 -> not strictly >
     CHECK(flock_geotag_should_update(true, true, -43, -50)); // +7 -> refresh
     CHECK(flock_geotag_should_update(true, true, -40, -50)); // clearly stronger
-
-    // --- ble_following_gate (AND of all four thresholds) --------------------
-    CHECK(ble_following_gate(4, 90000, 3, 150.0f)); // exactly at every threshold
-    CHECK(ble_following_gate(10, 120000, 5, 300.0f)); // comfortably past
-    CHECK(!ble_following_gate(3, 90000, 3, 150.0f)); // too few scans
-    CHECK(!ble_following_gate(4, 89999, 3, 150.0f)); // window too short
-    CHECK(!ble_following_gate(4, 90000, 2, 150.0f)); // too few waypoints
-    CHECK(!ble_following_gate(4, 90000, 3, 149.9f)); // span too small
-
-    // --- ble_track_fold_fix -------------------------------------------------
-    // Seed the first waypoint from a fresh (NAN) track.
-    BleTrack t = {
-        .first_lat = NAN,
-        .first_lon = NAN,
-        .last_wp_lat = NAN,
-        .last_wp_lon = NAN,
-        .waypoints = 0,
-        .max_span_m = 0.0f};
-    ble_track_fold_fix(&t, 0.0f, 0.0f);
-    CHECK_INT_EQ(t.waypoints, 1);
-    CHECK(nearf(t.last_wp_lat, 0.0f, 1e-6f));
-
-    // A fix within WAYPOINT_GAP_M does NOT advance the waypoint.
-    ble_track_fold_fix(&t, 0.0002f, 0.0f); // ~22 m
-    CHECK_INT_EQ(t.waypoints, 1);
-
-    // Created WITHOUT an origin (first_lat NAN): a far fix advances the waypoint
-    // but the span can't grow (no track origin to measure from).
-    ble_track_fold_fix(&t, 0.001f, 0.0f); // ~111 m from the last waypoint -> advance
-    CHECK_INT_EQ(t.waypoints, 2);
-    CHECK(nearf(t.max_span_m, 0.0f, 0.01f));
-
-    // A real "following" track: origin known, three >=50 m hops build the
-    // waypoint count and span up past the gate.
-    BleTrack tr = {
-        .first_lat = 0.0f,
-        .first_lon = 0.0f,
-        .last_wp_lat = 0.0f,
-        .last_wp_lon = 0.0f,
-        .waypoints = 1,
-        .max_span_m = 0.0f};
-    ble_track_fold_fix(&tr, 0.000600f, 0.0f); // ~67 m -> wp2, span ~67
-    ble_track_fold_fix(&tr, 0.001200f, 0.0f); // ~67 m hop -> wp3, span ~134
-    ble_track_fold_fix(&tr, 0.001800f, 0.0f); // ~67 m hop -> wp4, span ~200
-    CHECK_INT_EQ(tr.waypoints, 4);
-    CHECK(tr.max_span_m >= FOLLOW_MIN_SPAN_M);
-    CHECK(ble_following_gate(4, 90000, tr.waypoints, tr.max_span_m)); // now "following"
 
     // --- flock_alert_min_conf_rung (issue #5 configurable alert level) ------
     // The choice index maps to a confidence rung; anything unrecognised must land
@@ -149,32 +102,6 @@ void suite_detect_rules(void) {
     // A live entry re-seen in the SAME session is unaffected: still one alert per
     // device. Only the archived->live transition resets it.
     CHECK(!flock_alert_should_fire_ex(4, 4, true, false, 100000, 1000, true, dflt));
-
-    // --- wifi_rogue_pair: only a DOWNGRADE is evil-twin shaped ---------------
-    // esp wifi_auth_mode_t: 0 OPEN, 1 WEP, 2 WPA_PSK, 3 WPA2_PSK, 4 WPA_WPA2_PSK,
-    // 5 WPA2_ENT, 6 WPA3_PSK, 7 WPA2_WPA3_PSK.
-    //
-    // The attack: a clone you can join with no password, or with breakable
-    // crypto, standing in for a network you trust.
-    CHECK(wifi_rogue_pair(0, 3)); // open twin of WPA2
-    CHECK(wifi_rogue_pair(3, 0)); // order must not matter
-    CHECK(wifi_rogue_pair(0, 7)); // open twin of WPA2/WPA3
-    CHECK(wifi_rogue_pair(1, 6)); // WEP twin of WPA3 -- breakable, still a downgrade
-    CHECK(wifi_rogue_pair(5, 0)); // open twin of an enterprise network
-
-    // NOT rogue: the benign cases the old "any difference" rule shouted at.
-    // WPA2/WPA3 transition mode across two radios or two mesh nodes is an
-    // ordinary modern network, and calling it an evil twin is the kind of false
-    // positive that makes every later warning worth less.
-    CHECK(!wifi_rogue_pair(3, 7)); // WPA2_PSK vs WPA2_WPA3_PSK -- transition mode
-    CHECK(!wifi_rogue_pair(6, 7)); // WPA3_PSK vs WPA2_WPA3_PSK
-    CHECK(!wifi_rogue_pair(2, 3)); // WPA vs WPA2 -- mixed-generation mesh
-    CHECK(!wifi_rogue_pair(3, 4)); // WPA2 vs WPA/WPA2
-    CHECK(!wifi_rogue_pair(3, 3)); // identical, not a pair at all
-    // Both weak is a badly configured network, not a clone impersonating a
-    // secured one. Nothing is being downgraded.
-    CHECK(!wifi_rogue_pair(0, 0));
-    CHECK(!wifi_rogue_pair(0, 1));
 
     // --- esp_frames_rate: live activity, not a lifetime total (issue #5) -----
     CHECK_INT_EQ(esp_frames_rate(0, 100, 1000), 100); // 100 frames in 1 s

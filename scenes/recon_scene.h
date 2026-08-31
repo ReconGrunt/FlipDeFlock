@@ -11,8 +11,6 @@ typedef enum {
     ReconSceneReports,
     ReconSceneSettings,
     ReconSceneAbout,
-    ReconSceneBle,
-    ReconSceneBleDetail,
     ReconSceneFirmware,
     ReconSceneFirmwareRun,
     ReconSceneFlockMap,
@@ -34,8 +32,6 @@ void recon_scene_flock_on_enter(void* context);
 bool recon_scene_flock_on_event(void* context, SceneManagerEvent event);
 void recon_scene_flock_on_exit(void* context);
 
-
-
 void recon_scene_flock_detail_on_enter(void* context);
 bool recon_scene_flock_detail_on_event(void* context, SceneManagerEvent event);
 void recon_scene_flock_detail_on_exit(void* context);
@@ -55,14 +51,6 @@ void recon_scene_help_on_exit(void* context);
 bool recon_scene_about_on_event(void* context, SceneManagerEvent event);
 void recon_scene_about_on_exit(void* context);
 
-void recon_scene_ble_on_enter(void* context);
-bool recon_scene_ble_on_event(void* context, SceneManagerEvent event);
-void recon_scene_ble_on_exit(void* context);
-
-void recon_scene_ble_detail_on_enter(void* context);
-bool recon_scene_ble_detail_on_event(void* context, SceneManagerEvent event);
-void recon_scene_ble_detail_on_exit(void* context);
-
 void recon_scene_firmware_on_enter(void* context);
 bool recon_scene_firmware_on_event(void* context, SceneManagerEvent event);
 void recon_scene_firmware_on_exit(void* context);
@@ -78,8 +66,6 @@ void recon_scene_flock_map_on_exit(void* context);
 void recon_scene_deflock_handoff_on_enter(void* context);
 bool recon_scene_deflock_handoff_on_event(void* context, SceneManagerEvent event);
 void recon_scene_deflock_handoff_on_exit(void* context);
-
-
 
 void recon_scene_locator_on_enter(void* context);
 bool recon_scene_locator_on_event(void* context, SceneManagerEvent event);

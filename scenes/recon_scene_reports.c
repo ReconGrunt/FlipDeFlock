@@ -41,11 +41,7 @@ static void recon_scene_reports_build_menu(ReconApp* app) {
     // report is evidence about cameras and carries coordinates, this one is
     // evidence about the detector and must not.
     submenu_add_item(
-        submenu,
-        "False Positive Report",
-        ReportItemFalsePos,
-        recon_scene_reports_submenu_cb,
-        app);
+        submenu, "False Positive Report", ReportItemFalsePos, recon_scene_reports_submenu_cb, app);
     submenu_add_item(
         submenu, "Clear All Marks", ReportItemClear, recon_scene_reports_submenu_cb, app);
     // Erase the persisted hit log. Offered whenever the setting is on OR stored

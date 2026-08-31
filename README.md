@@ -5,18 +5,16 @@
 <p align="center"><em>The Swiss Army knife of ALPR/Anti-Stalking apps.</em></p>
 
 FlipDeFlock is a Flipper Zero app that pairs the Flipper with an ESP32 board to
-survey the radio around you for surveillance hardware: Flock Safety / ALPR / AXON
-cameras, Bluetooth trackers that follow you, and active Wi-Fi attacks such as
-deauth floods and evil-twin APs. The Flipper is the screen, GPS tagger, and
-logger; the ESP32 does the Wi-Fi sniffing its BLE-only radio can't. It's for
-security assessments, anti-surveillance awareness, and CTF/research.
+survey the radio around you for surveillance cameras: Flock Safety and other ALPR
+hardware, SoundThinking acoustic sensors, and Axon body-worn / in-car police
+equipment. The Flipper is the screen, GPS tagger, and logger; the ESP32 does the
+Wi-Fi sniffing its BLE-only radio can't. It's for security assessments,
+anti-surveillance awareness, and CTF/research.
 
-**Passive recon.** Flock / ALPR detection is listen-only — no deauth, injection, or
-jamming, ever. The single exception is explicit and user-initiated: for a tracker you
-have already selected and validated, you can send a Ping or a Ring. Nothing is
-transmitted unless you press it. Detections are indicators, not proof: OUI-only
-matches are possible, not confirmed, so verify by eye. Use it only where you are
-authorized to.
+**Passive recon, and cameras only.** Detection is listen-only — no deauth,
+injection, or jamming, ever, and nothing is transmitted at any point. Detections
+are indicators, not proof: OUI-only matches are possible, not confirmed, so verify
+by eye. Use it only where you are authorized to.
 
 Built for stock OFW, [Unleashed](https://github.com/DarkFlippers/unleashed-firmware),
 [Momentum](https://github.com/Next-Flip/Momentum-Firmware) and RogueMaster. Pick the
@@ -159,8 +157,7 @@ Set **Board Mode** in Settings to match your ESP32 firmware:
   ALPR Detect, GPS, and Reports. The app scrapes MAC/SSID tokens
   from whatever Marauder prints and applies the Flock filter on the Flipper.
 - **Companion** — the project firmware in `esp32_companion/`, a clean line
-  protocol. Adds BLE / Tracker Scan, Net Guardian, Locator, passive deauth
-  detection, and dual-band (Wi-Fi + BLE) Flock detection. Flash it from the
+  protocol. Adds Locator and dual-band (Wi-Fi + BLE) Flock detection. Flash it from the
   app with **ESP32 Firmware** (no computer needed) or with Arduino IDE /
   arduino-cli (see [`esp32_companion/README.md`](esp32_companion/README.md)).
 
@@ -173,8 +170,7 @@ firmware; in Marauder mode they explain what's missing.
   over Wi-Fi (and BLE, with the companion), geotags them, and lets you mark them
   for a report. Each row carries a confidence tag (see
   [Detection confidence](#detection-confidence)) and shows its source — probe,
-  beacon, or BLE — in the detail view. A `!DEAUTH ch<n> <bssid>` banner appears
-  while a deauth/disassoc flood is active and clears when it stops. Set **Alert on
+  beacon, or BLE — in the detail view. Set **Alert on
   hit** in Settings (Vibrate / Beep / both) to be told about a camera you aren't
   watching the screen for — it fires once per device, and never for an OUI-only
   "Possible" lead. Three device classes are distinguished rather than lumped
@@ -184,35 +180,9 @@ firmware; in Marauder mode they explain what's missing.
   are plotted by bearing and distance, dot size is confidence, with a heading tick
   and a scale bar. Left/Right zoom, OK re-fits. Needs a GPS fix; ungeotagged
   cameras aren't plotted.
-- **BLE / Tracker Scan** *(companion)* — detects validated AirTag / Tile / SmartTag /
-  Google Find My trackers and Flock/Raven BLE. Apple Find My status bytes keep
-  phones, Macs, and AirPods out of the tracker list, and weak tracker adverts are
-  ignored. With GPS on, a tracker that stays with you across several waypoints is
-  flagged `!FOLLOWING` (anti-stalking); open it for the track. `SEP state` is an
-  advertisement state marker, not proof of ownership or stalking. Labels a
-  **Flock Raven (audio sensor)** only when it sees the Raven's own Bluetooth
-  services — it never guesses "camera" by elimination. Those services arrived in
-  **Raven firmware 1.2.0**; a unit still on **1.1.7** publishes only generic
-  Bluetooth services that millions of ordinary devices also publish, so it cannot
-  be positively identified as a Raven and will not carry that label. Matching the
-  generic services instead would flag half the consumer electronics in range, which
-  is not a trade this project makes. On a validated tracker you
-  can also send **Ping** (a one-shot reachability check) or **Ring** (a non-owner
-  sound request, Apple/Find My only) — the only actions in the app that transmit,
-  and only when you press them.
-- **Net Guardian** *(companion)* — a leave-it-on-the-desk watch face. Keeps the ESP
-  running and rotates it across Wi-Fi and BLE so the fused **CLEAR / WATCHFUL /
-  ELEVATED** "am I being watched?" score stays live, with a pwnagotchi-style face
-  and a haptic on the edge into ELEVATED. Counts Flock cameras, nearby Flipper
-  Zeros, and active attacks — deauth/disassoc floods, evil-twin APs, and
-  attack-tool signatures (BLE-spam, Pineapple/Marauder beacon-spam, probe floods).
-  It reaches ELEVATED only when two independent radios agree. Press **OK** for a
-  Suspicious list and send one to the Locator. An opt-in Anomaly flag (Settings,
-  default off) adds unidentified-device flagging.
 - **Locator** *(companion)* — hunt a marked device by live signal strength: a
   hot/cold meter that climbs as you get closer, peak-hold, and a warmer/colder
-  trend. Mark a target from any Flock or BLE detection, or from the Guardian's
-  Suspicious list. Works without GPS (a fix only adds a "strongest here" note).
+  trend. Mark a target from any Flock detection. Works without GPS (a fix only adds a "strongest here" note).
   There's no compass arrow — direction-finding a transmitter needs a directional
   antenna, so you close in by walking.
 - **ESP32 Firmware** — backs up the board's current firmware to SD, then flashes a
@@ -223,8 +193,7 @@ firmware; in Marauder mode they explain what's missing.
   always allows a re-flash. Built on Espressif's esp-serial-flasher. **Back up
   before you flash.**
 - **Reports** — writes to `apps_data/flipdeflock/reports/`: Markdown,
-  DeFlock-compatible GeoJSON, KML, plain CSV, and WiGLE CSV (Wi-Fi and BLE) for
-  wardriving uploads. Reports stream row-by-row to SD, so a large scan won't run
+  DeFlock-compatible GeoJSON, and KML. Reports stream row-by-row to SD, so a large scan won't run
   the Flipper out of memory. Pull them with qFlipper or a card reader.
 - **Save hits** *(Settings, off by default)* — keeps your detections across app
   restarts in `apps_data/flipdeflock/hits.csv`, so closing the app doesn't throw
@@ -240,19 +209,13 @@ firmware; in Marauder mode they explain what's missing.
 
 ## Screenshots
 
-<p align="center">
-  <img src="media/screenshots/net-guardian.png" width="420" alt="Net Guardian">
-  <br><em>Net Guardian — the always-on watch face</em>
-</p>
-
 | | |
 |:--:|:--:|
 | <img src="media/screenshots/alpr.png" width="330" alt="Flock / ALPR Detect"><br>**Flock / ALPR Detect** | <img src="media/screenshots/menu.png" width="330" alt="Main menu"><br>**Main menu** |
-| <img src="media/screenshots/flock-detail.png" width="330" alt="Detection detail"><br>**Why it was flagged** | <img src="media/screenshots/ble-scan-results.png" width="330" alt="BLE / Tracker results"><br>**BLE / Tracker results** |
-| <img src="media/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** | |
+| <img src="media/screenshots/flock-detail.png" width="330" alt="Detection detail"><br>**Why it was flagged** | <img src="media/screenshots/esp32-firmware.png" width="330" alt="ESP32 Firmware"><br>**ESP32 Firmware** |
 
 <sub>Captured on a Flipper Zero running v0.49. The devices shown are fabricated
-demo records — no real network, tracker or location appears in any screenshot.
+demo records — no real network or location appears in any screenshot.
 The row tags for SoundThinking (`ST`) and Axon (`AX`) arrived later and are not
 pictured here yet.</sub>
 
@@ -301,12 +264,6 @@ MAC-randomized twins. See the [signatures guide](docs/signatures.md).
 RSSI is shown as signal bars (taller = stronger); the highlighted row shows the
 exact dB. `-33dB` closer to 0 means physically closer.
 
-**Net Guardian** — e.g. `(-_-) CLEAR · Flock 0  Atk 0  Flip 0 · WiFi+BLE ch6  OK=sus · 0:00:07`
-- **face / word** — fused state: `(-_-)` CLEAR → `(o_o)` WATCHFUL → `(>_<)` ELEVATED
-- **Flock / Atk / Flip** — this session's Flock detections · active attacks (flood-gated, so a lone benign disassoc doesn't count) · Flipper Zeros advertising nearby
-- **bottom line** — sweep radio + channel + `OK=sus` (press OK for the Suspicious list). On an alert it names the cause: `Flipper Zero`, `BLE-spam`, `deauth flood`, `evil-twin AP`, `unknown device on you`
-- **0:00:07** — guardian uptime. A Flipper alone raises WATCHFUL; ELEVATED still needs two independent radios
-
 **Flock / ALPR Detect** — header `ESP ch6  frames 339  hits 0`
 - **ESP** (or `...`) — companion connected / still waiting
 - **ch / frames / hits** — channel · 802.11 frames captured · Flock detections, counted this session (reset each time you open the screen)
@@ -316,13 +273,8 @@ exact dB. `-33dB` closer to 0 means physically closer.
 - **GPS badge** - filled `GPS 9` = locked with 9 satellites, filled `GPS` = locked but nothing reported a satellite count (normal on the `Phone` source), hollow `GPS` = on and searching. A fault names what to fix and never says "GPS", because a filled badge starting with those three letters reads as a lock: `!PORT` = GPS and the ESP are on the same UART (put GPS on the other one, LPUART / pins 15-16), `!PIN` = the companion refused that ESP GPS Pin, `!FW` = the companion never answered so reflash it — or, on the `Phone` source, this firmware has no location service (needs Unleashed). Phone-only faults: `!APP` = nothing paired, open qUnleashed · `!PERM` = the phone denied location permission · `!LOC` = the phone's location is off, or the paired device has no receiver · `!ACC` = fixes are arriving but coarser than 100 m, so go outside · `!ERR` = the companion app reported a fault
 - Marauder mode shows `rx <n>  hits <n>` instead (serial heartbeat + detection count)
 
-**BLE / Tracker Scan** — header `BLE 33  trk 9  follow 0`
-- **BLE / trk / follow** — total BLE devices · known trackers · trackers flagged following you
-- **row** — `<type> <name|MAC-tail> <rssi>dB`; type = `FLOCK` / `AirTag` / `Tile` / `Tag` / `FindMy` / `Flipper` / `BLE`. A `Flipper` is a recon device, not a tracker, so it isn't in `trk`
-- **prefix** — `!` following · `*` tagged
-
 **Locator**
-- **mark first** — the report star on any Flock or BLE detection adds it to the Locator pool; or pick one from the Guardian's Suspicious list
+- **mark first** — the report star on any Flock detection adds it to the Locator pool
 - **meter / dB** — climbs as you get closer; `WARMER`/`colder` is the trend, the tick above the bar is peak-hold. `out of range` means the target went quiet — walk back to where it was loudest
 
 ## Build from source
@@ -349,6 +301,15 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.79** - **A camera detector again.** Net Guardian, the BLE / Tracker scan and
+the Wi-Fi attack detection have been removed. The name says what the app does:
+find ALPR cameras, police body/in-car equipment and acoustic sensors, geotag
+them, and report them. The personal-safety features are moving to a separate
+tool. Camera detection itself is unchanged. Two side effects worth knowing:
+the app is now **receive-only with no exceptions** -- Ping and Ring were the only
+things it ever transmitted -- and your **companion firmware does not need
+reflashing**, because the firmware was not touched.
 
 **v0.78** - **The app powers the companion for you.** The Flipper's GPIO 5V rail
 is off at boot, so a board wired to the header stayed dead until you visited
@@ -634,18 +595,17 @@ Full history in [changelog.md](changelog.md).
 ```
 application.fam          manifest
 recon_app.c / _i.h       lifecycle, shared state, settings
-scenes/                  start, flock, guardian, locator, map, ble, firmware,
+scenes/                  start, flock, locator, map, firmware,
                          reports, deflock_handoff, settings, about
-views/                   flock list, on-device map, DeFlock QR, guardian face,
-                         locator HUD, ble list
+views/                   flock list, on-device map, DeFlock QR, locator HUD
 helpers/
   flock_db / detect_rules / sig_db   Flock OUIs, SSID/IE signatures, confidence scoring
   esp_link / esp_parser              ESP32 UART link (companion + generic backends)
   esp_flasher                        in-app ESP32 backup/flash (esp-serial-flasher port)
   gps_link / gps_parser              NMEA GPS reader (2nd UART)
   gps_rpc / gps_rpc_convert          phone GPS via the Unleashed RPC location service
-  recon_report / report_escape       Markdown + GeoJSON + KML + CSV/WiGLE writers
-  watchscore / scan_session          fused surveillance score, scan lifecycle
+  recon_report / report_escape       Markdown + GeoJSON + KML writers
+  watchscore / scan_session          camera-pressure score, scan lifecycle
 lib/esp-serial-flasher/  vendored Espressif flasher (Apache-2.0)
 lib/qrcodegen/           vendored Nayuki QR Code generator (MIT)
 esp32_companion/         universal ESP32 firmware + flashing guide

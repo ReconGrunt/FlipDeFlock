@@ -305,8 +305,7 @@ void suite_esp_parser(void) {
     // resolve to its own vendor and must not be labelled as a Flock camera; a
     // MAC in no table at all must name nobody rather than falling back to Flock.
     CHECK_INT_EQ(P("D,947bbe010203,-40,6,B,1,name,cls=g"), EspMsgFlock);
-    CHECK_INT_EQ(
-        flock_vendor_of(m.u.flock.mac, m.u.flock.ssid), FlockVendorUbicquia);
+    CHECK_INT_EQ(flock_vendor_of(m.u.flock.mac, m.u.flock.ssid), FlockVendorUbicquia);
     CHECK(
         strstr(
             flock_device_long_str(

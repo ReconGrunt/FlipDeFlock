@@ -337,7 +337,6 @@ void suite_flock_db(void) {
     CHECK_INT_EQ(flock_method_of(oui_mac, "", 'F', 0), FlockMethodOui);
     flock_db_set_extras(NULL);
 
-
     // --- vendor attribution (v0.77) ----------------------------------------
     //
     // THE CONTRACT THIS SUITE EXISTS TO PROTECT: the app must never print the
@@ -441,13 +440,17 @@ void suite_flock_db(void) {
         // class with no vendor evidence used to render "Flock / ALPR camera".
         CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassAlpr), "Flock") == NULL);
         CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassGear), "Flock") == NULL);
-        CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassAcoustic), "Flock") == NULL);
-        CHECK(strstr(flock_device_long_str(FlockVendorUnknown, FlockClassBodycam), "Flock") == NULL);
+        CHECK(
+            strstr(flock_device_long_str(FlockVendorUnknown, FlockClassAcoustic), "Flock") ==
+            NULL);
+        CHECK(
+            strstr(flock_device_long_str(FlockVendorUnknown, FlockClassBodycam), "Flock") == NULL);
 
         // Conversely, real Flock evidence MUST still say Flock -- the fix must
         // not have been achieved by deleting the attribution everywhere.
         CHECK(strstr(flock_device_long_str(FlockVendorFlock, FlockClassAlpr), "Flock") != NULL);
-        CHECK(strstr(flock_device_long_str(FlockVendorFlock, FlockClassAcoustic), "Flock") != NULL);
+        CHECK(
+            strstr(flock_device_long_str(FlockVendorFlock, FlockClassAcoustic), "Flock") != NULL);
 
         // Axon's label must no longer promise the device MOVES. Axon shipped
         // Outpost and Lightpost -- fixed pole ALPR -- on this same OUI, so the

@@ -110,8 +110,7 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             m->u.ble.company,
             m->u.ble.mfg_len ? m->u.ble.mfg : NULL,
             m->u.ble.mfg_len,
-            m->u.ble.raven_gatt,
-            m->u.ble.tracker_separated);
+            m->u.ble.raven_gatt);
         break;
     case EspMsgFlock:
         recon_app_report_flock(
@@ -180,7 +179,6 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
     case EspMsgStatus:
         recon_app_set_esp_status(
             app, m->u.status.frames, m->u.status.hits, m->u.status.channel, true);
-        if(m->u.status.have_deauths) recon_app_set_deauths(app, m->u.status.deauths);
         break;
     case EspMsgIgnore:
     default:

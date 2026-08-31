@@ -10,7 +10,6 @@ int g_checks = 0;
 int g_fails = 0;
 
 void suite_flock_db(void);
-void suite_watchscore(void);
 void suite_esp_parser(void);
 void suite_detect_rules(void);
 void suite_report_escape(void);
@@ -23,12 +22,10 @@ void suite_flock_ble(void);
 void suite_oui_vendor(void);
 void suite_marauder_scan(void);
 void suite_fast_trig(void);
-void suite_tracker_rules(void);
 
 int main(void) {
     printf("FlipDeFlock host unit tests\n");
     suite_flock_db();
-    suite_watchscore();
     suite_esp_parser();
     suite_detect_rules();
     suite_report_escape();
@@ -41,7 +38,6 @@ int main(void) {
     suite_oui_vendor();
     suite_marauder_scan();
     suite_fast_trig();
-    suite_tracker_rules();
 
     printf("\n%d checks, %d failed\n", g_checks, g_fails);
     if(g_fails) {

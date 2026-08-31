@@ -108,8 +108,7 @@ static bool fd_format(char* buf, size_t len, FdLineKind kind, const FlockEntry* 
             buf,
             len,
             "%s",
-            flock_device_long_str(
-                flock_vendor_of(e->mac, e->ssid), (FlockDevClass)e->dev_class));
+            flock_device_long_str(flock_vendor_of(e->mac, e->ssid), (FlockDevClass)e->dev_class));
         return false;
     case FdMethod: {
         // WHY it is on the list. "Possible" states confidence but not what
