@@ -141,7 +141,7 @@ jobs:
       # an existing release for the tag and won't fail the run on a miss.
       - name: Attach companion firmware to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: build_esp/flipdeflock_companion_esp32wroom.bin
           fail_on_unmatched_files: false
@@ -251,7 +251,7 @@ jobs:
       # warning that travels with the download.
       - name: Attach C5 firmware to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: build_c5/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
           fail_on_unmatched_files: false
