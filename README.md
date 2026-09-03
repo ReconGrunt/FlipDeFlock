@@ -195,12 +195,13 @@ firmware; in Marauder mode they explain what's missing.
 - **Reports** — writes to `apps_data/flipdeflock/reports/`: Markdown,
   DeFlock-compatible GeoJSON, and KML. Reports stream row-by-row to SD, so a large scan won't run
   the Flipper out of memory. Pull them with qFlipper or a card reader.
-- **Save hits** *(Settings, off by default)* — keeps your detections across app
+- **Save hits** *(Settings, on by default)* — keeps your detections across app
   restarts in `apps_data/flipdeflock/hits.csv`, so closing the app doesn't throw
   a scan away. Restored hits come back in the list and on the map, showing the age
-  of the stored sighting instead of a live signal reading. It is **off by default
-  on purpose**: a hit log is a durable record of where you have been. Turning it
-  back off deletes the file, and *Reports → Clear Saved Hits* erases it any time.
+  of the stored sighting instead of a live signal reading. **Know what it is:** a
+  hit log is a durable record of where you have been, so if that matters for your
+  situation, switch it off. Turning it off deletes the file, and *Reports → Clear
+  Saved Hits* erases it any time.
 - **Share to DeFlock** — renders a QR per marked, geotagged camera that opens
   [DeFlock](https://deflock.org) at that location on your phone, so you submit
   through the official app's review flow. The Flipper and ESP never touch a
@@ -301,6 +302,14 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.82** - **Two defaults changed so a drive is worth something out of the box.**
+**Save hits is now on** — it was off for privacy, but that meant the common case
+was losing a whole drive of detections the moment the app closed, with nothing
+written to the card. The toggle is unchanged and turning it off still deletes the
+file. **Alert on hit now defaults to Beep+Vibe**, because a camera you drove past
+is already behind you by the time a silent buzz gets noticed. Upgrading does not
+change settings you already saved. GPS stays off by default.
 
 **v0.81** - **The first real camera fingerprint.** A contributor stood next to a
 Flock camera he confirmed by eye and captured its probe fingerprint, and it now

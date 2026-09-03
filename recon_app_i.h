@@ -195,13 +195,13 @@ typedef struct {
                            *  specific -- there is no standard, so it is a setting
                            *  rather than a guess. */
     bool sound;
-    uint8_t alert_mode; /**< ReconAlertMode: beep/vibro on a new Flock hit (default Vibrate) */
+    uint8_t alert_mode; /**< ReconAlertMode: beep/vibro on a new Flock hit (default Beep+Vibe) */
     uint8_t alert_min_conf; /**< AlertConfChoice: lowest rung that may alert (default Likely) */
     bool flash_fast; /**< raise the flash (write) baud to 230400 after connect */
     bool esp_auto_5v; /**< power the GPIO 5V rail if the companion never answers.
                         *  Default ON. See recon_app_esp_power_tick(). */
-    bool save_hits; /**< persist detections to hits.csv across app restarts (default OFF:
-                      *   it is a durable record of where you have been) */
+    bool save_hits; /**< persist detections to hits.csv across app restarts (default ON;
+                      *   turning it off deletes the file) */
     bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
 } ReconSettings;
 

@@ -22,9 +22,9 @@
 /** ReconSettings.alert_mode. Index-aligned with alert_text[] in the settings scene. */
 typedef enum {
     ReconAlertOff = 0,
-    ReconAlertVibro = 1, /**< default: discreet, like the WATCHSCORE ELEVATED haptic */
+    ReconAlertVibro = 1, /**< discreet, haptic only */
     ReconAlertBeep = 2,
-    ReconAlertBoth = 3,
+    ReconAlertBoth = 3, /**< default: a missed camera is already behind you */
     ReconAlertModeCount = 4,
 } ReconAlertMode;
 

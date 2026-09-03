@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.82
+
+**Two defaults changed so a drive is worth something out of the box.**
+
+### Changed
+
+- **Save hits is now ON by default.** It was off for privacy, and the result was
+  that the common case lost a whole drive's worth of detections the moment the
+  app closed, with nothing written to the card and no warning it had happened.
+  Losing the data people go out to collect is the worse failure. The toggle is
+  unchanged and switching it off still deletes `hits.csv`, so opting out is one
+  switch away, and the README says plainly what the log is.
+
+  **Upgrading does not change your setting.** Saved preferences are read over the
+  defaults, so if you already had Save hits off it stays off. This only affects
+  fresh installs and anyone with no settings file.
+- **Alert on hit now defaults to Beep+Vibe** instead of vibrate only. A camera
+  you drove past is already behind you by the time a silent buzz in a pocket gets
+  noticed, and catching one you were not watching the screen for is the entire
+  point of the alert. The Sound setting still gates the beep and Flipper
+  Notifications can silence it system-wide.
+
+GPS stays off by default, unchanged: most boards have no GNSS hardware, so
+defaulting it on would just show a fault to the people who cannot use it.
+
 ## v0.81
 
 **The first real camera fingerprint, seeded carefully.**

@@ -664,11 +664,22 @@ static void recon_settings_defaults(ReconApp* app) {
     app->settings.gps_source = ReconGpsSourceFlipper; // the wiring the docs describe
     app->settings.esp_gps_pin = 16; // a common GPS RX on ESP32 carrier boards
     app->settings.sound = true;
-    app->settings.alert_mode = ReconAlertVibro; // haptic-first, like the ELEVATED alert
+    // Beep AND vibrate. A camera you drove past is gone by the time you notice a
+    // silent buzz in a pocket, and the whole point of the alert is to catch one
+    // you were not watching the screen for. `sound` above still gates the beep,
+    // and Flipper Notifications can silence it system-wide, so this is a louder
+    // default rather than an unmutable one.
+    app->settings.alert_mode = ReconAlertBoth;
     app->settings.alert_min_conf = AlertConfLikely; // precision over recall stays the default
     app->settings.flash_fast = false; // safe 115200 by default
     app->settings.esp_auto_5v = true; // a board on the header is dead without it
-    app->settings.save_hits = false; // privacy: a hit log is a record of where you have been
+    // ON by default. This was off for privacy -- a hit log is a durable record of
+    // where you have been -- but off by default meant the common case was losing a
+    // whole drive's worth of detections on app exit, with nothing written to the
+    // card and no warning that it had happened. Losing the data people go out to
+    // collect is the worse failure. The toggle stays, and switching it back off
+    // still deletes hits.csv, so opting out remains one switch away.
+    app->settings.save_hits = true;
     app->settings.log_serials = false; // privacy: don't catalogue police asset serials by default
 }
 
