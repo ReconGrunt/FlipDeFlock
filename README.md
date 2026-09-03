@@ -302,6 +302,14 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.81** - **The first real camera fingerprint.** A contributor stood next to a
+Flock camera he confirmed by eye and captured its probe fingerprint, and it now
+ships as a live detection signal. It is seeded conservatively: a matching probe
+lifts a detection from *Likely* to *Class?* (ranked above a bare shared-OUI hit)
+but can never auto-confirm on a single source. Only a fingerprint corroborated by
+a second independent capture, or a real SSID name, reaches *Confirmed*. No
+companion reflash needed.
+
 **v0.80** - **The Support screen's Bitcoin QR never actually worked** -- it fell
 back to a "QR n/a" placeholder every time, because the screen never loaded the QR
 encoder plugin the way every other QR screen does. Fixed, and while fixing it,

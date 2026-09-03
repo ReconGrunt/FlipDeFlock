@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.81
+
+**The first real camera fingerprint, seeded carefully.**
+[@h00die](https://github.com/h00die) went out, stood next to a Flock camera he
+confirmed by eye, and captured its probe fingerprint. That single corroborated
+capture is the thing the fingerprint table has been waiting for since it shipped
+empty, and it is now live as a signal for everyone.
+
+### Added
+
+- **A candidate IE-fingerprint tier, seeded with its first entry.** A probe
+  skeleton seen next to one confirmed camera now lifts a matching detection one
+  rung, from *Likely* to *Class?*, so a device whose probe structure matches a
+  known-Flock template is ranked above a bare shared-OUI hit. It **cannot**
+  auto-confirm on a single source: a candidate fingerprint is capped at *Class?*
+  and only a verified fingerprint (still empty, needs a second independent
+  capture) or a real SSID name reaches *Confirmed*. First entry: `0x42D75CD1` on
+  OUI `70:C9:4E`. When a second sighting corroborates it, promoting it to
+  auto-confirm is a one-line change.
+
+  This is companion-independent: the ESP32 only emits the fingerprint, all
+  matching happens on the Flipper, so no reflash is needed.
+
 ## v0.80
 
 **The Support screen's Bitcoin QR never actually worked.** It fell back to a
