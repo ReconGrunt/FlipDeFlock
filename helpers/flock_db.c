@@ -675,12 +675,36 @@ static const uint32_t flock_ie_fps[] = {
 
 #define FLOCK_IE_FP_COUNT (sizeof(flock_ie_fps) / sizeof(flock_ie_fps[0]))
 
+/**
+ * CANDIDATE fingerprints: shipped, but SINGLE-SOURCE, so they corroborate (lift a
+ * detection to Class?) and can NEVER auto-Confirm. A hash is promoted out of here
+ * and into flock_ie_fps[] only once a SECOND independent capture confirms it.
+ *
+ * 0x42D75CD1 -- probe IE skeleton of a Flock camera on OUI 70:C9:4E, reported by
+ * @h00die 2026-09-02 (false-positive report rows 5 & 6, two channels, one unit he
+ * visually confirmed standing next to it). Points in its favour: it appeared on
+ * that camera's OUI ONLY and did not smear across unrelated vendors the way the
+ * generic 0x7C923B53 skeleton did. Still one operator, one camera, one drive --
+ * hence candidate, not verified. Needs a second independent sighting to promote.
+ */
+static const uint32_t flock_ie_fps_candidate[] = {
+    0x42D75CD1u,
+};
+
+#define FLOCK_IE_FP_CANDIDATE_COUNT \
+    (sizeof(flock_ie_fps_candidate) / sizeof(flock_ie_fps_candidate[0]))
+
 FlockIeFp flock_ie_fp_match(uint32_t fp) {
     if(fp == 0) return FlockIeFpNone; // 0 = "no fingerprint", never a match
-    // Built-ins first: a compiled-in (maintainer-verified) hit is the strongest.
+    // Strongest-first. Built-ins are maintainer-VERIFIED (>=2 corroborations) and
+    // are the only tier that can auto-Confirm; it currently ships empty.
     for(size_t i = 0; i < FLOCK_IE_FP_COUNT; i++) {
         if(flock_ie_fps[i] == 0) continue; // skip the sentinel / unseeded slots
         if(flock_ie_fps[i] == fp) return FlockIeFpBuiltin;
+    }
+    // Candidate built-ins: single-source leads. Caller caps them at Class?.
+    for(size_t i = 0; i < FLOCK_IE_FP_CANDIDATE_COUNT; i++) {
+        if(flock_ie_fps_candidate[i] == fp) return FlockIeFpCandidate;
     }
     // Then the optional user-supplied extras (UNVERIFIED -> the caller caps these
     // at FlockConfidenceProbeFp; they can only ADD a candidate-class match).

@@ -184,6 +184,28 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(m.u.flock.ftype, 'F');
     flock_db_set_extras(NULL);
 
+    // --- CANDIDATE built-in fp (h00die's 70:C9:4E camera, single source) -----
+    // Shipped in flock_ie_fps_candidate[], so it is live for everyone with NO
+    // signatures.json. It must corroborate (lift to Class?) but NEVER auto-Confirm
+    // on one source, even sitting on a real Flock OUI. 0x42d75cd1 is the seeded
+    // value; the companion emits it lower-hex, parsed case-insensitively.
+    //
+    // Companion scored Likely (OUI + probe): the candidate fp lifts it to Class?.
+    CHECK_INT_EQ(P("D,70c94e010203,-81,7,P,2,,fp=42d75cd1"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceProbeFp); // Class?, NOT Confirmed
+    CHECK_INT_EQ(m.u.flock.ftype, 'F'); // labelled probe-fp source
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0x42d75cd1u);
+    // THE SAFETY PROPERTY: even a Flock OUI plus this candidate fp cannot reach
+    // Confirmed. Only a VERIFIED built-in (empty today) or an SSID name does that.
+    CHECK(m.u.flock.conf < FlockConfidenceConfirmed);
+    // Upper-case in the field parses to the same hash and matches.
+    CHECK_INT_EQ(P("D,70c94e010203,-81,7,P,1,,fp=42D75CD1"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceProbeFp);
+    // A genuine SSID name still overrules to Confirmed -- the fp cap only raises a
+    // floor, it never blocks a real name match.
+    CHECK_INT_EQ(P("D,70c94e010203,-81,7,B,3,Flock-A1B2C3,fp=42d75cd1"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+
     // --- cls=: device class -------------------------------------------------
     // Absent means ALPR, which is what every line from an older companion is.
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,name"), EspMsgFlock);

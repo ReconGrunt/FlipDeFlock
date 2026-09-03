@@ -154,9 +154,12 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
                                                          FlockConfidenceProbeFp;
         if(fp_conf > conf) conf = fp_conf;
         ftype = 'F'; // source label "probe-fp" in the detail scene
-    } else if(fp_src == FlockIeFpUser) {
-        // UNVERIFIED user fp (signatures.json): a candidate device-CLASS match ONLY
-        // -- capped at "Class?", never Confirmed even with a Flock OUI.
+    } else if(fp_src == FlockIeFpCandidate || fp_src == FlockIeFpUser) {
+        // Single-source built-in candidate, or an UNVERIFIED user fp
+        // (signatures.json). Either way a candidate device-CLASS match ONLY --
+        // capped at "Class?", never Confirmed even with a Flock OUI. Promotion of
+        // a candidate to the auto-confirming builtin table requires a second
+        // independent capture (see flock_ie_fps_candidate[] in flock_db.c).
         if(FlockConfidenceProbeFp > conf) conf = FlockConfidenceProbeFp;
         ftype = 'F';
     }
