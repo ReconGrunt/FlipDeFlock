@@ -73,8 +73,12 @@ static void flock_view_build_order(ReconApp* app, FlockViewModel* model) {
     model->order_count = n;
 }
 
-/** How long the "what just beeped?" card stays up, in ticks (ms). */
-#define CARD_MS 3000u
+/** How long the "what just beeped?" card stays up, in ticks (ms), when
+ *  Settings -> Card dismiss is Auto. Raised from 3000: three seconds was not
+ *  long enough to read the rung, the device and the name while driving. With
+ *  Card dismiss set to "Next hit" this is ignored and the card holds until the
+ *  next detection replaces it. */
+#define CARD_MS 6000u
 
 static char confidence_char(FlockConfidence c) {
     switch(c) {
@@ -342,7 +346,14 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // CARD_MS is short on purpose: this is an answer to a sound that just
     // played, not a dialog, and anything that lingers becomes something to swat
     // away on every hit.
-    if(app->alert_card_tick && (uint32_t)(furi_get_tick() - app->alert_card_tick) < CARD_MS) {
+    // Auto: the card ages out after CARD_MS. "Next hit": it holds until another
+    // detection overwrites alert_card_tick, so a hit found while you were
+    // watching the road is still on screen when you look down. Either way any
+    // key press dismisses it (see the input handler).
+    bool card_unexpired = app->settings.card_autodismiss ?
+                              ((uint32_t)(furi_get_tick() - app->alert_card_tick) < CARD_MS) :
+                              true;
+    if(app->alert_card_tick && card_unexpired) {
         for(size_t i = 0; i < app->flock_count; i++) {
             if(memcmp(app->flock[i].mac, app->alert_card_mac, 6) != 0) continue;
             FlockEntry* e = &app->flock[i];
@@ -740,21 +751,29 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         // stays as terse as it was, and the list never silently presents a
         // gunshot sensor or a body camera as a camera on a pole. Three chars each
         // so the tagged and untagged rows still line up.
+        // Colon, not a space, after each tag. With a space "VG PLaybaLL" was read
+        // off a real drive as a device NAMED "VG Play Ball" -- the tag ran into the
+        // SSID. Still three characters, so tagged and untagged rows keep lining up.
         const char* cls = "";
         if(r->dev_class == FlockClassAcoustic)
-            cls = "ST ";
+            cls = "ST:";
         else if(r->dev_class == FlockClassBodycam)
-            cls = "AX ";
+            cls = "AX:";
         else if(r->dev_class == FlockClassGear)
             // Vendor-exclusive competitor kit, make unknown. Untagged would mean
             // "ALPR camera" by the rule above, and these prefixes carry hand-held
             // radios and building cameras as well as plate readers -- the same
             // reason ST and AX exist. Spelled out in Help under ROW MARKS.
-            cls = "VG ";
+            cls = "VG:";
 
         char line[48];
         if(r->ssid[0] != '\0') {
-            snprintf(line, sizeof(line), "%s%s", cls, r->ssid);
+            // ">" means "this device is LOOKING FOR that network", which is what a
+            // probe request's SSID actually is. Without it, a phone hunting its
+            // home wifi reads as an ALPR camera named after someone's router --
+            // exactly how a real drive's list got misread. A camera probes with no
+            // name at all, so a ">" row is evidence against it being one.
+            snprintf(line, sizeof(line), "%s%s%s", cls, r->ftype == 'P' ? ">" : "", r->ssid);
         } else if(r->hidden) {
             // We watched this one beacon without a name. Worth surfacing, but it
             // is an observation only -- the conf char is unchanged by it. Drops

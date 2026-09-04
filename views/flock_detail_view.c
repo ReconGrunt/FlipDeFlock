@@ -142,7 +142,13 @@ static bool fd_format(char* buf, size_t len, FdLineKind kind, const FlockEntry* 
         snprintf(
             buf,
             len,
-            "SSID: %s",
+            // A probe REQUEST carries the network the device is LOOKING FOR,
+            // not its own name. Labelling both "SSID:" made a phone hunting for
+            // its home wifi read as a camera called "NETGEAR19", which is how a
+            // real drive's list got misread. Cameras send WILDCARD probes with no
+            // name at all, so a named probe target argues against this being one.
+            "%s: %s",
+            (e->ftype == 'P' && e->ssid[0]) ? "Seeking" : "SSID",
             e->ssid[0] ? e->ssid : (e->hidden ? "(withheld by AP)" : "(none seen)"));
         return false;
     case FdRssi:

@@ -248,6 +248,19 @@ static void save_hits_changed(VariableItem* item) {
     if(!app->settings.save_hits) recon_hits_clear(app);
 }
 
+// Auto = the hit card ages out on its own. Next hit = it holds until another
+// detection replaces it, for the case the request came from: a hit found while
+// you were watching the road rather than the screen.
+static const char* const card_text[] = {"Next hit", "Auto"};
+
+static void card_autodismiss_changed(VariableItem* item) {
+    ReconApp* app = variable_item_get_context(item);
+    uint8_t idx = variable_item_get_current_value_index(item);
+    app->settings.card_autodismiss = (idx == 1);
+    variable_item_set_current_value_text(item, card_text[idx]);
+    recon_settings_save(app);
+}
+
 static void esp_auto_5v_changed(VariableItem* item) {
     ReconApp* app = variable_item_get_context(item);
     uint8_t idx = variable_item_get_current_value_index(item);
@@ -376,8 +389,9 @@ void recon_scene_settings_on_enter(void* context) {
     variable_item_set_current_value_index(item, idx);
     variable_item_set_current_value_text(item, flash_speed_text[idx]);
 
-    // Persist detections across app restarts. OFF by default -- a hit log is a
-    // durable record of where you have been. Turning it off deletes hits.csv.
+    // Persist detections across app restarts. ON by default since v0.82: losing a
+    // drive's worth of detections was the worse failure. Turning it off deletes
+    // hits.csv, so opting out is still one switch away.
     idx = app->settings.save_hits ? 1 : 0;
     item = variable_item_list_add(list, "Save hits", 2, save_hits_changed, app);
     variable_item_set_current_value_index(item, idx);
@@ -387,6 +401,12 @@ void recon_scene_settings_on_enter(void* context) {
     // because a companion wired to the header is simply dead without it and the
     // failure looks like a broken app rather than an unpowered board. Only ever
     // acts on silence, so a board on its own USB is never given a second supply.
+    // How long the "what just beeped?" card stays up.
+    idx = app->settings.card_autodismiss ? 1 : 0;
+    item = variable_item_list_add(list, "Card dismiss", 2, card_autodismiss_changed, app);
+    variable_item_set_current_value_index(item, idx);
+    variable_item_set_current_value_text(item, card_text[idx]);
+
     idx = app->settings.esp_auto_5v ? 1 : 0;
     item = variable_item_list_add(list, "Auto 5V for ESP", 2, esp_auto_5v_changed, app);
     variable_item_set_current_value_index(item, idx);

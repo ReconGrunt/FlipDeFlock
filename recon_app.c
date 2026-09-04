@@ -686,6 +686,7 @@ static void recon_settings_defaults(ReconApp* app) {
     // collect is the worse failure. The toggle stays, and switching it back off
     // still deletes hits.csv, so opting out remains one switch away.
     app->settings.save_hits = true;
+    app->settings.card_autodismiss = true; // unchanged behaviour by default
     app->settings.log_serials = false; // privacy: don't catalogue police asset serials by default
 }
 
@@ -696,7 +697,7 @@ void recon_settings_save(ReconApp* app) {
         FuriString* s = furi_string_alloc();
         furi_string_printf(
             s,
-            "backend=%d\nesp_band=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\ngps_source=%d\nesp_gps_pin=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nalert_mode=%d\nalert_min_conf=%d\nsave_hits=%d\nesp_auto_5v=%d\n",
+            "backend=%d\nesp_band=%d\nesp_uart=%d\ngps_uart=%d\nesp_baud=%lu\ngps_baud=%lu\nmarauder_cmd=%d\ngps_enabled=%d\ngps_source=%d\nesp_gps_pin=%d\nsound=%d\nflash_fast=%d\nlog_serials=%d\nalert_mode=%d\nalert_min_conf=%d\nsave_hits=%d\nesp_auto_5v=%d\ncard_autodismiss=%d\n",
             app->settings.backend,
             app->settings.esp_band,
             app->settings.esp_uart,
@@ -713,7 +714,8 @@ void recon_settings_save(ReconApp* app) {
             app->settings.alert_mode,
             app->settings.alert_min_conf,
             app->settings.save_hits ? 1 : 0,
-            app->settings.esp_auto_5v ? 1 : 0);
+            app->settings.esp_auto_5v ? 1 : 0,
+            app->settings.card_autodismiss ? 1 : 0);
 
         storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
         furi_string_free(s);
@@ -762,6 +764,8 @@ static void recon_settings_apply_kv(ReconApp* app, const char* key, long val, co
         app->settings.alert_mode = (uint8_t)val; // corrupt value -> keep the default
     else if(strcmp(key, "alert_min_conf") == 0 && val >= 0 && val < AlertConfCount)
         app->settings.alert_min_conf = (uint8_t)val; // ditto -- range-checked, not trusted
+    else if(strcmp(key, "card_autodismiss") == 0)
+        app->settings.card_autodismiss = (val != 0);
     else if(strcmp(key, "save_hits") == 0)
         app->settings.save_hits = (val != 0);
     else if(strcmp(key, "esp_auto_5v") == 0)

@@ -202,6 +202,8 @@ typedef struct {
                         *  Default ON. See recon_app_esp_power_tick(). */
     bool save_hits; /**< persist detections to hits.csv across app restarts (default ON;
                       *   turning it off deletes the file) */
+    bool card_autodismiss; /**< hit card clears itself after CARD_MS (default ON). Off =
+                             *  it stays until the NEXT hit replaces it. */
     bool log_serials; /**< log Flock device serials to saved reports (default OFF) */
 } ReconSettings;
 
