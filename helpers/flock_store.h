@@ -22,7 +22,7 @@
 /** Schema marker written as the file's first line. A future format change bumps
  *  the version; a line the loader does not recognise means "ignore this file",
  *  never "parse it anyway and get the columns wrong". */
-#define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v2"
+#define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v3"
 
 /** The v1 marker, still accepted on READ. v2 only APPENDS columns (`class`,
  *  `hidden`) and reorders nothing, so a v1 record is a complete v2 record minus
@@ -32,18 +32,38 @@
  *  worse outcome than carrying one compatibility branch. */
 #define FLOCK_STORE_SCHEMA_V1 "# FlipDeFlock hits v1"
 
+/** The v2 marker, still accepted on READ. Same append-only rule as v1: v3 adds a
+ *  trailing `label` column and widens the MEANING of `marked` from 0/1 to a bit
+ *  field, so a v2 record is a complete v3 record with no label and no confirmed
+ *  bit -- exactly what a v2 file meant.
+ *
+ *  The bit field is why `confirmed` did not get a column of its own. An older
+ *  build rejects any line whose column count it does not expect, but it reads
+ *  `marked` with `!= 0`, so a row that is marked, or confirmed, or both, still
+ *  reads as "marked" there instead of vanishing. The label is the one thing an
+ *  older build genuinely cannot carry. */
+#define FLOCK_STORE_SCHEMA_V2 "# FlipDeFlock hits v2"
+
+/** `marked` column bits. Bit 0 keeps the original meaning so the column stays
+ *  truthy for an old reader; bit 1 is the visual confirmation. */
+#define FLOCK_STORE_MARK_REPORT    (1u << 0)
+#define FLOCK_STORE_MARK_CONFIRMED (1u << 1)
+
 /** Column header, written as the second line for anyone opening the file. */
 #define FLOCK_STORE_HEADER \
-    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class,hidden"
+    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class,hidden,label"
 
-/** Number of comma-separated columns in a v2 record line. */
-#define FLOCK_STORE_COLS 15
+/** Number of comma-separated columns in a v3 record line. */
+#define FLOCK_STORE_COLS 16
+
+/** Columns in a v2 record line (v3 minus the trailing `label`). */
+#define FLOCK_STORE_COLS_V2 15
 
 /** Columns in a v1 record line (v2 minus the trailing `class` and `hidden`). */
 #define FLOCK_STORE_COLS_V1 13
 
 /**
- * True if `line` is a schema marker this build can read (v1 or v2). Anything
+ * True if `line` is a schema marker this build can read (v1, v2 or v3). Anything
  * else -- including a NEWER marker -- must make the caller ignore the file
  * whole, since a future format may reuse or reorder columns.
  */
@@ -52,9 +72,13 @@ bool flock_store_schema_supported(const char* line);
 /** Matches RECON_SSID_LEN; kept independent so this module stays firmware-free. */
 #define FLOCK_STORE_SSID_LEN 33
 
+/** Operator-supplied label. Shorter than an SSID on purpose: it is typed on a
+ *  Flipper keyboard and has to fit a 128 px row beside a tag and a signal. */
+#define FLOCK_STORE_LABEL_LEN 25
+
 /** Buffer size a caller must provide to flock_store_fmt_line(). Worst case is a
  *  33-char SSID of nothing but quotes (each doubled, plus the wrapping pair). */
-#define FLOCK_STORE_LINE_MAX 192
+#define FLOCK_STORE_LINE_MAX 256
 
 /** POD mirror of the persisted subset of FlockEntry. Deliberately not FlockEntry
  *  itself: that type lives in the firmware-coupled recon_app_i.h, and copying
@@ -69,7 +93,8 @@ typedef struct {
     uint32_t ie_fp;
     float lat, lon, heading; /**< NAN when there was no fix */
     uint32_t count;
-    bool marked;
+    bool marked; /**< tagged for the report (bit 0 of the `marked` column) */
+    bool confirmed; /**< operator visually confirmed it (bit 1). False from v1/v2. */
     uint32_t epoch; /**< RTC Unix seconds at the last sighting. NOT a furi tick:
                       *  ticks are uptime-relative and meaningless after the
                       *  reboot this file exists to survive. */
@@ -77,6 +102,12 @@ typedef struct {
                          *  which is exactly the 0 default. */
     bool hidden; /**< the AP beacons but withholds its SSID. Absent in a v1
                    *  file, where the 0 default reads as "not observed". */
+    char label[FLOCK_STORE_LABEL_LEN]; /**< the operator's own name for this
+                                         *  device. NEVER overwrites `ssid`: what
+                                         *  was observed on the air and what the
+                                         *  operator calls it are different facts,
+                                         *  and conflating them loses the evidence.
+                                         *  Empty in a v1/v2 file. */
 } FlockStoreRec;
 
 /**

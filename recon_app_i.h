@@ -20,6 +20,7 @@
 #include "helpers/alerts.h"
 #include "helpers/detect_rules.h" // AlertConfChoice for the settings scene
 #include "helpers/flock_db.h"
+#include "helpers/flock_store.h"
 #include "helpers/flock_ble.h"
 #include "views/flock_view.h"
 #include "views/flock_detail_view.h"
@@ -232,6 +233,13 @@ typedef struct {
                    *   operator, never a confidence input -- see esp_parser.c. */
     int8_t geotag_rssi; /**< rssi when the geotag was last set (hysteresis) */
     bool marked; /**< user flagged this for the report */
+    bool confirmed; /**< the operator SAW this device with their own eyes. Ground
+                      *   truth, and the only thing in the table that is not an
+                      *   inference -- it is what promotes a candidate fingerprint. */
+    char label[FLOCK_STORE_LABEL_LEN]; /**< the operator's own name for it. Kept
+                                         *   SEPARATE from ssid on purpose: what was
+                                         *   observed on the air and what the operator
+                                         *   calls it are different facts. */
     bool alerted; /**< the detection alert has already fired for this device (latch) */
     bool archived; /**< restored from hits.csv, not seen yet this session. first_tick/
                      *   last_tick are 0 and MEANINGLESS -- never age-test an archived

@@ -139,6 +139,20 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
     char ssid_esc[ESC_SSID_MAX];
     csv_field_escape(ssid_flat, ssid_esc, sizeof(ssid_esc));
 
+    // Same flatten-then-escape as the SSID. The label is operator-typed, so it is
+    // every bit as capable of carrying a comma, a quote or a control character
+    // into the middle of a record.
+    char label_flat[FLOCK_STORE_LABEL_LEN];
+    size_t li = 0;
+    for(; li < FLOCK_STORE_LABEL_LEN - 1 && r->label[li]; li++) {
+        unsigned char c = (unsigned char)r->label[li];
+        label_flat[li] = (c < 0x20 || c == 0x7F) ? ' ' : (char)c;
+    }
+    label_flat[li] = '\0';
+
+    char label_esc[ESC_SSID_MAX];
+    csv_field_escape(label_flat, label_esc, sizeof(label_esc));
+
     // Empty field for "no fix", so a reader can tell an absent coordinate from
     // a real 0,0 out in the Gulf of Guinea.
     char lat_s[16], lon_s[16], head_s[16];
@@ -154,7 +168,7 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
     int n = snprintf(
         out,
         out_len,
-        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u,%u\n",
+        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u,%u,%s\n",
         mac_s,
         ssid_esc,
         r->rssi,
@@ -166,10 +180,15 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
         lon_s,
         head_s,
         (unsigned long)r->count,
-        r->marked ? 1u : 0u,
+        // Bit field, not a bool: bit 0 keeps the original "marked" meaning so an
+        // older build still reads a confirmed-only row as marked rather than
+        // rejecting it.
+        (unsigned)((r->marked ? FLOCK_STORE_MARK_REPORT : 0u) |
+                   (r->confirmed ? FLOCK_STORE_MARK_CONFIRMED : 0u)),
         (unsigned long)r->epoch,
         r->dev_class,
-        r->hidden ? 1u : 0u);
+        r->hidden ? 1u : 0u,
+        label_esc);
 
     if(n < 0 || (size_t)n >= out_len) {
         if(out_len) out[0] = '\0';
@@ -207,7 +226,8 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     if(*p != '\0') return false; // more columns than the schema allows
     // Exactly a v2 line, or exactly a v1 line (v2 minus the trailing class).
     // Any other count is a malformed record, not a version we tolerate.
-    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V1) return false;
+    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V2 && ncols != FLOCK_STORE_COLS_V1)
+        return false;
 
     if(!fs_parse_mac(f[0], r.mac)) return false;
 
@@ -248,19 +268,31 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
 
     if(!fs_parse_u32(f[10], &r.count)) return false;
 
-    if(!fs_parse_u32(f[11], &u) || u > 1) return false;
-    r.marked = (u != 0);
+    // Bit field since v3. A v1/v2 file only ever held 0 or 1, which still reads
+    // correctly as "marked, not confirmed".
+    if(!fs_parse_u32(f[11], &u) || u > (FLOCK_STORE_MARK_REPORT | FLOCK_STORE_MARK_CONFIRMED))
+        return false;
+    r.marked = (u & FLOCK_STORE_MARK_REPORT) != 0;
+    r.confirmed = (u & FLOCK_STORE_MARK_CONFIRMED) != 0;
 
     if(!fs_parse_u32(f[12], &r.epoch)) return false;
 
     // v2 only. A v1 line stops at 13 columns and keeps the memset defaults of 0
     // -- FlockClassAlpr and hidden-never-observed, which is what every v1
     // detection actually was.
-    if(ncols == FLOCK_STORE_COLS) {
+    if(ncols == FLOCK_STORE_COLS || ncols == FLOCK_STORE_COLS_V2) {
         if(!fs_parse_u32(f[13], &u) || u > FLOCK_STORE_MAX_DEV_CLASS) return false;
         r.dev_class = (uint8_t)u;
         if(!fs_parse_u32(f[14], &u) || u > 1) return false;
         r.hidden = (u != 0);
+    }
+    // v3 only. A v1/v2 line stops short and keeps the empty label, which is
+    // exactly what those files meant: the operator never named this device.
+    if(ncols == FLOCK_STORE_COLS) {
+        // Precision, not a bare %s: f[] is an escaped-SSID-sized buffer and the
+        // label is deliberately shorter, so the compiler rightly flags the
+        // unbounded form under -Werror=format-truncation.
+        snprintf(r.label, sizeof(r.label), "%.*s", (int)(sizeof(r.label) - 1), f[15]);
     }
 
     *out = r;
@@ -269,7 +301,8 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
 
 bool flock_store_schema_supported(const char* line) {
     if(!line) return false;
-    return strcmp(line, FLOCK_STORE_SCHEMA) == 0 || strcmp(line, FLOCK_STORE_SCHEMA_V1) == 0;
+    return strcmp(line, FLOCK_STORE_SCHEMA) == 0 || strcmp(line, FLOCK_STORE_SCHEMA_V2) == 0 ||
+           strcmp(line, FLOCK_STORE_SCHEMA_V1) == 0;
 }
 
 bool flock_store_evict_better(uint8_t conf_a, uint32_t epoch_a, uint8_t conf_b, uint32_t epoch_b) {

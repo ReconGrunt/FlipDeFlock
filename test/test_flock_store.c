@@ -198,12 +198,12 @@ void suite_flock_store(void) {
 
         char line[FLOCK_STORE_LINE_MAX];
         CHECK(flock_store_fmt_line(line, sizeof(line), &acoustic) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,1,1\n"); // epoch,class,hidden
+        CHECK_STR_CONTAINS(line, ",1785000000,1,1,\n"); // epoch,class,hidden,label
 
         FlockStoreRec alpr = sample();
         check_roundtrip(&alpr); // both default to 0
         CHECK(flock_store_fmt_line(line, sizeof(line), &alpr) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,0,0\n");
+        CHECK_STR_CONTAINS(line, ",1785000000,0,0,\n");
 
         // FlockClassBodycam (Axon). The bound below used to be a literal 1, so
         // adding a third class made the parser reject the whole LINE -- a stored
@@ -213,7 +213,7 @@ void suite_flock_store(void) {
         bodycam.dev_class = 2; // FlockClassBodycam
         check_roundtrip(&bodycam);
         CHECK(flock_store_fmt_line(line, sizeof(line), &bodycam) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,2,0\n");
+        CHECK_STR_CONTAINS(line, ",1785000000,2,0,\n");
 
         // Every value the enum can hold must survive; anything above the bound
         // is still rejected, so a corrupt or future-class file cannot be read as
@@ -259,9 +259,10 @@ void suite_flock_store(void) {
         // 14 columns: a half-v2 line, class but no hidden
         CHECK(!flock_store_parse_line(
             "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0", &junk));
-        // 16 columns (v2 plus one)
+        // 17 columns (v3 plus one). 16 is now a valid v3 line, so the
+        // one-too-many case moved up by one.
         CHECK(!flock_store_parse_line(
-            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,0,9", &junk));
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,0,lbl,9", &junk));
         // class outside the known enum
         CHECK(!flock_store_parse_line(
             "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,7,0", &junk));
@@ -270,13 +271,65 @@ void suite_flock_store(void) {
             "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,5", &junk));
     }
 
-    // Schema gate: this build reads v1 and v2 and nothing else. A NEWER marker
-    // must be refused -- a future format may reorder columns, and guessing at it
-    // is how you get a plausible-looking wrong detection.
+    // ---- v3: the marked bit field and the operator label -------------------
+    {
+        char line[FLOCK_STORE_LINE_MAX];
+
+        // Both flags live in ONE column so an older build, which reads that
+        // column with != 0, still sees a confirmed-only row as marked instead of
+        // rejecting the line. That back-compatibility is the whole reason
+        // `confirmed` did not get a column of its own.
+        FlockStoreRec conf_only = sample();
+        conf_only.marked = false;
+        conf_only.confirmed = true;
+        check_roundtrip(&conf_only);
+        CHECK(flock_store_fmt_line(line, sizeof(line), &conf_only) > 0);
+        CHECK_STR_CONTAINS(line, ",42,2,1785000000,"); // count,marked-bits,epoch
+
+        FlockStoreRec both = sample();
+        both.marked = true;
+        both.confirmed = true;
+        check_roundtrip(&both);
+        CHECK(flock_store_fmt_line(line, sizeof(line), &both) > 0);
+        CHECK_STR_CONTAINS(line, ",42,3,1785000000,");
+
+        // A label must survive verbatim AND must never touch the SSID: the name
+        // observed on the air and the name the operator gave it are separate
+        // facts, and overwriting one with the other destroys evidence.
+        FlockStoreRec named = sample();
+        snprintf(named.label, sizeof(named.label), "pole by the school");
+        check_roundtrip(&named);
+        CHECK_STR_EQ(named.ssid, "Flock-A1B2C3");
+
+        // Operator-typed, so it can carry a comma or a quote straight into the
+        // middle of a record. Same escaping the SSID gets.
+        FlockStoreRec nasty = sample();
+        snprintf(nasty.label, sizeof(nasty.label), "a,b\"c");
+        check_roundtrip(&nasty);
+
+        // A bit outside the two defined ones is a corrupt record, not a future
+        // flag to guess at.
+        FlockStoreRec junk;
+        CHECK(!flock_store_parse_line(
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,4,1785000000,0,0,", &junk));
+
+        // A REAL v2 line (15 cols, marked=1) still loads: no label, not
+        // confirmed. This is the upgrade path for every existing hits.csv.
+        CHECK(flock_store_parse_line(
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,0,0", &junk));
+        CHECK(junk.marked);
+        CHECK(!junk.confirmed);
+        CHECK_STR_EQ(junk.label, "");
+    }
+
+    // Schema gate: this build reads v1, v2 and v3 and nothing else. A NEWER
+    // marker must be refused -- a future format may reorder columns, and guessing
+    // at it is how you get a plausible-looking wrong detection.
     {
         CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA));
+        CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA_V2));
         CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA_V1));
-        CHECK(!flock_store_schema_supported("# FlipDeFlock hits v3"));
+        CHECK(!flock_store_schema_supported("# FlipDeFlock hits v4"));
         CHECK(!flock_store_schema_supported("# FlipDeFlock hits"));
         CHECK(!flock_store_schema_supported(""));
         CHECK(!flock_store_schema_supported(NULL));

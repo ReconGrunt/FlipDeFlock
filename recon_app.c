@@ -830,6 +830,8 @@ static void recon_hits_rec_from_entry(FlockStoreRec* r, const FlockEntry* e) {
     r->heading = e->heading;
     r->count = e->count;
     r->marked = e->marked;
+    r->confirmed = e->confirmed;
+    snprintf(r->label, sizeof(r->label), "%s", e->label);
     r->epoch = e->seen_epoch;
 }
 
@@ -965,6 +967,8 @@ static void recon_hits_add(ReconApp* app, const FlockStoreRec* r) {
     e->geotag_rssi = isnan(r->lat) ? 0 : r->rssi;
     e->count = r->count;
     e->marked = r->marked;
+    e->confirmed = r->confirmed;
+    snprintf(e->label, sizeof(e->label), "%s", r->label);
     e->seen_epoch = r->epoch;
     e->archived = true;
     // A restored hit must not buzz: the alert announces a NEW detection, and the
