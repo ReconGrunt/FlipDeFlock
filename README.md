@@ -303,6 +303,14 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.83** - **Everything a real drive turned up.** A flat battery no longer costs
+you the session (hits flush every 30s instead of only on exit). Probe targets are
+no longer shown as device names, so a phone looking for "NETGEAR19" stops reading
+as a camera called that. Newest hits sort to the top, with the cursor anchored to
+the device so a new arrival can't slide a delete onto the wrong one. **Hold OK** on
+a hit to Confirm, Rename, Mark or Delete, and a new **Saved Hits** screen to review
+a drive afterwards. Renaming never overwrites the observed SSID.
+
 **v0.82** - **Two defaults changed so a drive is worth something out of the box.**
 **Save hits is now on** — it was off for privacy, but that meant the common case
 was losing a whole drive of detections the moment the app closed, with nothing

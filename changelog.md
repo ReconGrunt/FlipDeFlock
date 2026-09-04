@@ -1,5 +1,50 @@
 # Changelog
 
+## v0.83
+
+**Everything a real drive turned up.** A field session came back with a flat
+battery, a list that read wrong, and two marked rows nobody could explain. All
+of it is fixed here.
+
+### Fixed
+
+- **A flat battery no longer costs you the session.** Detections only reached
+  the card when you left the scan screen, so a power loss mid-drive took
+  everything collected since the scan began. They now flush every 30 seconds
+  while scanning.
+- **Probe targets are no longer shown as device names.** A probe request
+  carries the network a device is *looking for*, not its own name, but both
+  were printed as "SSID" -- so a phone hunting its home wifi read as an ALPR
+  camera called "NETGEAR19". Rows now prefix those with `>` and the detail
+  screen says "Seeking:". It cuts the other way as evidence too: a real camera
+  probes with no name at all.
+- **Class tags no longer run into the name.** "VG PLaybaLL" was read as a
+  device *named* "VG Play Ball". Tags are now `ST:`, `AX:`, `VG:`.
+
+### Added
+
+- **Newest hits at the top.** The list was ordered by first-seen while showing
+  last-seen, which read as half-sorted and buried the thing that just beeped.
+  The cursor is anchored to the device rather than the row number, so a hit
+  arriving at the top cannot slide a delete onto a different camera.
+- **Hold OK on a hit: Confirm / Rename / Mark / Delete.** Tap-OK and Left are
+  unchanged, so the keys used while driving still behave. **Confirm** records
+  that you actually went and looked -- the only fact in the table that is not
+  an inference. **Rename** gives a hit your own name and **never overwrites the
+  observed SSID**; the two are different facts.
+- **Saved Hits** on the main menu: the sit-down view for after a drive, newest
+  first, showing what you confirmed and marked.
+- **Card dismiss** setting. The hit card now shows for 6 s instead of 3, and
+  can be set to hold until the next hit arrives, for a detection found while
+  you were watching the road.
+
+### Storage
+
+`hits.csv` is v3. The confirmed flag rides in the existing `marked` column as a
+bit field specifically so older builds still read those rows instead of
+dropping them; the new `label` column is the one thing they cannot carry. v1,
+v2 and v3 all load, so upgrading never loses a file.
+
 ## v0.82
 
 **Two defaults changed so a drive is worth something out of the box.**
