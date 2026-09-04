@@ -307,6 +307,14 @@ typedef struct {
 
     ReconSettings settings;
 
+    /* hits.csv autosave. Detections used to reach the card only via
+     * scan_session_stop(), so a battery death mid-scan lost everything collected
+     * since the scan began -- reported from a real drive. The worker sets
+     * hits_dirty on every new/updated detection; the GUI tick flushes on an
+     * interval. Not a setting: there is no reason to want crash loss. */
+    bool hits_dirty;
+    uint32_t hits_last_save; /**< furi tick of the last successful flush */
+
     EspLink* esp;
     GpsLink* gps;
     GpsRpc* gps_rpc; /**< phone GPS over the Unleashed RPC service; NULL unless selected */
@@ -655,4 +663,8 @@ void recon_hits_clear(ReconApp* app);
  * every scan-session exit, and folding this removal into it turned Net
  * Guardian's baseline reset into permanent data loss (issue #5).
  */
+/** Flush hits.csv on an interval while a scan runs, so a flat battery cannot
+ *  take the whole session with it. No-op when Save hits is off. */
+void recon_hits_autosave_tick(ReconApp* app);
+
 void recon_hits_save_after_delete(ReconApp* app);

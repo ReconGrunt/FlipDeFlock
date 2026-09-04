@@ -149,6 +149,12 @@ void recon_app_report_flock(
         }
     }
 
+    // Something in the table changed, so the copy on the card is now stale.
+    // recon_hits_autosave_tick() flushes it on an interval; before that existed
+    // the only write was scan_session_stop(), and a flat battery mid-scan took
+    // the whole session with it.
+    app->hits_dirty = true;
+
     furi_mutex_release(app->mutex);
 }
 
@@ -873,6 +879,46 @@ void recon_hits_save(ReconApp* app) {
     storage_file_free(file);
 }
 
+// How long a detection may sit in RAM before it reaches the card. The bound on
+// what a flat battery or a crash can take with it. 30 s costs one rewrite of a
+// <=64-row file per half minute during an active scan, which is nothing next to
+// losing the drive.
+#define RECON_HITS_AUTOSAVE_MS 30000u
+
+void recon_hits_autosave_tick(ReconApp* app) {
+    if(!app->settings.save_hits) return;
+
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    bool dirty = app->hits_dirty;
+    uint32_t last = app->hits_last_save;
+    furi_mutex_release(app->mutex);
+
+    if(!dirty) return;
+    uint32_t now = furi_get_tick();
+    // First flush of a session happens one full interval in, not instantly: a
+    // scan that finds something in its first second would otherwise write on the
+    // very next tick, before the table has settled.
+    if(last != 0 && (now - last) < RECON_HITS_AUTOSAVE_MS) return;
+    if(last == 0) {
+        // Seed the clock on the first dirty tick so the interval is measured from
+        // "first detection", not from app launch.
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        app->hits_last_save = now;
+        furi_mutex_release(app->mutex);
+        return;
+    }
+
+    // Clear the flag BEFORE writing. A detection that lands mid-write re-dirties
+    // it and gets picked up next interval; clearing afterwards could swallow that
+    // update instead, which is the one direction that loses data.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->hits_dirty = false;
+    app->hits_last_save = now;
+    furi_mutex_release(app->mutex);
+
+    recon_hits_save(app);
+}
+
 void recon_hits_save_after_delete(ReconApp* app) {
     if(!app->settings.save_hits) return;
 
@@ -1054,6 +1100,11 @@ static void recon_tick_event_callback(void* context) {
     // that must not need a per-scene call somebody forgets to add. A no-op when
     // the phone source is not selected, and on firmware without the service.
     gps_rpc_tick(app->gps_rpc);
+    // Get detections onto the card while the scan is still running. Hoisted here
+    // for the same reason as the three above: every scene gets it and no new
+    // scene has to remember. Cheap -- it is a flag test on all but one tick in
+    // 120, and a no-op entirely when Save hits is off.
+    recon_hits_autosave_tick(app);
     scene_manager_handle_tick_event(app->scene_manager);
 }
 
