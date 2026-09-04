@@ -19,6 +19,10 @@ void flock_view_set_app(FlockView* fv, void* app);
 /** Set the OK-press callback. */
 void flock_view_set_ok_callback(FlockView* fv, FlockViewOkCallback cb, void* context);
 
+/** Long-press OK on a row: the deliberate actions (confirm, rename, delete).
+ *  Same signature as the OK callback and the same currency -- a TABLE index. */
+void flock_view_set_hold_callback(FlockView* fv, FlockViewOkCallback cb, void* context);
+
 /** Request a redraw (call from a GUI-thread tick; never hold app->mutex). */
 void flock_view_refresh(FlockView* fv);
 

@@ -17,6 +17,9 @@ static void (*const recon_scene_on_enter_handlers[])(void*) = {
     recon_scene_locator_home_on_enter,
     recon_scene_support_on_enter,
     recon_scene_help_on_enter,
+    recon_scene_hit_menu_on_enter,
+    recon_scene_hit_rename_on_enter,
+    recon_scene_saved_hits_on_enter,
 };
 
 static bool (*const recon_scene_on_event_handlers[])(void*, SceneManagerEvent) = {
@@ -34,6 +37,9 @@ static bool (*const recon_scene_on_event_handlers[])(void*, SceneManagerEvent) =
     recon_scene_locator_home_on_event,
     recon_scene_support_on_event,
     recon_scene_help_on_event,
+    recon_scene_hit_menu_on_event,
+    recon_scene_hit_rename_on_event,
+    recon_scene_saved_hits_on_event,
 };
 
 static void (*const recon_scene_on_exit_handlers[])(void*) = {
@@ -51,6 +57,9 @@ static void (*const recon_scene_on_exit_handlers[])(void*) = {
     recon_scene_locator_home_on_exit,
     recon_scene_support_on_exit,
     recon_scene_help_on_exit,
+    recon_scene_hit_menu_on_exit,
+    recon_scene_hit_rename_on_exit,
+    recon_scene_saved_hits_on_exit,
 };
 
 const SceneManagerHandlers recon_scene_handlers = {

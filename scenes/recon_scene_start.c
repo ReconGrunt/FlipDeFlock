@@ -10,6 +10,7 @@ typedef enum {
     StartItemSettings,
     StartItemAbout,
     StartItemFlockMap,
+    StartItemSavedHits,
     StartItemDeflockShare,
     StartItemLocator,
     StartItemSupport,
@@ -51,6 +52,10 @@ void recon_scene_start_on_enter(void* context) {
         submenu, "Flock / ALPR Detect", StartItemFlock, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Locator", StartItemLocator, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Flock Map", StartItemFlockMap, recon_scene_start_submenu_cb, app);
+    // Post-drive review: confirm what you went and looked at, name what you
+    // worked out, bin the junk. Deliberately not buried in Reports -- going
+    // through a drive's hits is a primary job, not an export option.
+    submenu_add_item(submenu, "Saved Hits", StartItemSavedHits, recon_scene_start_submenu_cb, app);
     submenu_add_item(
         submenu, "ESP32 Firmware", StartItemFirmware, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Reports", StartItemReports, recon_scene_start_submenu_cb, app);
@@ -77,6 +82,9 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
             break;
         case StartItemLocator:
             scene_manager_next_scene(app->scene_manager, ReconSceneLocator);
+            break;
+        case StartItemSavedHits:
+            scene_manager_next_scene(app->scene_manager, ReconSceneSavedHits);
             break;
         case StartItemFlockMap:
             scene_manager_next_scene(app->scene_manager, ReconSceneFlockMap);

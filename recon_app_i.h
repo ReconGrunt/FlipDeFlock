@@ -12,6 +12,7 @@
 #include <gui/modules/variable_item_list.h>
 #include <gui/modules/widget.h>
 #include <gui/modules/popup.h>
+#include <gui/modules/text_input.h>
 #include <notification/notification.h>
 #include <notification/notification_messages.h>
 #include <storage/storage.h>
@@ -78,6 +79,7 @@ typedef enum {
     ReconViewFlockMap,
     ReconViewDeflockQr,
     ReconViewLocator,
+    ReconViewTextInput,
 } ReconView;
 
 /** ESP32 link backend / parsing strategy. */
@@ -309,6 +311,7 @@ typedef struct {
     VariableItemList* var_item_list;
     Widget* widget;
     Popup* popup;
+    TextInput* text_input;
     FlockView* flock_view;
     FlockDetailView* flock_detail_view;
     FlockMapView* flock_map_view;
@@ -322,6 +325,12 @@ typedef struct {
      * since the scan began -- reported from a real drive. The worker sets
      * hits_dirty on every new/updated detection; the GUI tick flushes on an
      * interval. Not a setting: there is no reason to want crash loss. */
+    /* Hit action menu (hold OK on a row). Table index of the device the menu and
+     * the rename screen act on, captured when the menu opens so a detection
+     * landing mid-edit cannot redirect it at a different camera. */
+    int hit_menu_idx;
+    char rename_buf[FLOCK_STORE_LABEL_LEN];
+
     bool hits_dirty;
     uint32_t hits_last_save; /**< furi tick of the last successful flush */
 

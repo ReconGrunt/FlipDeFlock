@@ -6,6 +6,7 @@
 
 typedef enum {
     FlockCustomOpenDetail = 100,
+    FlockCustomOpenHitMenu,
 } FlockCustomEvent;
 
 static void recon_scene_flock_ok_cb(void* context, int selected_index) {
@@ -14,10 +15,20 @@ static void recon_scene_flock_ok_cb(void* context, int selected_index) {
     view_dispatcher_send_custom_event(app->view_dispatcher, FlockCustomOpenDetail);
 }
 
+static void recon_scene_flock_hold_cb(void* context, int selected_index) {
+    ReconApp* app = context;
+    // Captured HERE, not read again when the menu opens: a detection landing in
+    // between would otherwise slide the menu onto a different camera, and one of
+    // its entries is Delete.
+    app->hit_menu_idx = selected_index;
+    view_dispatcher_send_custom_event(app->view_dispatcher, FlockCustomOpenHitMenu);
+}
+
 void recon_scene_flock_on_enter(void* context) {
     ReconApp* app = context;
 
     flock_view_set_ok_callback(app->flock_view, recon_scene_flock_ok_cb, app);
+    flock_view_set_hold_callback(app->flock_view, recon_scene_flock_hold_cb, app);
 
     // ESP first so it claims its UART (and disables the expansion manager) before
     // GPS. Returns true only on a genuinely FRESH session -- entered from the
@@ -69,6 +80,10 @@ bool recon_scene_flock_on_event(void* context, SceneManagerEvent event) {
         flock_view_refresh(app->flock_view);
         consumed = true;
     } else if(event.type == SceneManagerEventTypeCustom) {
+        if(event.event == FlockCustomOpenHitMenu) {
+            scene_manager_next_scene(app->scene_manager, ReconSceneHitMenu);
+            return true;
+        }
         if(event.event == FlockCustomOpenDetail) {
             furi_mutex_acquire(app->mutex, FuriWaitForever);
             bool valid = app->selected >= 0 && app->selected < (int)app->flock_count;

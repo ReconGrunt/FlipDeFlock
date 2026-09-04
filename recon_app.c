@@ -1155,6 +1155,7 @@ static ReconApp* recon_app_alloc(void) {
     app->var_item_list = variable_item_list_alloc();
     app->widget = widget_alloc();
     app->popup = popup_alloc();
+    app->text_input = text_input_alloc();
     app->flock_view = flock_view_alloc();
     flock_view_set_app(app->flock_view, app);
     app->flock_detail_view = flock_detail_view_alloc();
@@ -1174,6 +1175,8 @@ static ReconApp* recon_app_alloc(void) {
         variable_item_list_get_view(app->var_item_list));
     view_dispatcher_add_view(app->view_dispatcher, ReconViewWidget, widget_get_view(app->widget));
     view_dispatcher_add_view(app->view_dispatcher, ReconViewPopup, popup_get_view(app->popup));
+    view_dispatcher_add_view(
+        app->view_dispatcher, ReconViewTextInput, text_input_get_view(app->text_input));
     view_dispatcher_add_view(
         app->view_dispatcher, ReconViewFlock, flock_view_get_view(app->flock_view));
     view_dispatcher_add_view(
@@ -1197,6 +1200,7 @@ static void recon_app_free(ReconApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewVarItemList);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewWidget);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewPopup);
+    view_dispatcher_remove_view(app->view_dispatcher, ReconViewTextInput);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlock);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlockDetail);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewFlockMap);
@@ -1207,6 +1211,7 @@ static void recon_app_free(ReconApp* app) {
     variable_item_list_free(app->var_item_list);
     widget_free(app->widget);
     popup_free(app->popup);
+    text_input_free(app->text_input);
     flock_view_free(app->flock_view);
     flock_detail_view_free(app->flock_detail_view);
     flock_map_view_free(app->flock_map_view);

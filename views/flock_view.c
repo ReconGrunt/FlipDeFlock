@@ -18,6 +18,8 @@ struct FlockView {
     View* view;
     FlockViewOkCallback ok_cb;
     void* ok_ctx;
+    FlockViewOkCallback hold_cb;
+    void* hold_ctx;
 };
 
 typedef struct {
@@ -106,6 +108,9 @@ typedef struct {
     uint8_t mac[6];
     int8_t rssi;
     bool marked;
+    bool confirmed; /**< operator saw it -- shown as "+" so ground truth is visible
+                      *   on the row without opening anything */
+    char label[FLOCK_STORE_LABEL_LEN]; /**< operator's own name; wins over the SSID */
     bool selected;
     bool archived; /**< restored from hits.csv, not seen yet this session */
     uint32_t seen_epoch; /**< RTC seconds of that stored sighting (archived only) */
@@ -334,6 +339,8 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             memcpy(r->mac, e->mac, 6);
             r->rssi = e->rssi;
             r->marked = e->marked;
+            r->confirmed = e->confirmed;
+            snprintf(r->label, sizeof(r->label), "%s", e->label);
             r->selected = (pos == model->selected);
             r->archived = e->archived;
             r->seen_epoch = e->seen_epoch;
@@ -724,7 +731,11 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             char meta[18];
             char age[8];
             flock_age_str(age, sizeof(age), now_epoch, r->seen_epoch);
-            snprintf(meta, sizeof(meta), "%s%s", r->marked ? "*" : "", age);
+            // "+" = the operator went and looked at this one. It is the only
+            // fact on the row that is not an inference, so it earns a mark of
+            // its own rather than being folded into "*".
+            snprintf(
+                meta, sizeof(meta), "%s%s%s", r->confirmed ? "+" : "", r->marked ? "*" : "", age);
             canvas_draw_str_aligned(canvas, 126, y + 8, AlignRight, AlignBottom, meta);
             text_max_x = 126 - canvas_string_width(canvas, meta) - 3;
         } else {
@@ -732,8 +743,13 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
                 // marked indicator just left of the bars
                 canvas_draw_str(canvas, 96, y + 8, "*");
             }
+            if(r->confirmed) {
+                // Left of the mark again, so a row can carry both without them
+                // overlapping or either one moving depending on the other.
+                canvas_draw_str(canvas, 89, y + 8, "+");
+            }
             ui_signal_bars(canvas, 104, y - 1, r->rssi); // cell ~104..114, baseline y+7
-            text_max_x = r->marked ? 94 : 102;
+            text_max_x = r->confirmed ? 87 : (r->marked ? 94 : 102);
         }
 
         // ---- left: confidence rung, radio glyph, then the name ---------------
@@ -767,7 +783,12 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             cls = "VG:";
 
         char line[48];
-        if(r->ssid[0] != '\0') {
+        if(r->label[0] != '\0') {
+            // The operator's own name wins. They set it precisely because the
+            // observed name was not what they wanted to read here; the SSID is
+            // still on the detail screen and in every report.
+            snprintf(line, sizeof(line), "%s%s", cls, r->label);
+        } else if(r->ssid[0] != '\0') {
             // ">" means "this device is LOOKING FOR that network", which is what a
             // probe request's SSID actually is. Without it, a phone hunting its
             // home wifi reads as an ALPR camera named after someone's router --
@@ -907,6 +928,23 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                 },
                 true);
             handled = true;
+        } else if(event->key == InputKeyOk && event->type == InputTypeLong) {
+            // Deliberate actions live behind a hold so the fast keys stay fast:
+            // tap-OK opens the detail screen and Left deletes, both used while
+            // driving. Maps the display position back to a table index exactly
+            // as the short press does.
+            int hold_idx = -1;
+            with_view_model(
+                fv->view,
+                FlockViewModel * model,
+                {
+                    if(model->selected >= 0 && model->selected < model->order_count) {
+                        hold_idx = model->order[model->selected];
+                    }
+                },
+                false);
+            if(hold_idx >= 0 && fv->hold_cb) fv->hold_cb(fv->hold_ctx, hold_idx);
+            handled = true;
         } else if(event->key == InputKeyOk && event->type == InputTypeShort) {
             // The fault panel owns OK while it is up: the first press is far more
             // likely to be "I have read this" than "open a detail screen I cannot
@@ -944,6 +982,8 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
 FlockView* flock_view_alloc(void) {
     FlockView* fv = malloc(sizeof(FlockView));
     fv->ok_cb = NULL;
+    fv->hold_cb = NULL;
+    fv->hold_ctx = NULL;
     fv->ok_ctx = NULL;
     fv->view = view_alloc();
     view_set_context(fv->view, fv);
@@ -978,6 +1018,11 @@ View* flock_view_get_view(FlockView* fv) {
 
 void flock_view_set_app(FlockView* fv, void* app) {
     with_view_model(fv->view, FlockViewModel * model, { model->app = app; }, false);
+}
+
+void flock_view_set_hold_callback(FlockView* fv, FlockViewOkCallback cb, void* context) {
+    fv->hold_cb = cb;
+    fv->hold_ctx = context;
 }
 
 void flock_view_set_ok_callback(FlockView* fv, FlockViewOkCallback cb, void* context) {
