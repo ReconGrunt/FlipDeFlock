@@ -67,6 +67,12 @@ typedef enum {
 #define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
 #define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
 #define RECON_HITS_PATH     RECON_APP_FOLDER "/hits.csv"
+// One appended row per scan session. Exists because a drive that finds nothing
+// is INDISTINGUISHABLE from a companion that never scanned, an app that rejected
+// everything, and a road with no cameras on it -- all four render as an empty
+// list, and every counter that could tell them apart was live-only and died with
+// the session. v0.79-v0.83 shipped without this and cost two operators a drive.
+#define RECON_DIAG_PATH     RECON_APP_FOLDER "/diag.csv"
 
 /** ViewDispatcher view indexes. */
 typedef enum {
@@ -453,6 +459,17 @@ typedef struct {
                             *  long drives as a cosmetic annoyance, when it was the ESP
                             *  resetting and dropping detections. */
     uint8_t esp_proto_version; /**< companion wire-protocol version (FLOCKCO banner; 0 = unknown) */
+
+    /* ---- session diagnostics (see RECON_DIAG_PATH) ----------------------
+     * Counted app-side so they can be compared against the companion's OWN
+     * frames/hits totals. The comparison is the whole point: companion hits
+     * climbing while `diag_accepted` stays flat means the app is dropping
+     * detections; both flat means nothing was ever heard. */
+    uint32_t diag_flock_msgs; /**< detection reports handed to report_flock */
+    uint32_t diag_accepted; /**< of those, the ones that reached the table */
+    uint32_t diag_rej_conf; /**< dropped: scored FlockConfidenceNone */
+    uint32_t diag_rej_full; /**< dropped: table full and nothing evictable */
+    uint32_t diag_start_epoch; /**< wall clock at scan_session_start */
     bool esp_proto_mismatch; /**< companion speaks a different protocol version than the app */
     uint32_t esp_dropped_lines; /**< overlong RX lines dropped whole (wire-protocol health metric) */
     uint8_t esp_link_state; /**< EspLinkState: Stopped / Running / PortBusy (R6 error surface) */
@@ -551,6 +568,16 @@ void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch);
 
 /** Update the count of overlong RX lines dropped whole (health metric; thread-safe). */
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
+
+/** Zero the per-session diagnostic counters and stamp the start time. */
+void recon_diag_begin(ReconApp* app);
+
+/** Append this session's diagnostic row. Always written, even with save_hits
+ *  off: it records COUNTS, never a MAC, an SSID or a position, so it carries no
+ *  record of where you have been. That is why it is not behind the privacy
+ *  toggle -- the toggle exists to stop logging places, not to stop logging
+ *  whether the hardware worked. */
+void recon_diag_save(ReconApp* app);
 
 /** Update the queryable ESP-link state (thread-safe). See EspLinkState. */
 void recon_app_set_esp_link_state(ReconApp* app, EspLinkState state);

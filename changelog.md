@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.84
+
+**A drive that finds nothing now tells you why.** Two operators drove past known
+cameras and came back with an empty list, and there was no way to tell what had
+happened -- because a companion that never scanned, an app that rejected every
+report, and a road with no cameras on it all produce the same empty screen. Every
+counter that could separate them existed live on the scan view and died with the
+session.
+
+### Added
+
+- **Session diagnostics** at `apps_data/flipdeflock/diag.csv`, one appended row
+  per scan. It records the companion's own frame and hit totals next to the app's
+  count of reports received, accepted, and rejected -- with the reason. Companion
+  hits climbing while accepted stays flat means the app is dropping detections;
+  both flat means nothing was ever heard. It also logs dropped serial lines,
+  companion reboots, wire-protocol version, and the band actually in force as
+  opposed to the one requested.
+- The row carries **counts only -- never a MAC, an SSID or a position** -- so it
+  is written whether or not hit saving is on. The privacy toggle exists to stop
+  logging places, not to stop logging whether the hardware worked.
+
 ## v0.83
 
 **Everything a real drive turned up.** A field session came back with a flat

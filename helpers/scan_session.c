@@ -18,6 +18,7 @@ bool scan_session_start(void* _app) {
     // and the on-banner re-send cannot drift apart; it is a no-op on Marauder.
     esp_link_send_band(app->esp);
     esp_link_send_gps_cfg(app->esp);
+    recon_diag_begin(app);
     return true;
 }
 
@@ -80,4 +81,8 @@ void scan_session_stop(void* _app) {
     // AFTER the links are torn down, so the write can't race a still-running
     // ESP worker.
     recon_hits_save(app);
+    // Then the session's own vital signs. Written unconditionally: a drive that
+    // found nothing is exactly the session whose diagnostics matter most, and
+    // that is precisely the case where hits.csv is empty and tells you nothing.
+    recon_diag_save(app);
 }

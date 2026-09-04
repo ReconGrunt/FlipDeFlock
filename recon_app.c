@@ -36,9 +36,15 @@ void recon_app_report_flock(
     uint32_t ie_fp,
     FlockDevClass dev_class,
     bool hidden) {
-    if(confidence == FlockConfidenceNone) return;
-
     furi_mutex_acquire(app->mutex, FuriWaitForever);
+    // Counted BEFORE the confidence gate, so the diagnostic can separate "the
+    // companion reported nothing" from "it reported plenty and we binned it".
+    app->diag_flock_msgs++;
+    if(confidence == FlockConfidenceNone) {
+        app->diag_rej_conf++;
+        furi_mutex_release(app->mutex);
+        return;
+    }
 
     uint32_t now = furi_get_tick();
     FlockEntry* entry = NULL;
@@ -69,7 +75,10 @@ void recon_app_report_flock(
                     victim = (int)i;
                 }
             }
-            if(victim >= 0) entry = &app->flock[victim];
+            if(victim >= 0)
+                entry = &app->flock[victim];
+            else
+                app->diag_rej_full++; // table full of live rows; this one is lost
         }
         if(entry) {
             memset(entry, 0, sizeof(FlockEntry));
@@ -83,6 +92,7 @@ void recon_app_report_flock(
     }
 
     if(entry) {
+        app->diag_accepted++;
         uint8_t prev_conf = (uint8_t)entry->confidence;
         // Captured BEFORE the flag is cleared below: it is what tells the alert
         // rule that this device's latch and confidence were restored from disk
@@ -923,6 +933,86 @@ void recon_hits_autosave_tick(ReconApp* app) {
     furi_mutex_release(app->mutex);
 
     recon_hits_save(app);
+}
+
+void recon_diag_begin(ReconApp* app) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->diag_flock_msgs = 0;
+    app->diag_accepted = 0;
+    app->diag_rej_conf = 0;
+    app->diag_rej_full = 0;
+    app->diag_start_epoch = furi_hal_rtc_get_timestamp();
+    furi_mutex_release(app->mutex);
+}
+
+void recon_diag_save(ReconApp* app) {
+    // Never write a row for a session that never started (the Main Menu calls
+    // scan_session_stop() on entry, including the one at launch).
+    if(app->diag_start_epoch == 0) return;
+
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    uint32_t start = app->diag_start_epoch;
+    uint32_t msgs = app->diag_flock_msgs;
+    uint32_t acc = app->diag_accepted;
+    uint32_t rej_c = app->diag_rej_conf;
+    uint32_t rej_f = app->diag_rej_full;
+    uint32_t lines = app->esp_lines;
+    uint32_t dropped = app->esp_dropped_lines;
+    uint32_t reboots = app->esp_reboots;
+    uint32_t frames = app->esp_frames;
+    uint32_t ehits = app->esp_hits;
+    uint16_t band_ch = app->esp_band_channels;
+    uint8_t band_act = app->esp_band_actual;
+    uint8_t band_req = app->settings.esp_band;
+    uint8_t backend = app->settings.backend;
+    uint8_t proto = app->esp_proto_version;
+    uint32_t table = (uint32_t)app->flock_count;
+    app->diag_start_epoch = 0; // one row per session, not one per teardown call
+    furi_mutex_release(app->mutex);
+
+    uint32_t end = furi_hal_rtc_get_timestamp();
+
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    storage_common_mkdir(storage, RECON_APP_FOLDER);
+    File* file = storage_file_alloc(storage);
+    if(storage_file_open(file, RECON_DIAG_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
+        FuriString* s = furi_string_alloc();
+        if(storage_file_size(file) == 0) {
+            furi_string_cat_str(
+                s,
+                "# FlipDeFlock session diagnostics v1 -- counts only, no MAC/SSID/position\n"
+                "start,end,dur_s,ver,backend,band_req,band_act,band_ch,proto,"
+                "esp_lines,esp_dropped,esp_reboots,esp_frames,esp_hits,"
+                "reports,accepted,rej_conf,rej_full,table\n");
+        }
+        furi_string_cat_printf(
+            s,
+            "%lu,%lu,%lu,%s,%u,%u,%u,%u,%u,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
+            (unsigned long)start,
+            (unsigned long)end,
+            (unsigned long)(end - start),
+            RECON_VERSION,
+            (unsigned)backend,
+            (unsigned)band_req,
+            (unsigned)band_act,
+            (unsigned)band_ch,
+            (unsigned)proto,
+            (unsigned long)lines,
+            (unsigned long)dropped,
+            (unsigned long)reboots,
+            (unsigned long)frames,
+            (unsigned long)ehits,
+            (unsigned long)msgs,
+            (unsigned long)acc,
+            (unsigned long)rej_c,
+            (unsigned long)rej_f,
+            (unsigned long)table);
+        storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
+        furi_string_free(s);
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    furi_record_close(RECORD_STORAGE);
 }
 
 void recon_hits_save_after_delete(ReconApp* app) {
