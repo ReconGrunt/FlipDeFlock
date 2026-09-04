@@ -22,12 +22,56 @@ struct FlockView {
 
 typedef struct {
     void* app; /**< ReconApp* */
-    int selected;
+    int selected; /**< DISPLAY position (index into order[]), not a table index */
     int top;
+    /* Newest-first display order: order[display_pos] = index into app->flock[].
+     * The table itself stays in first-seen order because other code (the store,
+     * the locator, the detail scene) addresses it by index; only the view
+     * reorders. Rebuilt every draw -- 64 entries, once per tick, is free. */
+    int order[RECON_FLOCK_MAX];
+    int order_count;
+    /* The cursor is anchored to a DEVICE, not a row number. With newest-first
+     * ordering a new hit lands at the top and pushes every row down; without
+     * this the selection would slide under the operator's finger, and Left on
+     * this screen is Delete. Cleared by Up/Down so a deliberate move wins. */
+    uint8_t sel_mac[6];
+    bool sel_valid;
     int card_index; /**< row the live card points at, or -1. Written by the draw
                       *  pass, read by OK, so the jump lands on the device that
                       *  actually beeped rather than re-deriving it. */
 } FlockViewModel;
+
+/**
+ * Newest-first comparison. seen_epoch is wall clock and is written on EVERY live
+ * sighting as well as carried by entries restored from hits.csv, so it is the one
+ * key that orders live and archived rows against each other correctly. last_tick
+ * only breaks ties inside a session (and is 0 for a restored entry).
+ */
+static bool flock_row_newer(const FlockEntry* a, const FlockEntry* b) {
+    if(a->seen_epoch != b->seen_epoch) return a->seen_epoch > b->seen_epoch;
+    return a->last_tick > b->last_tick;
+}
+
+/** Rebuild order[] newest-first. Caller holds app->mutex. */
+static void flock_view_build_order(ReconApp* app, FlockViewModel* model) {
+    int n = (int)app->flock_count;
+    if(n > RECON_FLOCK_MAX) n = RECON_FLOCK_MAX;
+    for(int i = 0; i < n; i++)
+        model->order[i] = i;
+    // Insertion sort: n <= 64 and it runs once per draw, so the simple algorithm
+    // is the right one. Anything cleverer here would be harder to read for no
+    // measurable gain.
+    for(int i = 1; i < n; i++) {
+        int v = model->order[i];
+        int j = i - 1;
+        while(j >= 0 && flock_row_newer(&app->flock[v], &app->flock[model->order[j]])) {
+            model->order[j + 1] = model->order[j];
+            j--;
+        }
+        model->order[j + 1] = v;
+    }
+    model->order_count = n;
+}
 
 /** How long the "what just beeped?" card stays up, in ticks (ms). */
 #define CARD_MS 3000u
@@ -243,17 +287,38 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
 
     // Clamp selection/scroll (touches only the view model) then copy the visible
     // rows, so the render loop below needs no lock.
+    flock_view_build_order(app, model);
     if(count > 0) {
-        if(model->selected >= (int)count) model->selected = count - 1;
-        if(model->selected < 0) model->selected = 0;
+        // Re-find the anchored device in the new order. If it is gone (deleted,
+        // or evicted from a full table) fall back to the old position so the
+        // cursor stays roughly where the operator left it.
+        int sel = -1;
+        if(model->sel_valid) {
+            for(int i = 0; i < model->order_count; i++) {
+                if(memcmp(app->flock[model->order[i]].mac, model->sel_mac, 6) == 0) {
+                    sel = i;
+                    break;
+                }
+            }
+        }
+        if(sel < 0) sel = model->selected;
+        if(sel >= model->order_count) sel = model->order_count - 1;
+        if(sel < 0) sel = 0;
+        model->selected = sel;
+        // Re-anchor to whatever is under the cursor now, so the next frame
+        // tracks this device even if newer hits arrive above it.
+        memcpy(model->sel_mac, app->flock[model->order[model->selected]].mac, 6);
+        model->sel_valid = true;
+
         if(model->selected < model->top) model->top = model->selected;
         if(model->selected >= model->top + VISIBLE_ROWS)
             model->top = model->selected - VISIBLE_ROWS + 1;
         if(model->top < 0) model->top = 0;
 
         for(int row = 0; row < VISIBLE_ROWS; row++) {
-            int idx = model->top + row;
-            if(idx >= (int)count) break;
+            int pos = model->top + row;
+            if(pos >= model->order_count) break;
+            int idx = model->order[pos];
             FlockEntry* e = &app->flock[idx];
             FlockRowSnap* r = &rows[nrows++];
             r->conf_ch = confidence_char(e->confidence);
@@ -265,7 +330,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             memcpy(r->mac, e->mac, 6);
             r->rssi = e->rssi;
             r->marked = e->marked;
-            r->selected = (idx == model->selected);
+            r->selected = (pos == model->selected);
             r->archived = e->archived;
             r->seen_epoch = e->seen_epoch;
         }
@@ -774,10 +839,23 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                     with_view_model(
                         fv->view, FlockViewModel * model, { model->card_index = -1; }, true);
                     if(event->key == InputKeyOk) {
+                        // card_index is a TABLE index. Anchor the cursor by that
+                        // device's MAC and let the next draw place it, rather
+                        // than writing a table index into a display position.
                         with_view_model(
                             fv->view,
                             FlockViewModel * model,
-                            { model->selected = card_idx; },
+                            {
+                                ReconApp* a2 = model->app;
+                                if(a2) {
+                                    furi_mutex_acquire(a2->mutex, FuriWaitForever);
+                                    if(card_idx < (int)a2->flock_count) {
+                                        memcpy(model->sel_mac, a2->flock[card_idx].mac, 6);
+                                        model->sel_valid = true;
+                                    }
+                                    furi_mutex_release(a2->mutex);
+                                }
+                            },
                             true);
                         if(fv->ok_cb) fv->ok_cb(fv->ok_ctx, card_idx);
                     }
@@ -791,6 +869,9 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                 FlockViewModel * model,
                 {
                     if(model->selected > 0) model->selected--;
+                    // A deliberate move re-anchors to whatever is now under the
+                    // cursor; the next draw writes sel_mac from this position.
+                    model->sel_valid = false;
                 },
                 true);
             handled = true;
@@ -799,14 +880,11 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                 fv->view,
                 FlockViewModel * model,
                 {
-                    ReconApp* app = model->app;
-                    int count = 0;
-                    if(app) {
-                        furi_mutex_acquire(app->mutex, FuriWaitForever);
-                        count = (int)app->flock_count;
-                        furi_mutex_release(app->mutex);
-                    }
-                    if(model->selected < count - 1) model->selected++;
+                    // Bound by the DISPLAY list, which is what the operator sees.
+                    // order_count is rebuilt every draw from flock_count, so it
+                    // needs no lock of its own here.
+                    if(model->selected < model->order_count - 1) model->selected++;
+                    model->sel_valid = false;
                 },
                 true);
             handled = true;
@@ -823,9 +901,21 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                 furi_mutex_release(app->mutex);
                 if(showing) return true;
             }
-            int sel = 0;
-            with_view_model(fv->view, FlockViewModel * model, { sel = model->selected; }, false);
-            if(fv->ok_cb) fv->ok_cb(fv->ok_ctx, sel);
+            // ok_cb takes a TABLE index, and model->selected is a display
+            // position, so map it through order[]. Passing the display position
+            // straight through would open the detail screen for a different
+            // camera than the highlighted one.
+            int table_idx = -1;
+            with_view_model(
+                fv->view,
+                FlockViewModel * model,
+                {
+                    if(model->selected >= 0 && model->selected < model->order_count) {
+                        table_idx = model->order[model->selected];
+                    }
+                },
+                false);
+            if(table_idx >= 0 && fv->ok_cb) fv->ok_cb(fv->ok_ctx, table_idx);
             handled = true;
         }
     }
@@ -849,6 +939,8 @@ FlockView* flock_view_alloc(void) {
             model->selected = 0;
             model->top = 0;
             model->card_index = -1;
+            model->order_count = 0;
+            model->sel_valid = false;
         },
         false);
     return fv;
@@ -885,6 +977,9 @@ void flock_view_reset(FlockView* fv) {
         {
             model->selected = 0;
             model->top = 0;
+            // Drop the device anchor too: a reset means "start at the top of the
+            // list", and a stale MAC would drag the cursor back to it.
+            model->sel_valid = false;
         },
         true);
 }
