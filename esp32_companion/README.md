@@ -255,3 +255,24 @@ carry this very link).
 OUI list and detection approach build on the open counter-surveillance work of
 `colonelpanichacks/flock-you`, `0xXyc/flock-you-wifi-recon`, and the DeFlock
 community (deflock.org). Thanks to the researchers who mapped these signatures.
+
+## Which board?
+
+**A classic ESP32 (WROOM) is the one to get.** It has both radios, so it runs the
+whole detector. `flipdeflock_companion_esp32wroom.bin` is the image for it.
+
+**ESP32-S2 (the official Flipper Wi-Fi Devboard / "Wi-Fi Module v1") is supported
+but degraded.** That chip has no Bluetooth radio at all -- not a driver gap, no
+Bluetooth silicon -- so `flipdeflock_companion_esp32s2.bin` is a **Wi-Fi-only**
+build. Probe and OUI camera detection work exactly as they do anywhere else, and
+the BLE half of Flock detection is permanently absent. The app shows
+"WiFi only" in its header when it sees this SoC.
+
+That distinction matters when a drive comes back empty: on a Wi-Fi-only board,
+"found nothing" is a weaker statement than the same words from a board that can
+hear both, and there is no way to tell the two apart on screen unless the app
+says so.
+
+Before this build the sketch did not compile for S2 at all. Flashing the WROOM
+image to one produced a board that appeared to flash fine and then never spoke,
+which the app showed as `ch 0` with no error (issue #25).

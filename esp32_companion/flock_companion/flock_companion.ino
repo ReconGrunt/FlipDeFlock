@@ -98,12 +98,36 @@
 #include "esp_event.h"
 #include "nvs_flash.h"
 
+/* ---- Bluetooth capability -------------------------------------------------
+ *
+ * The ESP32-S2 has NO Bluetooth radio at all. The Arduino core therefore ships
+ * no BLE library for it and every BLE symbol below is simply absent, so this
+ * sketch did not compile for that target at all -- it died on BLEAddress. That
+ * is not a build we forgot to publish; the silicon cannot do Bluetooth.
+ *
+ * On such a part this now builds as a WI-FI-ONLY companion: probe/OUI camera
+ * detection works exactly as it does anywhere else, and the BLE half of Flock
+ * detection is gone permanently. Worth saying out loud, because an operator on
+ * a Wi-Fi-only board who finds nothing cannot otherwise tell "there was no
+ * camera" from "this board cannot see half of them".
+ *
+ * CONFIG_BT_ENABLED / CONFIG_BLUEDROID_ENABLED come from sdkconfig.h, already
+ * pulled in by Arduino.h above.
+ */
+#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+#define FLOCK_HAS_BLE 1
+#else
+#define FLOCK_HAS_BLE 0
+#endif
+
+#if FLOCK_HAS_BLE
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
 #include <BLEClient.h>
 #include <BLERemoteService.h>
 #include <BLERemoteCharacteristic.h>
+#endif
 
 #include <string>
 
@@ -151,9 +175,11 @@ static inline std::string fstr(const String& s) {
 /** Same, but `cont` keeps results accumulated from earlier slices. */
 #define FLOCK_SCAN_CONT(scan, secs, cont) (*(scan)->start((secs), (cont)))
 /** 3.x: already a flat pointer to the 6 address bytes. */
+#if FLOCK_HAS_BLE
 static inline const uint8_t* fble_addr_bytes(BLEAddress& a) {
     return a.getNative();
 }
+#endif
 #else
 /** 2.x already returns std::string; pass through so call sites stay identical. */
 static inline std::string fstr(const std::string& s) {
@@ -164,9 +190,11 @@ static inline std::string fstr(const std::string& s) {
 /** Same, but `cont` keeps results accumulated from earlier slices. */
 #define FLOCK_SCAN_CONT(scan, secs, cont) ((scan)->start((secs), (cont)))
 /** 2.x: uint8_t(*)[6], so one deref yields the uint8_t*. */
+#if FLOCK_HAS_BLE
 static inline const uint8_t* fble_addr_bytes(BLEAddress& a) {
     return *a.getNative();
 }
+#endif
 #endif
 
 // ---- Flock-associated OUI prefixes (29) ----------------------------------
@@ -495,7 +523,9 @@ static bool parse_hexmac(const char* s, uint8_t out[6]) {
 // toggling promiscuous off during a BLE scan, then back on. flockcombo
 // interleaves a WiFi-promiscuous phase with a periodic BLE scan phase.
 static bool g_ble_inited = false;
+#if FLOCK_HAS_BLE
 static BLEScan* g_ble = nullptr;
+#endif
 static bool g_combo = false;
 static uint32_t g_phase_start = 0;
 #define COMBO_WIFI_MS 9000 // ~3 channel sweeps before a BLE scan (WiFi-biased)
@@ -1238,6 +1268,15 @@ static void wifi_security_scan() {
 //   contains '=' so the Flipper tells it apart from mfghex. Older parsers ignore.
 //   sep=1: Apple Find My tracker was in separated-state payload form. This is
 //   an indicator only; the app still requires repeated sightings over distance.
+static void ble_action_emit(const char* op, const char* status, int rssi, bool have_rssi) {
+    if(have_rssi)
+        Serial.printf("ACT,%s,%s,%d\n", op, status, rssi);
+    else
+        Serial.printf("ACT,%s,%s\n", op, status);
+}
+
+#if FLOCK_HAS_BLE
+
 static void ble_ensure_init() {
     if(g_ble_inited) return;
     BLEDevice::init("");
@@ -1462,13 +1501,6 @@ static void ble_locate_scan() {
 
 static volatile bool g_ring_response_ready = false;
 static volatile uint16_t g_ring_response_status = 0xFFFF;
-
-static void ble_action_emit(const char* op, const char* status, int rssi, bool have_rssi) {
-    if(have_rssi)
-        Serial.printf("ACT,%s,%s,%d\n", op, status, rssi);
-    else
-        Serial.printf("ACT,%s,%s\n", op, status);
-}
 
 static void ble_action_restore_radio() {
     g_ble->clearResults();
@@ -1715,6 +1747,29 @@ static void ble_action_ring(const char* wanted) {
     ble_action_emit("RING", wrote ? status : "service_missing", rssi, true);
     ble_action_restore_radio();
 }
+
+#else // FLOCK_HAS_BLE == 0
+
+// Wi-Fi-only target (ESP32-S2 and friends). No Bluetooth radio exists, so these
+// stand in as no-ops rather than missing symbols, which keeps loop() and the
+// command dispatcher byte-identical across targets instead of threading #ifs
+// through both. The ACT replies still ANSWER: a Flipper left waiting on a reply
+// that can never arrive is worse than one told plainly the board cannot do it.
+static void ble_do_scan(int seconds) {
+    (void)seconds;
+}
+static void ble_locate_scan() {
+}
+static void ble_action_ping(const char* wanted) {
+    (void)wanted;
+    ble_action_emit("PING", "noble", -127, false);
+}
+static void ble_action_ring(const char* wanted) {
+    (void)wanted;
+    ble_action_emit("RING", "noble", -127, false);
+}
+
+#endif // FLOCK_HAS_BLE
 
 // ---- optional GPS relay (FlipDeFlock issue #5) ---------------------------
 //

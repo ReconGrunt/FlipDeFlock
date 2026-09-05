@@ -26,7 +26,10 @@ static void recon_scene_start_submenu_cb(void* context, uint32_t index) {
 // BLE half of Flock detection -- say so rather than let a quiet screen imply
 // full coverage.
 static void recon_scene_start_update_header(ReconApp* app) {
-    bool wifi_only = (app->settings.backend != EspBackendCompanion);
+    // Two different ways to end up Wi-Fi only: a scraper backend that cannot ask
+    // for BLE, or a companion SoC with no Bluetooth radio to ask.
+    bool wifi_only = (app->settings.backend != EspBackendCompanion) ||
+                     recon_esp_chip_has_no_ble(app->esp_chip);
     submenu_set_header(
         app->submenu,
         wifi_only ? "FlipDeFlock " RECON_VERSION " - WiFi only" : "FlipDeFlock " RECON_VERSION);

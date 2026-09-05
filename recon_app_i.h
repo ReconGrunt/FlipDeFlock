@@ -390,6 +390,8 @@ typedef struct {
     // What the companion reported about itself (CHIP/BAND). Zeroed = not heard
     // yet, in which case the app must not claim to know the board's pinout.
     char esp_chip[12]; /**< IDF target name, "" until a CHIP line arrives */
+    /* NOTE: a BLE-less companion (see recon_esp_chip_has_no_ble) is reported
+     * here and nowhere else, which is why the header keys off this field. */
     uint8_t esp_gpio_count;
     uint64_t esp_gps_pin_mask; /**< bit N = GPIO N can carry a GPS on THIS chip */
     bool esp_has_5ghz;
@@ -567,6 +569,22 @@ void recon_app_set_esp_lines(ReconApp* app, uint32_t lines);
 void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch);
 
 /** Update the count of overlong RX lines dropped whole (health metric; thread-safe). */
+/**
+ * True for companion SoCs with NO Bluetooth radio at all -- currently the
+ * ESP32-S2, which is the chip on the official Flipper Wi-Fi Devboard.
+ *
+ * Such a board runs the Wi-Fi half of detection only and can never see the BLE
+ * half, no matter what firmware it is given. The operator has to be told, because
+ * "found nothing" from a board that cannot hear half the signals is a materially
+ * weaker statement than the same words from one that can -- and indistinguishable
+ * on screen unless we say so.
+ *
+ * @param target  the IDF target name from the companion's CHIP line.
+ */
+static inline bool recon_esp_chip_has_no_ble(const char* target) {
+    return target && target[0] && strcmp(target, "esp32s2") == 0;
+}
+
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
 
 /** Zero the per-session diagnostic counters and stamp the start time. */

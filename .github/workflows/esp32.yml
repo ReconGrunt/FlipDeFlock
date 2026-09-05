@@ -124,6 +124,34 @@ jobs:
           print(f"WROOM image OK: {len(d):,} bytes, bootloader magic at 0x1000")
           PY
 
+      # ESP32-S2 (the official Flipper Wi-Fi Devboard / Wi-Fi Module v1). That chip
+      # has NO Bluetooth radio, so the core ships no BLE library and the sketch
+      # would not compile for it at all -- reported as issue #25, where the board
+      # flashed "fine" and then sat at ch 0 forever with no error. It now builds
+      # WI-FI ONLY via FLOCK_HAS_BLE. Built here so the target cannot rot, and
+      # released, because "buy a different board" is a poor answer to someone who
+      # already owns the official one.
+      #
+      # This image is DEGRADED BY DESIGN: probe/OUI detection works, the BLE half
+      # of Flock detection is permanently absent. The app says "WiFi only" when it
+      # sees this SoC, and the README says why.
+      - name: Compile (ESP32-S2, Wi-Fi only)
+        run: |
+          arduino-cli compile             --fqbn esp32:esp32:esp32s2:PartitionScheme=huge_app             --output-dir build_s2             esp32_companion/flock_companion
+
+      - name: Merge S2 into a single flashable image
+        run: |
+          BOOT0=$(find "$HOME/.arduino15" -name boot_app0.bin | head -n1)
+          python -m esptool --chip esp32s2 merge_bin -o build_s2/flipdeflock_companion_esp32s2.bin             0x1000  build_s2/flock_companion.ino.bootloader.bin             0x8000  build_s2/flock_companion.ino.partitions.bin             0xe000  "$BOOT0"             0x10000 build_s2/flock_companion.ino.bin
+          python - <<'PY'
+          import pathlib
+          p = pathlib.Path("build_s2/flipdeflock_companion_esp32s2.bin")
+          d = p.read_bytes()
+          assert d[0x1000] == 0xE9, f"bootloader magic missing at 0x1000 (got {d[0x1000]:#04x})"
+          assert len(d) < 3_000_000, f"image looks padded to flash size: {len(d):,} bytes"
+          print(f"S2 image OK: {len(d):,} bytes, bootloader magic at 0x1000")
+          PY
+
       - name: Upload firmware binaries
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -133,6 +161,7 @@ jobs:
             build_esp/flock_companion.ino.bootloader.bin
             build_esp/flock_companion.ino.partitions.bin
             build_esp/flipdeflock_companion_esp32wroom.bin
+            build_s2/flipdeflock_companion_esp32s2.bin
           if-no-files-found: error
 
       # On a tag, attach the full 0x0-flashable image to that tag's Release so
@@ -143,7 +172,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
-          files: build_esp/flipdeflock_companion_esp32wroom.bin
+          files: |
+            build_esp/flipdeflock_companion_esp32wroom.bin
+            build_s2/flipdeflock_companion_esp32s2.bin
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

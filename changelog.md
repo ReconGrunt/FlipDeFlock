@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.86
+
+### Added
+
+- **ESP32-S2 companion support, Wi-Fi only.** The official Flipper Wi-Fi Devboard
+  is an ESP32-S2, which has no Bluetooth radio at all, so the Arduino core ships
+  no BLE library for it and the companion sketch did not compile for that target
+  in any form. Anyone flashing the WROOM image to one got a board that appeared to
+  flash correctly and then never said a word, which the app rendered as `ch 0`
+  with no error at all. All Bluetooth code now sits behind `FLOCK_HAS_BLE`, and CI
+  builds and releases `flipdeflock_companion_esp32s2.bin` alongside the WROOM
+  image.
+- **The app says "WiFi only" when it sees a Bluetooth-less companion.** This build
+  is degraded on purpose and the operator has to know: "found nothing" from a
+  board that cannot hear half the signals is a materially weaker statement than
+  the same words from one that can, and the two look identical on screen unless
+  the app says which it is.
+
 ## v0.85
 
 ### Fixed
