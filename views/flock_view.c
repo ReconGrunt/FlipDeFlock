@@ -853,6 +853,32 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
     FlockView* fv = context;
     bool handled = false;
 
+    // A HOLD is its own gesture and MUST be handled before the block below.
+    // That block gates on `InputTypeShort || InputTypeRepeat`, so a branch
+    // nested inside it that tests for InputTypeLong can never match -- which is
+    // exactly where this lived in v0.83, making every action behind the hold
+    // (mark confirmed, rename, delete) unreachable on a real device while the
+    // code read as though it worked. Kept at the top level so the compiler
+    // cannot quietly strand it again.
+    //
+    // Deliberate actions live behind a hold so the fast keys stay fast: tap-OK
+    // opens the detail screen and Left deletes, both used while driving. Maps
+    // the display position back to a table index exactly as the short press does.
+    if(event->key == InputKeyOk && event->type == InputTypeLong) {
+        int hold_idx = -1;
+        with_view_model(
+            fv->view,
+            FlockViewModel * model,
+            {
+                if(model->selected >= 0 && model->selected < model->order_count) {
+                    hold_idx = model->order[model->selected];
+                }
+            },
+            false);
+        if(hold_idx >= 0 && fv->hold_cb) fv->hold_cb(fv->hold_ctx, hold_idx);
+        return true;
+    }
+
     if(event->type == InputTypeShort || event->type == InputTypeRepeat) {
         // The card owns the FIRST press while it is up. OK jumps to the device
         // that beeped and opens it -- which is the whole point, since the row
@@ -927,23 +953,6 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
                     model->sel_valid = false;
                 },
                 true);
-            handled = true;
-        } else if(event->key == InputKeyOk && event->type == InputTypeLong) {
-            // Deliberate actions live behind a hold so the fast keys stay fast:
-            // tap-OK opens the detail screen and Left deletes, both used while
-            // driving. Maps the display position back to a table index exactly
-            // as the short press does.
-            int hold_idx = -1;
-            with_view_model(
-                fv->view,
-                FlockViewModel * model,
-                {
-                    if(model->selected >= 0 && model->selected < model->order_count) {
-                        hold_idx = model->order[model->selected];
-                    }
-                },
-                false);
-            if(hold_idx >= 0 && fv->hold_cb) fv->hold_cb(fv->hold_ctx, hold_idx);
             handled = true;
         } else if(event->key == InputKeyOk && event->type == InputTypeShort) {
             // The fault panel owns OK while it is up: the first press is far more

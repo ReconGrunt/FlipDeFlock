@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.85
+
+### Fixed
+
+- **Hold-OK on the scan list never worked.** The whole action menu shipped in
+  v0.83 -- mark visually confirmed, rename, delete without leaving for the main
+  menu -- sat behind a hold that could not fire. Its handler was nested inside a
+  block gated on `InputTypeShort || InputTypeRepeat`, then tested for
+  `InputTypeLong`, a condition that can never be true. Dead code that read like a
+  working feature, shipped and described as working, never once pressed on a
+  device. The handler is now a top-level branch taken before that gate.
+
 ## v0.84
 
 **A drive that finds nothing now tells you why.** Two operators drove past known
