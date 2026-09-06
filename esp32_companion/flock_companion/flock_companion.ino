@@ -1293,6 +1293,11 @@ static void ble_ensure_init() {
 // Flock OUI on the BLE address; plus validated AirTag/Tile/SmartTag. Emits
 // BBEGIN/BLE/BEND. Weak tracker adverts below BLE_TRACKER_MIN_RSSI are omitted:
 // they are not useful evidence that a tag is travelling with the operator.
+// Defined further down with the BLE action helpers, but needed by the Raven GATT
+// check below: it iterates EVERY advertised service UUID, which is the whole
+// point -- the singular accessor missed Ravens that list 0x3100 second.
+static bool ble_action_has_service(BLEAdvertisedDevice& d, const char* token);
+
 static void ble_do_scan(int seconds) {
     ble_ensure_init();
     esp_wifi_set_promiscuous(false);
@@ -1369,9 +1374,24 @@ static void ble_do_scan(int seconds) {
         }
         if(d.haveServiceUUID()) {
             std::string u = fstr(d.getServiceUUID().toString());
-            if(u.find("00003100") != std::string::npos || u.find("00003200") != std::string::npos ||
-               u.find("00003300") != std::string::npos || u.find("00003400") != std::string::npos ||
-               u.find("00003500") != std::string::npos) {
+            // RAVEN GATT: check EVERY advertised service UUID, not just the first.
+            //
+            // This used to read only getServiceUUID() -- the singular accessor,
+            // index 0 -- so a Raven advertising 0x3100 anywhere but first was
+            // missed outright: no cat=1, no rv=1, no detection, no alert. A
+            // silent recall hole against real hardware, and the one bug in this
+            // sweep that costs whole devices rather than a rung.
+            //
+            // ble_action_has_service() below already iterates the full list with
+            // the same substring semantics, and is already compiling on both core
+            // 2.0.x and 3.x, so the multi-UUID API is proven available. Substring
+            // matching is kept exactly as it was: anchoring would be a recall
+            // change, which is out of scope here.
+            if(ble_action_has_service(d, "00003100") ||
+               ble_action_has_service(d, "00003200") ||
+               ble_action_has_service(d, "00003300") ||
+               ble_action_has_service(d, "00003400") ||
+               ble_action_has_service(d, "00003500")) {
                 cat = 1; // Raven custom GATT services
                 raven = true; // Raven-specific GATT -> positive acoustic-sensor ID
             }
@@ -1424,7 +1444,24 @@ static void ble_do_scan(int seconds) {
         // Trailing field: raw mfg-data hex for Flock (0x09C8) only, so the
         // Flipper can decode the device serial. Capped so the line stays well
         // under the Flipper's RX line limit; only Flock units carry it.
-        if(cat == 1 && company == 0x09C8 && d.haveManufacturerData()) {
+        // Widened from `company == 0x09C8` to ANY cat=1 device carrying
+        // manufacturer data. A unit that reached cat=1 by Penguin naming, Raven
+        // GATT or a Flock OUI while advertising under some other id previously
+        // sent ZERO mfg bytes, so its serial could never be decoded and the app
+        // had nothing to show.
+        //
+        // LINE BUDGET (char line[176], now the longest line the protocol emits):
+        //   "BLE," 4 + addr 12 + "," + rssi <=4 + "," + cat 1 + "," + company <=6
+        //   + ","                                              ~= 27
+        //   escaped name, capped at 32 by buf_append_escaped, <=64 worst case
+        //   "," + 62 hex chars (31-byte cap)                    = 63
+        //   ",rv=1" 5 + ",sep=1" 6 + "\n" 1                     = 12
+        //   -> 166 of 176. Fits, and buf_appendf clamps regardless.
+        //
+        // Wire shape is unchanged, so an older app still parses it: esp_parser.c
+        // splits trailers on the presence of '=', and a foreign payload simply
+        // lands in mfg[] and yields no serial. No ESP_PROTO_VERSION bump.
+        if(cat == 1 && d.haveManufacturerData()) {
             std::string md = fstr(d.getManufacturerData());
             if(pos + 1 < sizeof(line)) line[pos++] = ',';
             for(size_t j = 0; j < md.length() && j < 31 && pos + 2 < sizeof(line); j++) {

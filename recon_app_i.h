@@ -239,6 +239,12 @@ typedef struct {
                          *   sensor. What it is, as opposed to how sure we are. */
     bool hidden; /**< beacons but withholds its SSID. An OBSERVATION shown to the
                    *   operator, never a confidence input -- see esp_parser.c. */
+    uint8_t ble_tell; /**< FlockBleTell: WHICH BLE signal classified this (mfg id
+                        *   vs Raven GATT vs naming vs a shared OUI). Display only
+                        *   -- never a confidence input. LIVE-SESSION ONLY: it is
+                        *   not in the hits.csv schema, so a row restored from the
+                        *   card reads back as FlockBleTellNone and the detail
+                        *   screen falls back to the generic "BLE". */
     int8_t geotag_rssi; /**< rssi when the geotag was last set (hysteresis) */
     bool marked; /**< user flagged this for the report */
     bool confirmed; /**< the operator SAW this device with their own eyes. Ground
@@ -584,6 +590,15 @@ void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch);
 static inline bool recon_esp_chip_has_no_ble(const char* target) {
     return target && target[0] && strcmp(target, "esp32s2") == 0;
 }
+
+/**
+ * Record WHICH BLE signal classified the device at @p mac (a FlockBleTell).
+ *
+ * Separate from recon_app_report_flock() rather than another parameter on it:
+ * this is BLE-only evidence and the WiFi callers have nothing to say about it.
+ * Display only -- it never feeds a confidence rung.
+ */
+void recon_app_set_ble_tell(ReconApp* app, const uint8_t mac[6], uint8_t tell);
 
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
 

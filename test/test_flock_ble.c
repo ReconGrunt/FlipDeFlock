@@ -58,6 +58,116 @@ void suite_flock_ble(void) {
     // so the floor is Possible. A None here would silently drop the detection.
     CHECK(flock_ble_confidence(0, NULL, false) != FlockConfidenceNone);
 
+    // --- flock_ble_tell: WHICH signal fired -------------------------------
+    // Ordered to mirror flock_ble_confidence()'s precedence, so the tell always
+    // explains the rung that function returned.
+    const uint8_t addr_flock[6] = {0xb4, 0x1e, 0x52, 0x00, 0x00, 0x02}; // Flock's own OUI
+    const uint8_t addr_other[6] = {0xde, 0xad, 0xbe, 0xef, 0x00, 0x01}; // in no table
+
+    CHECK_INT_EQ(
+        flock_ble_tell(FLOCK_BLE_COMPANY_ID, NULL, false, NULL), FlockBleTellMfgId);
+    CHECK_INT_EQ(flock_ble_tell(AXON_BLE_COMPANY_ID, NULL, false, NULL), FlockBleTellMfgId);
+    CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, NULL, true, NULL), FlockBleTellRavenGatt);
+    CHECK_INT_EQ(
+        flock_ble_tell(BLE_COMPANY_NONE, "Penguin-42", false, NULL), FlockBleTellNaming);
+    CHECK_INT_EQ(
+        flock_ble_tell(BLE_COMPANY_NONE, "FS Ext Battery", false, NULL), FlockBleTellNaming);
+
+    // OUI-only is identified POSITIVELY from the address, not inferred from the
+    // absence of everything else -- that is the whole reason the address is
+    // passed in. Without it we cannot tell "shared silicon prefix" apart from
+    // "a newer companion matched on something this build predates".
+    CHECK_INT_EQ(
+        flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, addr_flock), FlockBleTellOuiOnly);
+    CHECK_INT_EQ(
+        flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, addr_other), FlockBleTellNone);
+    CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, NULL), FlockBleTellNone);
+
+    // Precedence: a stronger tell wins even when a weaker one is also present.
+    CHECK_INT_EQ(
+        flock_ble_tell(FLOCK_BLE_COMPANY_ID, "Penguin-1", true, addr_flock),
+        FlockBleTellMfgId);
+    CHECK_INT_EQ(
+        flock_ble_tell(BLE_COMPANY_NONE, "Penguin-1", true, addr_flock),
+        FlockBleTellRavenGatt);
+
+    // THE SAFETY PROPERTY. The tell is evidence reporting, NOT scoring: for every
+    // input, the rung flock_ble_confidence() returns must be exactly what it was
+    // before the tell existed. On this path there is no middle rung -- only
+    // Confirmed(4) and Possible(1) -- and the default alert gate sits at
+    // Likely(2), so any demotion here would silently cost the beep, the vibro and
+    // the alert card, permanently. If this block ever fails, detection regressed.
+    CHECK_INT_EQ(
+        flock_ble_confidence(FLOCK_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(FLOCK_BLE_COMPANY_ID, "ESP32", false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(AXON_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, NULL, true), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, "Penguin-42", false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, "ESP32", false), FlockConfidencePossible);
+
+    // EXHAUSTIVE EQUIVALENCE SWEEP. The spot checks above are examples; this is
+    // the proof. Walk the whole input space and assert that adding the tell moved
+    // no rung anywhere: for every combination, the tell's implied rung (Confirmed
+    // for a Flock-specific tell, Possible otherwise) must equal what
+    // flock_ble_confidence() independently returns. Two implementations, checked
+    // against each other -- if they ever disagree, detection changed.
+    {
+        const uint16_t companies[] = {
+            0, BLE_COMPANY_NONE, 0x004C, 0x0059, FLOCK_BLE_COMPANY_ID, AXON_BLE_COMPANY_ID};
+        const char* names[] = {
+            NULL,
+            "",
+            "ESP32",
+            "Penguin-1234567890",
+            "penguin-42",
+            "FS Ext Battery",
+            "Unit 7 FS Ext Battery",
+            "Flock of Seagulls",
+            "MyPenguinSpeaker"};
+        const uint8_t a_flock[6] = {0x3c, 0x91, 0x80, 0x00, 0x00, 0x01};
+        const uint8_t a_off[6] = {0xde, 0xad, 0xbe, 0xef, 0x00, 0x02};
+        const uint8_t* addrs[] = {NULL, a_flock, a_off};
+
+        int mismatches = 0;
+        for(size_t ci = 0; ci < sizeof(companies) / sizeof(companies[0]); ci++) {
+            for(size_t ni = 0; ni < sizeof(names) / sizeof(names[0]); ni++) {
+                for(int rv = 0; rv < 2; rv++) {
+                    for(size_t ai = 0; ai < sizeof(addrs) / sizeof(addrs[0]); ai++) {
+                        FlockBleTell t =
+                            flock_ble_tell(companies[ci], names[ni], rv != 0, addrs[ai]);
+                        // Tells at or above OuiOnly are the non-specific ones.
+                        FlockConfidence implied =
+                            (t != FlockBleTellNone && t != FlockBleTellOuiOnly) ?
+                                FlockConfidenceConfirmed :
+                                FlockConfidencePossible;
+                        FlockConfidence actual =
+                            flock_ble_confidence(companies[ci], names[ni], rv != 0);
+                        if(implied != actual) mismatches++;
+                    }
+                }
+            }
+        }
+        CHECK_INT_EQ(mismatches, 0);
+    }
+
+    // --- flock_ble_name_is_flock: the specificity test used for name upgrades -
+    // A device advertising several identities from ONE address (the bench emitter
+    // does exactly this) must not be named permanently by whichever advert landed
+    // first. This predicate decides when a later name is more informative.
+    CHECK(flock_ble_name_is_flock("Penguin-1234567890"));
+    CHECK(flock_ble_name_is_flock("penguin-42"));
+    CHECK(flock_ble_name_is_flock("FS Ext Battery"));
+    CHECK(flock_ble_name_is_flock("Unit 7 fs ext battery"));
+    CHECK(!flock_ble_name_is_flock("ESP32")); // the name that caused all this
+    CHECK(!flock_ble_name_is_flock("MyPenguinSpeaker")); // prefix test, not substring
+    CHECK(!flock_ble_name_is_flock(""));
+    CHECK(!flock_ble_name_is_flock(NULL));
+
     // --- flock_ble_extract_serial: the 0x09C8 manufacturer payload ----------
     // Layout: 2-byte LE company id, then a plain-ASCII serial. We take the
     // longest alphanumeric run of >= 6 chars.

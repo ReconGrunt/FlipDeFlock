@@ -3,6 +3,7 @@
 #include "flock_detail_view.h"
 #include "../recon_app_i.h"
 #include "../helpers/report_fmt.h"
+#include "../helpers/flock_ble.h" // FlockBleTell / flock_ble_tell_str
 #include "ui_widgets.h"
 
 #include <gui/elements.h>
@@ -117,6 +118,20 @@ static bool fd_format(char* buf, size_t len, FdLineKind kind, const FlockEntry* 
         // possible hit?"). Re-derived from stored evidence, never asserted by
         // the companion, so it cannot inherit an over-claim from older firmware.
         FlockMethod m = flock_method_of(e->mac, e->ssid, e->ftype, e->ie_fp);
+        // A BLE hit knows WHICH tell fired, and they are not equally strong: the
+        // 0x09C8 manufacturer id belongs to the battery vendor XUNTONG, while the
+        // Raven GATT service is Flock's own. Both reach Confirmed, so the rung
+        // alone cannot separate them -- name the evidence instead.
+        //
+        // ONLY refines the generic FlockMethodBle case. flock_method_of() tests
+        // the OUI tables BEFORE ftype, so a BLE hit on a Flock-OUI address
+        // already reads "Method: OUI" today; overriding that here would quietly
+        // change text this row has always shown. Rows restored from the card
+        // carry no tell and fall back to the same string as before.
+        if(m == FlockMethodBle && e->ble_tell != FlockBleTellNone) {
+            snprintf(buf, len, "Method: %s", flock_ble_tell_str((FlockBleTell)e->ble_tell));
+            return false;
+        }
         if(m == FlockMethodBle || m == FlockMethodUnknown) {
             // "BLE mfg ID + BLE advert" says the same thing twice, and an
             // "ESP probe rule" verdict is already about how it was seen -- both

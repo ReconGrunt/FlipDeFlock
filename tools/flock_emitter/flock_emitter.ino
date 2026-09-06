@@ -271,10 +271,33 @@ typedef struct {
     const char* expect;
 } BleIdentity;
 
+// ALL OF THESE ADVERTISE FROM ONE BLE ADDRESS -- the board's own. Unlike the
+// WiFi identities above, which carry a spoofed source MAC in a hand-built frame,
+// apply_ble_identity() only swaps the advertised PAYLOAD. The detector keys its
+// table on the address, so all of these collapse into a SINGLE row that changes
+// name and evidence as the rotation advances.
+//
+// That is worth knowing before reading bench output: there is no separate
+// "Penguin" row and no separate "bench-raven" row, and the one row you get is
+// named by whichever advert was seen first. On 2026-09-06 that was the stack's
+// default GAP name, and the resulting "ESP32" row -- correctly Confirmed via the
+// Raven GATT identity below -- was mistaken for a false positive and cost a
+// shipped detection regression. Both halves of that are now fixed (an explicit
+// init name here, a specificity upgrade in the app), but the shared address is
+// inherent to how this rig works.
 static const BleIdentity BLE_IDS[] = {
     {"Penguin-1234567890", "TN72023022000771", NULL, "FLOCK, serial TN72023022000771"},
     {"FS Ext Battery", NULL, NULL, "FLOCK, no serial (model label, not a serial)"},
     {"bench-raven", NULL, "00003100-0000-1000-8000-00805f9b34fb", "Flock Raven (audio)"},
+    // THE REGRESSION CANARY. 0x09C8 with a payload that yields NO decodable
+    // serial (too short for the >=6 alphanumeric run) and no Flock naming, so the
+    // ONLY thing identifying it is the manufacturer id. It must still read
+    // CONFIRMED. v0.87 briefly gated that id behind "a serial decoded", which
+    // would have shown this identity as Possible -- below the default alert
+    // threshold, i.e. silent. Had this identity existed, that change could not
+    // have been written. If this ever shows anything but Confirmed, the gate is
+    // back.
+    {"bench-mfgonly", "A1", NULL, "FLOCK Confirmed on mfg id ALONE (no serial)"},
 };
 #define BLE_ID_COUNT (sizeof(BLE_IDS) / sizeof(BLE_IDS[0]))
 
@@ -507,6 +530,20 @@ static void apply_ble_identity(int idx) {
     }
 
     g_adv->setAdvertisementData(data);
+
+    // Put the identity's name in the SCAN RESPONSE too, so both payloads agree.
+    //
+    // A scanner may read either one, and if the scan response is left empty the
+    // stack answers with its own default GAP name. That is precisely how "ESP32"
+    // ended up naming a Flock-Confirmed row (see BLEDevice::init in setup()).
+    // Identity #3 needs this most: "bench-raven" plus a complete 128-bit UUID is
+    // 31 bytes, right at the AD limit, so the name is the field most likely to be
+    // dropped from the advert and looked for in the scan response instead.
+    BLEAdvertisementData scan_rsp;
+    scan_rsp.setName(id->name);
+    g_adv->setScanResponseData(scan_rsp);
+    g_adv->setScanResponse(true);
+
     g_adv->start();
 
     Serial.printf("[BLE ] #%d name=%-20s -> expect: %s\n", idx, id->name, id->expect);
@@ -532,7 +569,24 @@ void setup() {
     // we never install an RX callback.
     esp_wifi_set_promiscuous(true);
 
-    BLEDevice::init("");
+    // NEVER init with "". The Bluedroid stack then keeps its own default GAP
+    // device name -- "ESP32" -- and a scanner that reads the scan response before
+    // an identity advert gets THAT as the device's name. The detector stores the
+    // first name it sees for a MAC and never replaces it, so the row wears
+    // "ESP32" permanently while the same address goes on to advertise
+    // "Penguin-...", "FS Ext Battery" and the Raven GATT UUID.
+    //
+    // THIS RIG HAS NOW CAUSED TWO FALSE DIAGNOSES BY THE SAME MECHANISM. See the
+    // block in apply_wifi_identity() recording 2026-08-29, when the board's own
+    // SoftAP beacon won the name race against identity #9. On 2026-09-06 the BLE
+    // half did it again: a correctly-Confirmed row reading "ESP32" was taken for
+    // a false positive and cost a shipped detection regression before the cause
+    // was found. A default vendor name from this board is a RIG DEFECT, never a
+    // detector finding.
+    //
+    // Named so it can never be mistaken for a real device, nor for a generic
+    // module: if this string ever appears on the detector, the rig is talking.
+    BLEDevice::init("FDF-BENCH");
     g_adv = BLEDevice::getAdvertising();
     g_adv->setMinInterval(160); // 100 ms: several adverts per rotation
     g_adv->setMaxInterval(160);

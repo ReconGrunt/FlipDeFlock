@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.87
+
+**A bench "false positive" that was not one, and the three real defects it
+exposed.** A device showing as `ESP32` scored CONFIRMED and was diagnosed as a
+false positive. It was the bench emitter: it advertises all its Flock BLE
+identities from one address, one of them carries the Raven GATT service UUID, and
+it was correctly Confirmed on that. The `ESP32` name was the Bluetooth stack's
+default, captured because the app keeps the first name it ever sees for a device.
+
+### Fixed
+
+- **A device no longer wears the first name it happened to advertise.** A BLE
+  device that announces a generic stack default before identifying itself was
+  stuck showing the meaningless name forever. A later, Flock-specific name now
+  replaces a generic one. Monotonic, so it cannot flap, and it never touches a
+  name you set yourself. Deliberately NOT applied to Wi-Fi, where the stored name
+  on a probe request is the network being *sought* rather than the device's own.
+- **Ravens advertising their GATT service anywhere but first were missed
+  entirely** — no detection, no alert. The companion checked only the first
+  advertised service UUID. It now checks all of them. This finds cameras that
+  were previously invisible.
+- **BLE manufacturer evidence could be erased.** A later advert carrying no
+  manufacturer data overwrote a previously captured `0x09C8`, discarding the
+  strongest BLE signal available.
+- Manufacturer data is now relayed for every Flock-classified BLE device rather
+  than only `0x09C8` ones, so evidence is not silently dropped before it reaches
+  the app. The serial decoder is correspondingly restricted to genuinely Flock
+  payloads, so another vendor's bytes can never be shown as a Flock serial.
+
+### Added
+
+- **The detail screen now names WHICH signal identified a BLE device** — the
+  manufacturer id, the Raven GATT service, Flock's product naming, or only a
+  shared-vendor OUI. Two Confirmed rows can rest on very different evidence
+  (`0x09C8` is registered to the battery vendor, the Raven GATT is Flock's own),
+  and the rung alone could not tell them apart. Reported alongside the rung and
+  proven by an exhaustive test to change no rung anywhere.
+
+### Notes
+
+- Confidence only ever increases for a given device, so rows already saved in
+  `hits.csv` keep the rung they were stored with. Scoring changes apply to new
+  detections; clearing a hit is the only reset.
+
 ## v0.86
 
 ### Added

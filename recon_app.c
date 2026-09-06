@@ -120,9 +120,31 @@ void recon_app_report_flock(
         // request from the same MAC (which carries no hidden flag at all) must
         // not erase that observation.
         if(hidden) entry->hidden = true;
-        if(ssid && ssid[0] && entry->ssid[0] == '\0') {
-            strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
-            entry->ssid[RECON_SSID_LEN - 1] = '\0';
+        // First non-empty name wins, with ONE exception, below.
+        //
+        // Sticky is right for WiFi and must stay that way: on a probe request the
+        // "ssid" is the network the device is LOOKING FOR, not its own name, so
+        // letting a later sighting overwrite a beacon's real SSID with a probe
+        // target would actively corrupt the row.
+        //
+        // BLE has no such ambiguity -- there the name is the device's own GAP
+        // name -- and there it bit us. A device that advertises a stack default
+        // first ("ESP32" from BLEDevice::init("")) and only later announces
+        // "Penguin-..." was stuck displaying the meaningless name forever. That
+        // is exactly how a correctly-Confirmed unit read as an unrelated gadget
+        // on the bench and cost a day chasing a false positive that never was.
+        // So on BLE only, a Flock-shaped name may replace a non-Flock-shaped one.
+        // Monotonic by construction: Flock-shaped never reverts to generic, so it
+        // cannot flap. The operator's own `label` is a separate field and always
+        // wins in the UI regardless (views/flock_view.c).
+        if(ssid && ssid[0]) {
+            bool upgrade = (ftype == 'L') && entry->ssid[0] != '\0' &&
+                           !flock_ble_name_is_flock(entry->ssid) &&
+                           flock_ble_name_is_flock(ssid);
+            if(entry->ssid[0] == '\0' || upgrade) {
+                strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
+                entry->ssid[RECON_SSID_LEN - 1] = '\0';
+            }
         }
         // Geotag with the current fix per the hysteresis rule (haven't tagged yet,
         // or a meaningfully stronger sighting) -- see detect_rules.h.
@@ -382,6 +404,23 @@ void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch) {
     furi_mutex_release(app->mutex);
 }
 
+void recon_app_set_ble_tell(ReconApp* app, const uint8_t mac[6], uint8_t tell) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    for(size_t i = 0; i < app->flock_count; i++) {
+        if(memcmp(app->flock[i].mac, mac, 6) == 0) {
+            // Sticky like the other evidence fields: a later sighting that only
+            // saw the weaker signal must not overwrite the stronger one already
+            // recorded. FlockBleTell is ordered strongest-first, so a lower
+            // non-zero value wins.
+            if(tell != 0 && (app->flock[i].ble_tell == 0 || tell < app->flock[i].ble_tell)) {
+                app->flock[i].ble_tell = tell;
+            }
+            break;
+        }
+    }
+    furi_mutex_release(app->mutex);
+}
+
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_dropped_lines = dropped;
@@ -502,7 +541,16 @@ void recon_app_ble_add(
     char serial[RECON_BLE_SERIAL_LEN] = "";
     uint8_t model = FlockBleModelUnknown;
     if(cat == BleCatFlock) {
-        flock_ble_extract_serial(mfg, mfg_len, name, serial, sizeof(serial));
+        // Only read the MANUFACTURER PAYLOAD as a Flock serial when it actually
+        // is Flock's. The companion now sends mfghex for any cat=1 device that
+        // carries manufacturer data -- not just 0x09C8 -- so a unit classified by
+        // naming, Raven GATT or an OUI can arrive with some other vendor's blob,
+        // and flock_ble_extract_serial() would happily report the longest
+        // alphanumeric run in it as a device serial. The GAP-name fallback stays
+        // unconditional: that path validates the name's own shape.
+        bool flock_mfg = (company == FLOCK_BLE_COMPANY_ID);
+        flock_ble_extract_serial(
+            flock_mfg ? mfg : NULL, flock_mfg ? mfg_len : 0, name, serial, sizeof(serial));
         model = (uint8_t)flock_ble_model_ex(serial, name, raven_gatt);
     }
 
@@ -537,10 +585,24 @@ void recon_app_ble_add(
         // detail "FOLLOWING ... over %lus" readout (which always printed 0s).
         e->last_tick = now;
         if(cat) e->cat = cat;
-        e->company = company;
-        if(name && name[0] && e->name[0] == '\0') {
-            strncpy(e->name, name, RECON_SSID_LEN - 1);
-            e->name[RECON_SSID_LEN - 1] = '\0';
+        // Sticky, like cat/dev_class/ie_fp around it. A device advertises several
+        // payloads in rotation, and only some carry manufacturer data; writing
+        // this unconditionally let a later advert with none (which arrives as
+        // BLE_COMPANY_NONE) erase a 0x09C8 we had already captured, throwing away
+        // the strongest BLE evidence we get.
+        if(company != BLE_COMPANY_NONE) e->company = company;
+        // Same specificity upgrade as the Flock table above: a Flock-shaped name
+        // may replace a generic one that was merely seen first. A single BLE
+        // radio advertises several identities from ONE address (the bench emitter
+        // does exactly this), so whichever advert happens to land first must not
+        // get to name the device permanently.
+        if(name && name[0]) {
+            bool upgrade = e->name[0] != '\0' && !flock_ble_name_is_flock(e->name) &&
+                           flock_ble_name_is_flock(name);
+            if(e->name[0] == '\0' || upgrade) {
+                strncpy(e->name, name, RECON_SSID_LEN - 1);
+                e->name[RECON_SSID_LEN - 1] = '\0';
+            }
         }
         if(serial[0] && e->serial[0] == '\0') {
             strncpy(e->serial, serial, RECON_BLE_SERIAL_LEN - 1);
@@ -579,6 +641,12 @@ void recon_app_ble_add(
             0,
             (cat == BleCatAxon) ? FlockClassBodycam : FlockClassAlpr,
             false);
+        // Record WHAT matched, alongside how sure we are. Two Confirmed rows can
+        // rest on very different evidence -- 0x09C8 is the battery VENDOR's id,
+        // the Raven GATT is Flock's own -- and the operator should be able to see
+        // which. Does not touch the rung.
+        recon_app_set_ble_tell(
+            app, addr, (uint8_t)flock_ble_tell(company, name, raven_gatt, addr));
     }
 }
 
