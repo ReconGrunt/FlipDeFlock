@@ -467,11 +467,11 @@ void recon_app_survey_add(
 }
 
 void recon_survey_save(ReconApp* app) {
-    furi_mutex_acquire(app->mutex, FuriWaitForever);
-    size_t n = app->survey_count;
-    furi_mutex_release(app->mutex);
-    if(n == 0) return;
-
+    // Written even with ZERO rows, on purpose. "No file" is indistinguishable
+    // from "the feature is broken" -- which is exactly how this landed on issue
+    // #25, where short sessions produced nothing and the reporter could not tell
+    // whether it had run. A header with no rows is a real answer: the survey ran
+    // and nothing was probing.
     Storage* storage = furi_record_open(RECORD_STORAGE);
     storage_common_mkdir(storage, RECON_APP_FOLDER);
     File* file = storage_file_alloc(storage);
@@ -1059,7 +1059,12 @@ void recon_hits_save(ReconApp* app) {
 // losing the drive.
 #define RECON_HITS_AUTOSAVE_MS 30000u
 
-#define RECON_SURVEY_POLL_MS 30000u
+// Short enough that a brief scan still collects something on its own, and far
+// below anything that competes with detection traffic: a full 32-row dump is
+// ~1.3 KB, which is about a tenth of a second of a 115200 link. The session-end
+// dump in scan_session_stop() is what actually guarantees a file; this is the
+// crash-safety net in between.
+#define RECON_SURVEY_POLL_MS 10000u
 
 void recon_survey_tick(ReconApp* app) {
     if(!app->esp) return; // no link, nothing to ask

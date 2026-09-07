@@ -19,11 +19,22 @@ bool scan_session_start(void* _app) {
     esp_link_send_band(app->esp);
     esp_link_send_gps_cfg(app->esp);
     recon_diag_begin(app);
-    // A survey is a snapshot of one outing, not a running history: a row from a
-    // different street would mislead someone hunting a single camera.
+    // A survey is a snapshot of ONE OUTING, not a running history.
+    //
+    // Clearing the app's copy is not enough -- the counts live on the COMPANION,
+    // which keeps counting until it is power-cycled. Without this the numbers are
+    // "since the board booted", so a phone seen around the house for a few hours
+    // climbs into the hundreds and reads exactly like the persistent emitter a
+    // camera produces. That inverts the one thing the survey is for: the whole
+    // method is "the row with a big count next to a camera you can see IS the
+    // camera", and a stale total makes an ordinary device look like one.
+    esp_link_send(app->esp, "surveyclear");
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->survey_count = 0;
-    app->survey_last_poll = 0;
+    // Start the clock now rather than at 0. A poll fired the instant a scan opens
+    // asks the companion for a table it has not filled yet, wasting the one
+    // request a short session would ever make.
+    app->survey_last_poll = furi_get_tick();
     furi_mutex_release(app->mutex);
     return true;
 }
@@ -64,6 +75,23 @@ void scan_session_stop(void* _app) {
     if(!app->esp && !app->gps && !app->gps_rpc) return;
 
     if(app->esp) {
+        // FINAL SURVEY DUMP, before the link goes away.
+        //
+        // The survey lives in the companion's RAM and only crosses the wire when
+        // asked, so without this a short session captures nothing at all: the
+        // periodic poll fires once at session start, when the board's table is
+        // still empty, and a session that ends before the next one leaves no file
+        // behind. Reported on issue #25 with sessions of 7, 14 and 26 seconds --
+        // every one of them under the poll interval, every one producing nothing,
+        // and no way for the operator to tell the feature from a broken one.
+        //
+        // Asking here and draining briefly is the only point where the whole
+        // session's survey is available AND the link still exists. ~350 ms covers
+        // a full 32-row dump at 115200 (about 1.3 KB, ~110 ms on the wire) with
+        // room for the worker thread to parse it.
+        esp_link_send(app->esp, "survey");
+        furi_delay_ms(350);
+
         esp_link_stop(app->esp);
         esp_link_free(app->esp);
         app->esp = NULL;
