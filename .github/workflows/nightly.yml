@@ -243,11 +243,40 @@ jobs:
           print(f"WROOM image OK: {len(d):,} bytes, bootloader magic at 0x1000")
           PY
 
+      # ESP32-S2 (the official Flipper Wi-Fi Devboard v1), Wi-Fi only -- that chip
+      # has no Bluetooth radio. Built on the SAME core as the WROOM image above,
+      # so it costs one extra compile rather than another job.
+      #
+      # It is here because of issue #25: an S2 user's board comes up healthy and
+      # detects nothing, and the candidate fix is S2-gated, so a released image
+      # cannot carry it and a nightly is the only way to get a testable build
+      # into their hands. Nobody on this project owns an S2, so this image is
+      # UNVERIFIED ON HARDWARE by definition -- that is exactly what a nightly is
+      # for, and the filename says so.
+      - name: Compile (ESP32-S2, Wi-Fi only)
+        run: |
+          arduino-cli compile             --fqbn esp32:esp32:esp32s2:PartitionScheme=huge_app             --output-dir build_s2             esp32_companion/flock_companion
+
+      - name: Merge the S2 image
+        run: |
+          BOOT0=$(find "$HOME/.arduino15" -name boot_app0.bin | head -n1)
+          python -m esptool --chip esp32s2 merge_bin -o build_s2/flipdeflock_companion_esp32s2_UNVERIFIED.bin             0x1000  build_s2/flock_companion.ino.bootloader.bin             0x8000  build_s2/flock_companion.ino.partitions.bin             0xe000  "$BOOT0"             0x10000 build_s2/flock_companion.ino.bin
+          python - <<'PY'
+          import pathlib
+          p = pathlib.Path("build_s2/flipdeflock_companion_esp32s2_UNVERIFIED.bin")
+          d = p.read_bytes()
+          assert d[0x1000] == 0xE9, f"bootloader magic missing at 0x1000 (got {d[0x1000]:#04x})"
+          assert len(d) < 3_000_000, f"image looks padded to flash size: {len(d):,} bytes"
+          print(f"S2 image OK: {len(d):,} bytes, bootloader magic at 0x1000")
+          PY
+
       - name: Upload the companion image for the publish job
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-companion-bin
-          path: build_esp/flipdeflock_companion_esp32wroom.bin
+          path: |
+            build_esp/flipdeflock_companion_esp32wroom.bin
+            build_s2/flipdeflock_companion_esp32s2_UNVERIFIED.bin
           if-no-files-found: error
 
   # The ESP32-C5 (dual-band) companion, built on core 3.x. Separate job from the
@@ -350,14 +379,14 @@ jobs:
       - name: Check both companion images are present
         run: |
           set -euo pipefail
-          for f in flipdeflock_companion_esp32wroom.bin flipdeflock_companion_esp32c5_EXPERIMENTAL.bin; do
+          for f in flipdeflock_companion_esp32wroom.bin flipdeflock_companion_esp32c5_EXPERIMENTAL.bin                    flipdeflock_companion_esp32s2_UNVERIFIED.bin; do
             if [ ! -s "faps/$f" ]; then
               echo "::error::$f missing; the nightly would ship an app half its users cannot pair a companion to."
               ls -lR faps || true
               exit 1
             fi
           done
-          ls -l faps/flipdeflock_companion_esp32wroom.bin faps/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+          ls -l faps/flipdeflock_companion_esp32wroom.bin                 faps/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin                 faps/flipdeflock_companion_esp32s2_UNVERIFIED.bin
 
       # The same set check release.yml runs. A nightly that publishes three .fap
       # files instead of four is a nightly that silently drops a firmware
@@ -439,7 +468,8 @@ jobs:
             --notes-file notes.md \
             faps/*.fap \
             faps/flipdeflock_companion_esp32wroom.bin \
-            faps/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
+            faps/flipdeflock_companion_esp32c5_EXPERIMENTAL.bin \
+            faps/flipdeflock_companion_esp32s2_UNVERIFIED.bin
 
           gh release view nightly --json isPrerelease,targetCommitish,assets \
             --jq '"prerelease=\(.isPrerelease) target=\(.targetCommitish) assets=\([.assets[].name]|join(", "))"'

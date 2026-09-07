@@ -2060,7 +2060,28 @@ void setup() {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
     esp_wifi_set_storage(WIFI_STORAGE_RAM);
+    // WIFI_MODE_NULL is the classic-ESP32 idiom for a promiscuous sniffer and is
+    // left exactly as it was on that target -- it is field-proven there and this
+    // is not the place to experiment.
+    //
+    // CANDIDATE FIX FOR THE ESP32-S2, UNVERIFIED ON HARDWARE. Reported in issue
+    // #25: an S2 (the official Flipper Wi-Fi Devboard v1) running the Wi-Fi-only
+    // build comes up looking perfectly healthy -- banner fine, channel counting,
+    // no errors -- and detects nothing at all across ten-plus minutes past
+    // ten-plus cameras, on a board proven good because Marauder scans and logs on
+    // it. A promiscuous RX callback that never fires produces exactly that
+    // picture, and NULL-mode promiscuous is not guaranteed to deliver packets on
+    // the S2 the way it does on the classic part. STA mode is the portable form.
+    //
+    // Gated to the S2 alone so the classic image is byte-identical and cannot
+    // regress for anyone currently working. Nobody on this project has an S2, so
+    // this ships as a nightly for the reporter to test, not as a release, and it
+    // is a hypothesis until his diag.csv shows esp_frames climbing.
+#if defined(CONFIG_IDF_TARGET_ESP32S2)
+    esp_wifi_set_mode(WIFI_MODE_STA);
+#else
     esp_wifi_set_mode(WIFI_MODE_NULL);
+#endif
     esp_wifi_start();
 #if FLOCK_HAS_5GHZ
     // AUTO = 2.4 + 5. Must be set before hopping: with the default 2.4-only mode
