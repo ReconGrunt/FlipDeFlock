@@ -5,13 +5,20 @@
 <p align="center"><em>Find the cameras that are watching you.</em></p>
 
 FlipDeFlock is a Flipper Zero app that pairs the Flipper with an ESP32 board to
-survey the radio around you for surveillance cameras: Flock Safety and other ALPR
-hardware, SoundThinking acoustic sensors, and Axon body-worn / in-car police
-equipment. The Flipper is the screen, GPS tagger, and logger; the ESP32 does the
-Wi-Fi sniffing its BLE-only radio can't. It's for security assessments,
+survey the radio around you for surveillance gear: Flock Safety and other ALPR
+hardware, SoundThinking acoustic sensors, Axon and Utility body-worn police
+cameras, and drones. The Flipper is the screen, GPS tagger, and logger; the ESP32
+does the Wi-Fi sniffing its BLE-only radio can't. It's for security assessments,
 anti-surveillance awareness, and CTF/research.
 
-**Passive recon, and cameras only.** Detection is listen-only — no deauth,
+Drones are found by their **Remote ID** broadcast (ASTM F3411), which every
+unmanned aircraft in US airspace is required to transmit. That gives you the
+aircraft's serial, its type, its position, and the position of the person flying
+it. It also works where nothing else does: of the five drone vendors a US police
+department actually buys from, only one holds an IEEE MAC block, so a prefix list
+cannot see the rest.
+
+**Passive recon only.** Detection is listen-only — no deauth,
 injection, or jamming, ever, and nothing is transmitted at any point. Detections
 are indicators, not proof: OUI-only matches are possible, not confirmed, so verify
 by eye. Use it only where you are authorized to.
@@ -302,6 +309,12 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.89** - Same features as v0.88, cut so the release tag is green. Two build
+compatibility fixes: the bench emitter now builds on Arduino core 3.x, and the
+companion builds for the ESP32-C5. Neither affected a shipped file. The in-app
+About screen has also been brought up to date with drones, survey mode and the
+redacted exports.
 
 **v0.88** - **Police drones, and exports redacted by default.**
 

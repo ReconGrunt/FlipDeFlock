@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.89
+
+Same features as v0.88. This release exists because v0.88's CI went red after the
+tag was cut, on two build-compatibility jobs, and a release tag should be green.
+
+### Fixed
+
+- The bench emitter would not build on Arduino core 3.x. `getPayload()` returns
+  `std::string` on core 2.x and Arduino `String` on 3.x, and the sketch only
+  carries a one-way shim, so naming the type compiled on 2.0.17 and broke the
+  compat job. It uses `length()` and `operator[]` now, which exist on both.
+
+- The companion would not build for the ESP32-C5. `soc/rtc_cntl_reg.h` does not
+  exist on that target, so the include added for the software `bootloader`
+  command was a fatal error. It is wrapped in `__has_include` now; where the
+  header is missing the macros are undefined and the command reports that it
+  cannot enter download mode in software, which is already the honest answer on
+  a classic ESP32.
+
+Neither affected a shipped artifact. The failing job is a compatibility check
+that produces no release asset, and v0.88's downloads were built and attached
+before it ran.
+
+### Changed
+
+- The in-app **About** screen now covers Remote ID drone detection, survey mode,
+  body-worn cameras, and the fact that exports are redacted by default. It had
+  been left describing v0.87.
+
 ## v0.88
 
 **Police drones, redacted exports by default, and a sweep of the current
