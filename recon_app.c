@@ -139,8 +139,7 @@ void recon_app_report_flock(
         // wins in the UI regardless (views/flock_view.c).
         if(ssid && ssid[0]) {
             bool upgrade = (ftype == 'L') && entry->ssid[0] != '\0' &&
-                           !flock_ble_name_is_flock(entry->ssid) &&
-                           flock_ble_name_is_flock(ssid);
+                           flock_ble_name_should_replace(entry->ssid, ssid);
             if(entry->ssid[0] == '\0' || upgrade) {
                 strncpy(entry->ssid, ssid, RECON_SSID_LEN - 1);
                 entry->ssid[RECON_SSID_LEN - 1] = '\0';
@@ -597,8 +596,8 @@ void recon_app_ble_add(
         // does exactly this), so whichever advert happens to land first must not
         // get to name the device permanently.
         if(name && name[0]) {
-            bool upgrade = e->name[0] != '\0' && !flock_ble_name_is_flock(e->name) &&
-                           flock_ble_name_is_flock(name);
+            bool upgrade =
+                e->name[0] != '\0' && flock_ble_name_should_replace(e->name, name);
             if(e->name[0] == '\0' || upgrade) {
                 strncpy(e->name, name, RECON_SSID_LEN - 1);
                 e->name[RECON_SSID_LEN - 1] = '\0';

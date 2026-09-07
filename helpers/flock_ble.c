@@ -91,6 +91,45 @@ bool flock_ble_name_is_flock(const char* name) {
     return ci_prefix(name, "PENGUIN") || ci_contains(name, "FS EXT");
 }
 
+/**
+ * Stock module / stack names that identify nothing about the device.
+ *
+ * ANCHORED prefixes only. Deliberately short and boring: every entry must be a
+ * name a device ships with rather than one it chose, because anything on this
+ * list can be displaced by a later advert. Nothing Flock-adjacent belongs here,
+ * and a test asserts none of these collide with a Flock-shaped name.
+ */
+static const char* const k_generic_names[] = {
+    "ESP32", "ESP_", "ESP-", "ARDUINO", "NRF", "BLUETOOTH", "UNKNOWN", "NONAME",
+};
+
+int flock_ble_name_specificity(const char* name) {
+    if(!name || !name[0]) return 0;
+
+    // Self-identifying: Flock's own product naming, or a bare serial. The serial
+    // check is the post-2025-03 firmware case, where the GAP name IS the serial
+    // and carries no "Penguin-" prefix to recognise it by.
+    char probe[24];
+    if(flock_ble_name_is_flock(name) ||
+       flock_ble_extract_serial(NULL, 0, name, probe, sizeof(probe))) {
+        return 3;
+    }
+
+    for(size_t i = 0; i < sizeof(k_generic_names) / sizeof(k_generic_names[0]); i++) {
+        if(ci_prefix(name, k_generic_names[i])) return 1;
+    }
+    // Exact-match-only entries: too short to use as prefixes without catching
+    // real names ("BT" would swallow "BTLE-Cam-3").
+    if(ci_prefix(name, "BT") && !name[2]) return 1;
+    if(ci_prefix(name, "BLE") && !name[3]) return 1;
+
+    return 2;
+}
+
+bool flock_ble_name_should_replace(const char* current, const char* candidate) {
+    return flock_ble_name_specificity(candidate) > flock_ble_name_specificity(current);
+}
+
 FlockBleTell
     flock_ble_tell(uint16_t company, const char* name, bool raven_gatt, const uint8_t* addr) {
     // Mirrors flock_ble_confidence()'s precedence exactly, so the tell always

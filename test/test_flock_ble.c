@@ -168,6 +168,66 @@ void suite_flock_ble(void) {
     CHECK(!flock_ble_name_is_flock(""));
     CHECK(!flock_ble_name_is_flock(NULL));
 
+    // --- the name specificity ladder ---------------------------------------
+    CHECK_INT_EQ(flock_ble_name_specificity(NULL), 0);
+    CHECK_INT_EQ(flock_ble_name_specificity(""), 0);
+    // 1: stock defaults that identify nothing.
+    CHECK_INT_EQ(flock_ble_name_specificity("ESP32"), 1);
+    CHECK_INT_EQ(flock_ble_name_specificity("ESP32-WROOM"), 1);
+    CHECK_INT_EQ(flock_ble_name_specificity("ESP_CFDD91"), 1);
+    CHECK_INT_EQ(flock_ble_name_specificity("Arduino"), 1);
+    CHECK_INT_EQ(flock_ble_name_specificity("BT"), 1);
+    CHECK_INT_EQ(flock_ble_name_specificity("BLE"), 1);
+    // ...but a real name that merely STARTS like one is not a default.
+    CHECK_INT_EQ(flock_ble_name_specificity("BTLE-Cam-3"), 2);
+    // 2: an ordinary name the device actually chose.
+    CHECK_INT_EQ(flock_ble_name_specificity("bench-raven"), 2);
+    CHECK_INT_EQ(flock_ble_name_specificity("Flock of Seagulls"), 2);
+    // 3: self-identifying -- Flock naming, or a bare serial (newer firmware
+    // drops "Penguin-" and advertises the serial as the whole name).
+    CHECK_INT_EQ(flock_ble_name_specificity("Penguin-1234567890"), 3);
+    CHECK_INT_EQ(flock_ble_name_specificity("FS Ext Battery"), 3);
+    CHECK_INT_EQ(flock_ble_name_specificity("1234567890"), 3);
+
+    // DENYLIST SAFETY: no stock-default pattern may ever match a Flock name.
+    // If one did, a real detection's name could be displaced as if it were junk.
+    const char* flock_names[] = {
+        "Penguin-1234567890", "penguin-42", "FS Ext Battery", "1234567890"};
+    for(size_t i = 0; i < sizeof(flock_names) / sizeof(flock_names[0]); i++) {
+        CHECK_INT_EQ(flock_ble_name_specificity(flock_names[i]), 3);
+    }
+
+    // Replacement happens only on a STRICT increase.
+    CHECK(flock_ble_name_should_replace("ESP32", "bench-raven"));
+    CHECK(flock_ble_name_should_replace("ESP32", "Penguin-1"));
+    CHECK(flock_ble_name_should_replace("bench-raven", "FS Ext Battery"));
+    CHECK(!flock_ble_name_should_replace("Penguin-1", "ESP32")); // never downgrade
+    CHECK(!flock_ble_name_should_replace("bench-raven", "ESP32"));
+    CHECK(!flock_ble_name_should_replace("Penguin-1", "FS Ext Battery")); // equal
+    CHECK(!flock_ble_name_should_replace("bench-raven", "other-name")); // equal
+    CHECK(!flock_ble_name_should_replace("ESP32", ""));
+
+    // THE INCIDENT, ENCODED. A device advertised the stack default first and
+    // identified itself afterwards; the app latched "ESP32" forever and the row
+    // was read as an unrelated gadget, which cost a shipped detection regression.
+    // ANTI-FLAP: feed the alternating sequence many times and assert the stored
+    // name only ever climbs, changes at most 3 times, and settles.
+    {
+        const char* seq[] = {"ESP32", "bench-raven", "ESP32", "FS Ext Battery", "ESP32"};
+        char stored[33] = "";
+        int changes = 0;
+        for(int pass = 0; pass < 40; pass++) {
+            for(size_t i = 0; i < sizeof(seq) / sizeof(seq[0]); i++) {
+                if(stored[0] == '\0' || flock_ble_name_should_replace(stored, seq[i])) {
+                    snprintf(stored, sizeof(stored), "%s", seq[i]);
+                    changes++;
+                }
+            }
+        }
+        CHECK_STR_EQ(stored, "FS Ext Battery"); // settled on the most specific
+        CHECK(changes <= 3); // bounded: 200 sightings, at most 3 renames
+    }
+
     // --- flock_ble_extract_serial: the 0x09C8 manufacturer payload ----------
     // Layout: 2-byte LE company id, then a plain-ASCII serial. We take the
     // longest alphanumeric run of >= 6 chars.

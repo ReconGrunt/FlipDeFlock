@@ -206,6 +206,30 @@ const char* flock_ble_tell_str(FlockBleTell tell);
 bool flock_ble_name_is_flock(const char* name);
 
 /**
+ * How INFORMATIVE an observed BLE name is. Higher wins. Pure, total, and with no
+ * clock or signal input, so it cannot oscillate.
+ *
+ *   0  absent            NULL or ""
+ *   1  stock default     a module/stack name that identifies nothing ("ESP32")
+ *   2  an ordinary name  anything else the device actually chose
+ *   3  self-identifying  Flock's own product naming, or a bare serial
+ *
+ * A stored name is replaced only by a STRICTLY higher score, so a device's name
+ * can change at most three times in its life and two equally specific names
+ * never displace each other -- first-seen still breaks ties.
+ *
+ * Rung 1 exists because of a real incident: a Flock unit advertised the
+ * Bluetooth stack's default "ESP32" before identifying itself, the app latched
+ * that name forever, and the row was mistaken for an unrelated gadget. Matched
+ * ANCHORED, never as a substring -- this project has been bitten twice by
+ * unanchored matching -- and nothing Flock-adjacent may ever go on that list.
+ */
+int flock_ble_name_specificity(const char* name);
+
+/** True iff @p candidate is strictly more informative than @p current. */
+bool flock_ble_name_should_replace(const char* current, const char* candidate);
+
+/**
  * Human-readable label. The Raven label is GATT-backed and therefore confident
  * (no "?"); the Falcon label keeps its "?" since Falcon is never asserted.
  */
