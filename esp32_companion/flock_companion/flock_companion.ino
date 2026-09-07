@@ -93,7 +93,19 @@
 #include <Arduino.h>
 #include <stdarg.h> // buf_appendf()
 #include "soc/soc_caps.h" // SOC_GPIO_PIN_COUNT / SOC_GPIO_VALID_GPIO_MASK
-#include "soc/rtc_cntl_reg.h" // RTC_CNTL_FORCE_DOWNLOAD_BOOT -- hands-free reflash
+// RTC_CNTL_FORCE_DOWNLOAD_BOOT, for the hands-free "bootloader" command.
+//
+// __has_include, NOT a plain include: this header does not exist on every
+// target. The ESP32-C5 has no soc/rtc_cntl_reg.h at all and the compile died
+// with "No such file or directory" -- caught by the core-3.x/C5 compat job,
+// which exists for exactly this. Where the header is missing the macros are
+// undefined, so the command's #else branch reports "cannot" instead, which is
+// the honest answer on a part with no software download-boot anyway.
+#if defined(__has_include)
+#if __has_include("soc/rtc_cntl_reg.h")
+#include "soc/rtc_cntl_reg.h"
+#endif
+#endif
 #include "soc/spi_pins.h" // SPI_IOMUX_PIN_NUM_* -- this chip's flash pins
 #include "soc/uart_pins.h" // U0TXD_GPIO_NUM / U0RXD_GPIO_NUM -- the Flipper link
 #include "esp_wifi.h"
