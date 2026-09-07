@@ -19,6 +19,12 @@ bool scan_session_start(void* _app) {
     esp_link_send_band(app->esp);
     esp_link_send_gps_cfg(app->esp);
     recon_diag_begin(app);
+    // A survey is a snapshot of one outing, not a running history: a row from a
+    // different street would mislead someone hunting a single camera.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->survey_count = 0;
+    app->survey_last_poll = 0;
+    furi_mutex_release(app->mutex);
     return true;
 }
 
@@ -85,4 +91,7 @@ void scan_session_stop(void* _app) {
     // found nothing is exactly the session whose diagnostics matter most, and
     // that is precisely the case where hits.csv is empty and tells you nothing.
     recon_diag_save(app);
+    // What was actually in the air, matched or not -- the only thing that can
+    // explain a session with frames but no candidates.
+    recon_survey_save(app);
 }

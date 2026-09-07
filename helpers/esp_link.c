@@ -130,6 +130,15 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
         // Attack detection moved to Aegis. The universal companion still reports
         // DA/ATK lines; FlipDeFlock (cameras only) ignores them.
         break;
+    case EspMsgSurvey:
+        recon_app_survey_add(
+            app,
+            m->u.survey.mac,
+            m->u.survey.fp,
+            m->u.survey.rssi,
+            m->u.survey.channel,
+            m->u.survey.count);
+        break;
     case EspMsgLocate:
         recon_app_set_locate_rssi(app, m->u.locate.rssi);
         break;

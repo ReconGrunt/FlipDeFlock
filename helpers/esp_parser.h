@@ -58,6 +58,7 @@ typedef enum {
     EspMsgGpsNmea, /**< G: one NMEA sentence relayed from a GPS on the ESP board */
     EspMsgGpsCfg, /**< GPSCFG: the companion's echo of its GPS relay state */
     EspMsgChip, /**< CHIP: the board's real SoC, GPIO count and usable GPS pins */
+    EspMsgSurvey, /**< SV: one wildcard-probe transmitter seen, matched or NOT */
     EspMsgBand, /**< BAND: the band selection actually in force */
 } EspMsgType;
 
@@ -133,6 +134,22 @@ typedef struct {
              */
             char* nmea;
         } gps;
+        struct { // EspMsgSurvey (SV)
+            /**
+             * A device seen emitting WILDCARD PROBE REQUESTS, whether or not it
+             * matched anything we ship. This is deliberately unfiltered: field
+             * reports show tens of thousands of frames captured with zero
+             * candidates, and the detector cannot distinguish "an empty street"
+             * from "a camera on an OUI we do not carry" or one using a randomised
+             * MAC. The survey is what makes that difference visible.
+             */
+            uint8_t mac[6];
+            uint32_t fp; /**< IE-skeleton hash -- survives MAC randomisation */
+            int8_t rssi; /**< strongest seen, i.e. closest approach */
+            uint8_t channel;
+            uint16_t count; /**< a camera probes forever; a phone bursts and stops */
+        } survey;
+
         struct { // EspMsgChip (CHIP)
             /**
              * What the companion is actually running on. The app used to offer a

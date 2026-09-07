@@ -73,6 +73,12 @@ typedef enum {
 // list, and every counter that could tell them apart was live-only and died with
 // the session. v0.79-v0.83 shipped without this and cost two operators a drive.
 #define RECON_DIAG_PATH     RECON_APP_FOLDER "/diag.csv"
+// Every wildcard-probe transmitter seen during a session, MATCHED OR NOT.
+// Exists because "83,916 frames, zero candidates" is the one result the detector
+// cannot explain: a camera on an OUI we do not carry, or one using a randomised
+// MAC, looks exactly like an empty street. Park next to a camera you can see and
+// the row with a huge count is it, whatever its OUI turns out to be.
+#define RECON_SURVEY_PATH   RECON_APP_FOLDER "/survey.csv"
 
 /** ViewDispatcher view indexes. */
 typedef enum {
@@ -189,6 +195,29 @@ typedef enum {
     ReconEspBandAll, /**< 41 channels; a third the revisit rate */
     ReconEspBandCount,
 } ReconEspBand;
+
+/**
+ * One wildcard-probe transmitter observed, WHETHER OR NOT it matched a table.
+ *
+ * The detector only ever reports what it already recognises, so "83,916 frames,
+ * zero candidates" -- the result two operators independently got next to real
+ * cameras -- is indistinguishable from an empty street. This records what was
+ * actually in the air, so a camera on an OUI we do not carry, or one using a
+ * randomised MAC, becomes visible instead of silently absent.
+ *
+ * `fp` is the IE-skeleton hash: MAC-independent, so it survives randomisation and
+ * is the thing that can populate flock_ie_fps[], which ships empty today.
+ * `count` is the discriminator -- a camera probes every ~125 ms forever, a phone
+ * emits a burst and goes quiet.
+ */
+typedef struct {
+    uint8_t mac[6];
+    uint32_t fp;
+    int8_t rssi; /**< strongest seen -- closest approach */
+    uint8_t channel;
+    uint16_t count;
+} SurveyEntry;
+#define RECON_SURVEY_MAX 48
 
 typedef struct {
     EspBackend backend;
@@ -478,6 +507,11 @@ typedef struct {
     uint32_t diag_rej_conf; /**< dropped: scored FlockConfidenceNone */
     uint32_t diag_rej_full; /**< dropped: table full and nothing evictable */
     uint32_t diag_start_epoch; /**< wall clock at scan_session_start */
+
+    /* ---- probe survey (see RECON_SURVEY_PATH) --------------------------- */
+    SurveyEntry survey[RECON_SURVEY_MAX];
+    size_t survey_count;
+    uint32_t survey_last_poll; /**< tick of the last `survey` request */
     bool esp_proto_mismatch; /**< companion speaks a different protocol version than the app */
     uint32_t esp_dropped_lines; /**< overlong RX lines dropped whole (wire-protocol health metric) */
     uint8_t esp_link_state; /**< EspLinkState: Stopped / Running / PortBusy (R6 error surface) */
@@ -599,6 +633,21 @@ static inline bool recon_esp_chip_has_no_ble(const char* target) {
  * Display only -- it never feeds a confidence rung.
  */
 void recon_app_set_ble_tell(ReconApp* app, const uint8_t mac[6], uint8_t tell);
+
+/** Record one surveyed wildcard-probe transmitter (see RECON_SURVEY_PATH). */
+void recon_app_survey_add(
+    ReconApp* app,
+    const uint8_t mac[6],
+    uint32_t fp,
+    int8_t rssi,
+    uint8_t channel,
+    uint16_t count);
+
+/** Write survey.csv. Counts and signatures only -- no SSID, no position. */
+void recon_survey_save(ReconApp* app);
+
+/** Ask the companion for its survey on an interval (see RECON_SURVEY_PATH). */
+void recon_survey_tick(ReconApp* app);
 
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped);
 

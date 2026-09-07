@@ -356,6 +356,22 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
         out->type = EspMsgBleEnd;
         return out->type;
     }
+    // SV,<mac12>,<rssi>,<ch>,<fp8hex>,<count>  one wildcard-probe transmitter,
+    // matched or not. SVBEGIN/SVEND bracket a dump and carry nothing themselves.
+    if(strncmp(line, "SV,", 3) == 0) {
+        char* f[6];
+        int n = esp_split_fields(line, f, 6);
+        if(n < 6) return (out->type = EspMsgIgnore);
+        uint8_t mac[6];
+        if(!parse_mac_compact(f[1], mac)) return (out->type = EspMsgIgnore);
+        memcpy(out->u.survey.mac, mac, 6);
+        out->u.survey.rssi = (int8_t)atoi(f[2]);
+        out->u.survey.channel = (uint8_t)atoi(f[3]);
+        out->u.survey.fp = (uint32_t)strtoul(f[4], NULL, 16);
+        out->u.survey.count = (uint16_t)atoi(f[5]);
+        return (out->type = EspMsgSurvey);
+    }
+
     if(strncmp(line, "BLE,", 4) == 0) {
         // BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1][,sep=1].
         // 9 slots hold the 6 base fields plus all three optional trailers

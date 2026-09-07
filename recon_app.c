@@ -420,6 +420,97 @@ void recon_app_set_ble_tell(ReconApp* app, const uint8_t mac[6], uint8_t tell) {
     furi_mutex_release(app->mutex);
 }
 
+void recon_app_survey_add(
+    ReconApp* app,
+    const uint8_t mac[6],
+    uint32_t fp,
+    int8_t rssi,
+    uint8_t channel,
+    uint16_t count) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    SurveyEntry* e = NULL;
+    for(size_t i = 0; i < app->survey_count; i++) {
+        if(memcmp(app->survey[i].mac, mac, 6) == 0) {
+            e = &app->survey[i];
+            break;
+        }
+    }
+    if(!e) {
+        if(app->survey_count < RECON_SURVEY_MAX) {
+            e = &app->survey[app->survey_count++];
+            memset(e, 0, sizeof(SurveyEntry));
+            memcpy(e->mac, mac, 6);
+        } else {
+            // Full: drop the least-seen row rather than the newest. A persistent
+            // emitter is the interesting one, and a camera is persistent.
+            size_t victim = 0;
+            for(size_t i = 1; i < app->survey_count; i++) {
+                if(app->survey[i].count < app->survey[victim].count) victim = i;
+            }
+            if(app->survey[victim].count < count) {
+                e = &app->survey[victim];
+                memset(e, 0, sizeof(SurveyEntry));
+                memcpy(e->mac, mac, 6);
+            }
+        }
+    }
+    if(e) {
+        // The companion sends running totals, so take its value rather than
+        // incrementing -- a dump repeated every interval would otherwise multiply
+        // the count by the number of dumps.
+        e->count = count;
+        e->fp = fp;
+        e->channel = channel;
+        if(rssi > e->rssi || e->rssi == 0) e->rssi = rssi;
+    }
+    furi_mutex_release(app->mutex);
+}
+
+void recon_survey_save(ReconApp* app) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    size_t n = app->survey_count;
+    furi_mutex_release(app->mutex);
+    if(n == 0) return;
+
+    Storage* storage = furi_record_open(RECORD_STORAGE);
+    storage_common_mkdir(storage, RECON_APP_FOLDER);
+    File* file = storage_file_alloc(storage);
+    // Truncating rather than appending: this is a snapshot of what was in the air
+    // during the last session, not a running history, and a stale row from a
+    // different street would be actively misleading when hunting one camera.
+    if(storage_file_open(file, RECON_SURVEY_PATH, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+        FuriString* out = furi_string_alloc();
+        furi_string_cat_str(
+            out,
+            "# FlipDeFlock probe survey -- every wildcard-probe transmitter seen, matched or not\n"
+            "# No SSID and no position. A high count next to a camera you can see is that camera.\n"
+            "mac,rssi,channel,ie_fp,count\n");
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        for(size_t i = 0; i < app->survey_count; i++) {
+            SurveyEntry* e = &app->survey[i];
+            furi_string_cat_printf(
+                out,
+                "%02X:%02X:%02X:%02X:%02X:%02X,%d,%u,%08lx,%u\n",
+                e->mac[0],
+                e->mac[1],
+                e->mac[2],
+                e->mac[3],
+                e->mac[4],
+                e->mac[5],
+                e->rssi,
+                e->channel,
+                (unsigned long)e->fp,
+                (unsigned)e->count);
+        }
+        furi_mutex_release(app->mutex);
+        storage_file_write(file, furi_string_get_cstr(out), furi_string_size(out));
+        furi_string_free(out);
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    furi_record_close(RECORD_STORAGE);
+}
+
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_dropped_lines = dropped;
@@ -968,6 +1059,19 @@ void recon_hits_save(ReconApp* app) {
 // losing the drive.
 #define RECON_HITS_AUTOSAVE_MS 30000u
 
+#define RECON_SURVEY_POLL_MS 30000u
+
+void recon_survey_tick(ReconApp* app) {
+    if(!app->esp) return; // no link, nothing to ask
+    uint32_t now = furi_get_tick();
+    if(app->survey_last_poll != 0 &&
+       (now - app->survey_last_poll) < RECON_SURVEY_POLL_MS) {
+        return;
+    }
+    app->survey_last_poll = now;
+    esp_link_send(app->esp, "survey");
+}
+
 void recon_hits_autosave_tick(ReconApp* app) {
     if(!app->settings.save_hits) return;
 
@@ -1270,6 +1374,12 @@ static void recon_tick_event_callback(void* context) {
     // scene has to remember. Cheap -- it is a flag test on all but one tick in
     // 120, and a no-op entirely when Save hits is off.
     recon_hits_autosave_tick(app);
+    // Pull the probe survey off the companion periodically. It is held in RAM on
+    // the board and only moves when asked, so this is the one thing that puts it
+    // on the card -- and it must happen DURING the session, because the link is
+    // torn down before the save runs. 30 s: a bounded handful of lines, far below
+    // anything that competes with detection traffic.
+    recon_survey_tick(app);
     scene_manager_handle_tick_event(app->scene_manager);
 }
 

@@ -877,6 +877,96 @@ static uint32_t ie_skeleton_hash(const uint8_t* p, int len) {
     return any ? h : 0;
 }
 
+// ---- PROBE SURVEY --------------------------------------------------------
+//
+// WHY THIS EXISTS. Field reports (issue #25, and a drive of the maintainer's own)
+// show the same picture from different hardware: tens of thousands of management
+// frames captured, and ZERO candidates. 83,916 frames over 31 minutes past real
+// ALPR cameras, nothing scoring. The radio is fine; nothing in the air matched
+// any table we ship.
+//
+// The detector cannot explain that, because it only ever reports what it already
+// recognises. A camera on an OUI we do not know, or one that has moved to MAC
+// randomisation -- which this file's own comments warn "collapses the whole
+// OUI/SSID ladder" -- is indistinguishable from an empty street.
+//
+// So this records what is ACTUALLY there: every distinct transmitter sending
+// WILDCARD probe requests, matched or not, with its IE-skeleton fingerprint. Park
+// next to a camera you can see, and the row with a large count and a stable
+// fingerprint is the camera -- whatever its OUI turns out to be. That is how the
+// OUI table gets extended and how flock_ie_fps[] finally gets populated, which is
+// the designed answer to randomised MACs and currently ships empty.
+//
+// Wildcard probes only: a directed probe names a network the device already
+// knows, which is ordinary client behaviour and would bury the table in phones.
+// Phones still appear -- they scan too -- but a phone emits a burst and stops
+// while a camera probes every ~125 ms forever, so COUNT is the discriminator.
+//
+// Costs nothing when unused: rows are kept in RAM and only leave the board when
+// the app asks with `survey`. No extra UART traffic during normal detection.
+#define SURVEY_MAX 32
+typedef struct {
+    uint8_t mac[6];
+    uint32_t fp; /**< IE-skeleton hash; survives MAC randomisation */
+    int8_t rssi; /**< strongest seen -- closest approach */
+    uint8_t ch;
+    uint16_t count;
+    bool used;
+} SurveyRow;
+static SurveyRow g_survey[SURVEY_MAX];
+
+static void survey_note(const uint8_t* mac, uint32_t fp, int8_t rssi, uint8_t ch) {
+    int free_slot = -1, weakest = -1;
+    for(int i = 0; i < SURVEY_MAX; i++) {
+        if(!g_survey[i].used) {
+            if(free_slot < 0) free_slot = i;
+            continue;
+        }
+        if(memcmp(g_survey[i].mac, mac, 6) == 0) {
+            if(g_survey[i].count < 0xFFFF) g_survey[i].count++;
+            if(rssi > g_survey[i].rssi) g_survey[i].rssi = rssi; // closest approach
+            g_survey[i].ch = ch;
+            if(fp) g_survey[i].fp = fp;
+            return;
+        }
+        // Evict the LEAST seen, never the most: a persistent emitter is the one
+        // worth keeping, and it is the one a camera produces.
+        if(weakest < 0 || g_survey[i].count < g_survey[weakest].count) weakest = i;
+    }
+    int slot = (free_slot >= 0) ? free_slot : weakest;
+    if(slot < 0) return;
+    memset(&g_survey[slot], 0, sizeof(SurveyRow));
+    memcpy(g_survey[slot].mac, mac, 6);
+    g_survey[slot].fp = fp;
+    g_survey[slot].rssi = rssi;
+    g_survey[slot].ch = ch;
+    g_survey[slot].count = 1;
+    g_survey[slot].used = true;
+}
+
+/** Stream the survey to the app. One line per transmitter, strongest first. */
+static void survey_dump() {
+    Serial.print("SVBEGIN\n");
+    int n = 0;
+    for(int i = 0; i < SURVEY_MAX; i++) {
+        if(!g_survey[i].used) continue;
+        Serial.printf(
+            "SV,%02x%02x%02x%02x%02x%02x,%d,%u,%08lx,%u\n",
+            g_survey[i].mac[0],
+            g_survey[i].mac[1],
+            g_survey[i].mac[2],
+            g_survey[i].mac[3],
+            g_survey[i].mac[4],
+            g_survey[i].mac[5],
+            g_survey[i].rssi,
+            g_survey[i].ch,
+            (unsigned long)g_survey[i].fp,
+            (unsigned)g_survey[i].count);
+        n++;
+    }
+    Serial.printf("SVEND,%d\n", n);
+}
+
 // Sequence-number-run coalescer. A MAC-cycling Flock burst sprays many probes
 // from different (randomized) MACs but with a *contiguous* 802.11 sequence
 // number run -- the SoC's seq counter increments across the burst regardless of
@@ -1033,6 +1123,14 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     // belongs to that someone else and says nothing about the receiver.
     // Counted for REPORTING ONLY -- see the note on probe_rate_bump(). This used
     // to gate the OUI+probe rungs below; it does not any more.
+    // SURVEY: record every wildcard-probe emitter, matched or not. Deliberately
+    // BEFORE the scoring ladder, because the whole point is to see the devices
+    // the ladder rejects -- a camera on an OUI we do not carry, or one using a
+    // randomised MAC, is invisible everywhere else.
+    if(is_probe && wildcard) {
+        survey_note(p + 10, ie_skeleton_hash(p, len), pkt->rx_ctrl.rssi, frame_channel);
+    }
+
     uint8_t probe_rate = 0;
     if(is_probe) probe_rate = probe_rate_bump(p + 10); // addr2 = transmitter
 
@@ -2177,6 +2275,12 @@ static void handle_command(String cmd) {
         g_scanning = true;
         g_combo = true; // interleaved WiFi + BLE Flock detection
         g_phase_start = millis();
+    } else if(cmd == "survey") {
+        // Dump on request only, so a survey costs nothing until someone asks.
+        survey_dump();
+    } else if(cmd == "surveyclear") {
+        memset(g_survey, 0, sizeof(g_survey));
+        Serial.print("SVEND,0\n");
     } else if(cmd == "flockwifi") {
         g_combo = false;
     } else if(cmd.startsWith("ch ")) {
