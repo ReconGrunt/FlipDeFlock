@@ -269,6 +269,26 @@ typedef struct {
     const char* serial; /**< appended after the 0x09C8 company id; NULL = none */
     const char* service_uuid; /**< advertised service UUID, or NULL */
     const char* expect;
+    /**
+     * The BLE address this identity advertises from. DISTINCT PER IDENTITY, and
+     * that is the entire point.
+     *
+     * Every BLE identity used to advertise from the board's own single address,
+     * so the detector -- which keys its table on the address -- collapsed all of
+     * them into ONE row that changed name and evidence as the rotation advanced.
+     * A row could not be attributed to the identity that produced it, which makes
+     * the rig unable to validate the thing it exists to validate. It also cost a
+     * day: a row correctly Confirmed by the Raven identity, wearing a name from a
+     * different advert, was read as a false positive.
+     *
+     * Must be a RANDOM STATIC address, so the top two bits of the first byte are
+     * set (0xC0 mask) -- esp_ble_gap_set_rand_addr() rejects anything else. That
+     * means these deliberately do NOT match a Flock OUI, which is correct here:
+     * each identity then exercises exactly ONE tell (mfg id, naming, or GATT)
+     * with no OUI match confusing the result. The BLE bare-OUI path is covered by
+     * the host tests instead (flock_ble_tell's OuiOnly case).
+     */
+    uint8_t addr[6];
 } BleIdentity;
 
 // ALL OF THESE ADVERTISE FROM ONE BLE ADDRESS -- the board's own. Unlike the
@@ -286,9 +306,21 @@ typedef struct {
 // init name here, a specificity upgrade in the app), but the shared address is
 // inherent to how this rig works.
 static const BleIdentity BLE_IDS[] = {
-    {"Penguin-1234567890", "TN72023022000771", NULL, "FLOCK, serial TN72023022000771"},
-    {"FS Ext Battery", NULL, NULL, "FLOCK, no serial (model label, not a serial)"},
-    {"bench-raven", NULL, "00003100-0000-1000-8000-00805f9b34fb", "Flock Raven (audio)"},
+    {"Penguin-1234567890",
+     "TN72023022000771",
+     NULL,
+     "FLOCK, serial TN72023022000771",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x01}},
+    {"FS Ext Battery",
+     NULL,
+     NULL,
+     "FLOCK, no serial (model label, not a serial)",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x02}},
+    {"bench-raven",
+     NULL,
+     "00003100-0000-1000-8000-00805f9b34fb",
+     "Flock Raven (audio)",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x03}},
     // THE REGRESSION CANARY. 0x09C8 with a payload that yields NO decodable
     // serial (too short for the >=6 alphanumeric run) and no Flock naming, so the
     // ONLY thing identifying it is the manufacturer id. It must still read
@@ -297,7 +329,11 @@ static const BleIdentity BLE_IDS[] = {
     // threshold, i.e. silent. Had this identity existed, that change could not
     // have been written. If this ever shows anything but Confirmed, the gate is
     // back.
-    {"bench-mfgonly", "A1", NULL, "FLOCK Confirmed on mfg id ALONE (no serial)"},
+    {"bench-mfgonly",
+     "A1",
+     NULL,
+     "FLOCK Confirmed on mfg id ALONE (no serial)",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x04}},
 };
 #define BLE_ID_COUNT (sizeof(BLE_IDS) / sizeof(BLE_IDS[0]))
 
@@ -511,6 +547,14 @@ static void apply_ble_identity(int idx) {
 
     g_adv->stop();
 
+    // Advertise this identity from ITS OWN address, so the detector files it as
+    // its own device instead of folding every identity into one row. Done while
+    // advertising is stopped: esp_ble_gap_set_rand_addr() (which this wraps)
+    // will not take effect underneath a running advertiser.
+    esp_bd_addr_t bd;
+    memcpy(bd, id->addr, sizeof(bd));
+    g_adv->setDeviceAddress(bd, BLE_ADDR_TYPE_RANDOM);
+
     BLEAdvertisementData data;
     data.setName(id->name);
 
@@ -546,7 +590,19 @@ static void apply_ble_identity(int idx) {
 
     g_adv->start();
 
-    Serial.printf("[BLE ] #%d name=%-20s -> expect: %s\n", idx, id->name, id->expect);
+    // Address included so the bench log can be matched against the detector's
+    // rows one-to-one -- the whole reason the addresses are distinct.
+    Serial.printf(
+        "[BLE ] #%d %02x:%02x:%02x:%02x:%02x:%02x name=%-20s -> expect: %s\n",
+        idx,
+        id->addr[0],
+        id->addr[1],
+        id->addr[2],
+        id->addr[3],
+        id->addr[4],
+        id->addr[5],
+        id->name,
+        id->expect);
 }
 
 // ---- setup / loop ----------------------------------------------------------
