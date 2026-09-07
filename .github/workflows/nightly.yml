@@ -255,15 +255,22 @@ jobs:
       # for, and the filename says so.
       - name: Compile (ESP32-S2, Wi-Fi only)
         run: |
-          arduino-cli compile             --fqbn esp32:esp32:esp32s2:PartitionScheme=huge_app             --output-dir build_s2             esp32_companion/flock_companion
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32s2:PartitionScheme=huge_app \
+            --output-dir build_s2 \
+            esp32_companion/flock_companion
 
       - name: Merge the S2 image
         run: |
           BOOT0=$(find "$HOME/.arduino15" -name boot_app0.bin | head -n1)
-          python -m esptool --chip esp32s2 merge_bin -o build_s2/flipdeflock_companion_esp32s2_UNVERIFIED.bin             0x1000  build_s2/flock_companion.ino.bootloader.bin             0x8000  build_s2/flock_companion.ino.partitions.bin             0xe000  "$BOOT0"             0x10000 build_s2/flock_companion.ino.bin
+          python -m esptool --chip esp32s2 merge_bin -o build_esp/flipdeflock_companion_esp32s2_UNVERIFIED.bin \
+            0x1000  build_s2/flock_companion.ino.bootloader.bin \
+            0x8000  build_s2/flock_companion.ino.partitions.bin \
+            0xe000  "$BOOT0" \
+            0x10000 build_s2/flock_companion.ino.bin
           python - <<'PY'
           import pathlib
-          p = pathlib.Path("build_s2/flipdeflock_companion_esp32s2_UNVERIFIED.bin")
+          p = pathlib.Path("build_esp/flipdeflock_companion_esp32s2_UNVERIFIED.bin")
           d = p.read_bytes()
           assert d[0x1000] == 0xE9, f"bootloader magic missing at 0x1000 (got {d[0x1000]:#04x})"
           assert len(d) < 3_000_000, f"image looks padded to flash size: {len(d):,} bytes"
@@ -274,9 +281,13 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: nightly-companion-bin
+          # BOTH under build_esp on purpose. upload-artifact roots the archive
+          # at the common ancestor of its paths, so two different directories
+          # would prefix every file and move the WROOM image the publish job
+          # expects at the root.
           path: |
             build_esp/flipdeflock_companion_esp32wroom.bin
-            build_s2/flipdeflock_companion_esp32s2_UNVERIFIED.bin
+            build_esp/flipdeflock_companion_esp32s2_UNVERIFIED.bin
           if-no-files-found: error
 
   # The ESP32-C5 (dual-band) companion, built on core 3.x. Separate job from the
