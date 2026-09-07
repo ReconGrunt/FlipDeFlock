@@ -168,6 +168,53 @@ void suite_flock_ble(void) {
     CHECK(!flock_ble_name_is_flock(""));
     CHECK(!flock_ble_name_is_flock(NULL));
 
+    // --- B15: field-observed Flock BLE names added 2026-09-07 ---------------
+    //
+    // These reach CONFIRMED, so each has to be a string an ordinary device would
+    // not choose. The negatives below are the load-bearing half: they are what
+    // stops this from becoming the v0.46 `Flock-Guest` over-claim on the BLE path.
+    CHECK(flock_ble_name_is_flock("Pigvision"));
+    CHECK(flock_ble_name_is_flock("PIGVISION-3"));
+    CHECK(flock_ble_name_is_flock("FlockCam"));
+    CHECK(flock_ble_name_is_flock("RWLS-38:5B:44:B3:0F:5A")); // as observed in the field
+    CHECK(flock_ble_name_is_flock("FS-1A2B3C")); // "FS-" + exactly six hex
+    CHECK(flock_ble_name_is_flock("fs-abcdef"));
+
+    // A BARE "Flock" prefix is deliberately NOT a tell here. The BLE path has no
+    // Likely rung -- flock_ble_confidence() returns only Confirmed or Possible --
+    // so a loose match would promote anything flock-ish straight to Confirmed.
+    // That is exactly the v0.46 bug, which the Wi-Fi side can absorb (it has a
+    // Likely rung to land on) and this side cannot.
+    CHECK(!flock_ble_name_is_flock("Flock-Guest"));
+    CHECK(!flock_ble_name_is_flock("Flock"));
+    CHECK(!flock_ble_name_is_flock("flocking-awesome"));
+
+    // "FS-" must be SHAPED, not a two-letter prefix: too short, too many
+    // ordinary devices start that way.
+    CHECK(!flock_ble_name_is_flock("FS-")); // nothing after the dash
+    CHECK(!flock_ble_name_is_flock("FS-12")); // too short
+    CHECK(!flock_ble_name_is_flock("FS-1A2B3C4")); // trailing junk -> not the form
+    CHECK(!flock_ble_name_is_flock("FS-XYZQRS")); // right length, not hex
+    CHECK(!flock_ble_name_is_flock("FS")); // no dash; must not read past the NUL
+    CHECK(!flock_ble_name_is_flock("F")); // one byte then NUL
+    CHECK(!flock_ble_name_is_flock("RWLS")); // the dash is part of the tell
+    CHECK(!flock_ble_name_is_flock("Pig")); // prefix of a tell is not a tell
+
+    // The new tells must reach Confirmed through the real scoring entry point,
+    // not merely through the helper -- a green test over a function nothing calls
+    // proves nothing (see CLAUDE.md).
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, "Pigvision", false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, "RWLS-38:5B:44:B3:0F:5A", false),
+        FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, "FS-1A2B3C", false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(
+        flock_ble_confidence(BLE_COMPANY_NONE, "Flock-Guest", false), FlockConfidencePossible);
+    CHECK_INT_EQ(
+        flock_ble_tell(BLE_COMPANY_NONE, "Pigvision", false, NULL), FlockBleTellNaming);
+
     // --- the name specificity ladder ---------------------------------------
     CHECK_INT_EQ(flock_ble_name_specificity(NULL), 0);
     CHECK_INT_EQ(flock_ble_name_specificity(""), 0);

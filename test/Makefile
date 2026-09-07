@@ -17,13 +17,13 @@ MODULES := ../helpers/flock_db.c \
            ../helpers/gps_parser.c ../helpers/gps_rpc_convert.c \
            ../helpers/report_fmt.c ../helpers/flock_store.c \
            ../helpers/flock_ble.c ../helpers/oui_vendor.c ../helpers/marauder_scan.c \
-           ../helpers/fast_trig.c
+           ../helpers/fast_trig.c ../helpers/open_drone_id.c
 MOCKS   := mocks/furi_string_mock.c
 TESTS   := test_flock_db.c test_esp_parser.c \
            test_detect_rules.c test_report_escape.c test_gps_parser.c \
            test_gps_rpc_convert.c test_report_fmt.c \
            test_flock_store.c test_flock_ble.c test_oui_vendor.c test_marauder_scan.c \
-           test_fast_trig.c test_main.c
+           test_fast_trig.c test_open_drone_id.c test_main.c
 HEADERS := test.h mocks/core/string.h \
           
 

@@ -6,6 +6,7 @@
 // bit-for-bit on the next, and anything malformed must be REJECTED rather than
 // half-parsed into a plausible-looking wrong detection.
 #include "flock_store.h"
+#include "flock_db.h" // FlockClassDrone -- the ceiling below must track the enum
 #include "test.h"
 
 #include <math.h>
@@ -29,6 +30,10 @@ static FlockStoreRec sample(void) {
     r.count = 42;
     r.marked = true;
     r.epoch = 1785000000u;
+    // NAN, matching the app: a non-aircraft row has no operator position, and
+    // memset's 0 would both write "0.000000" and read back as a real fix.
+    r.op_lat = NAN;
+    r.op_lon = NAN;
     return r;
 }
 
@@ -198,12 +203,12 @@ void suite_flock_store(void) {
 
         char line[FLOCK_STORE_LINE_MAX];
         CHECK(flock_store_fmt_line(line, sizeof(line), &acoustic) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,1,1,\n"); // epoch,class,hidden,label
+        CHECK_STR_CONTAINS(line, ",1785000000,1,1,,,,0\n"); // epoch,class,hidden,label
 
         FlockStoreRec alpr = sample();
         check_roundtrip(&alpr); // both default to 0
         CHECK(flock_store_fmt_line(line, sizeof(line), &alpr) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,0,0,\n");
+        CHECK_STR_CONTAINS(line, ",1785000000,0,0,,,,0\n");
 
         // FlockClassBodycam (Axon). The bound below used to be a literal 1, so
         // adding a third class made the parser reject the whole LINE -- a stored
@@ -213,7 +218,7 @@ void suite_flock_store(void) {
         bodycam.dev_class = 2; // FlockClassBodycam
         check_roundtrip(&bodycam);
         CHECK(flock_store_fmt_line(line, sizeof(line), &bodycam) > 0);
-        CHECK_STR_CONTAINS(line, ",1785000000,2,0,\n");
+        CHECK_STR_CONTAINS(line, ",1785000000,2,0,,,,0\n");
 
         // Every value the enum can hold must survive; anything above the bound
         // is still rejected, so a corrupt or future-class file cannot be read as
@@ -222,6 +227,25 @@ void suite_flock_store(void) {
             FlockStoreRec r = sample();
             r.dev_class = (uint8_t)c;
             check_roundtrip(&r);
+        }
+
+        // THE CHECK THAT WOULD ACTUALLY HAVE CAUGHT IT.
+        //
+        // The loop above walks 0..MAX using the constant itself, so it stays
+        // green when the constant falls BEHIND the enum -- which is exactly what
+        // happened when FlockClassDrone (4) was added and this ceiling was left
+        // at FlockClassGear (3). The parser rejects any row above the ceiling
+        // outright, so a Remote ID drone was written to hits.csv correctly and
+        // then silently dropped on every reload: the detection simply vanished
+        // when the app restarted, and never reached an export. A self-referential
+        // bound cannot detect that. Tie it to the enum.
+        CHECK_INT_EQ((unsigned)FLOCK_STORE_MAX_DEV_CLASS, (unsigned)FlockClassDrone);
+
+        // And the drone specifically, end to end through the CSV.
+        {
+            FlockStoreRec drone = sample();
+            drone.dev_class = (uint8_t)FlockClassDrone;
+            check_roundtrip(&drone);
         }
         {
             FlockStoreRec junk;
@@ -322,17 +346,64 @@ void suite_flock_store(void) {
         CHECK_STR_EQ(junk.label, "");
     }
 
-    // Schema gate: this build reads v1, v2 and v3 and nothing else. A NEWER
-    // marker must be refused -- a future format may reorder columns, and guessing
-    // at it is how you get a plausible-looking wrong detection.
+    // Schema gate: this build reads v1..v4 and nothing else. A NEWER marker must
+    // be refused -- a future format may reorder columns, and guessing at it is
+    // how you get a plausible-looking wrong detection.
+    //
+    // WHEN YOU ADD A VERSION, move the "future" marker up with it. v4 was sitting
+    // in this negative assert as the unreadable future while v4 was being made
+    // the current format, which would have refused every file the build itself
+    // writes.
     {
         CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA));
+        CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA_V3));
         CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA_V2));
         CHECK(flock_store_schema_supported(FLOCK_STORE_SCHEMA_V1));
-        CHECK(!flock_store_schema_supported("# FlipDeFlock hits v4"));
+        CHECK(!flock_store_schema_supported("# FlipDeFlock hits v5"));
         CHECK(!flock_store_schema_supported("# FlipDeFlock hits"));
         CHECK(!flock_store_schema_supported(""));
         CHECK(!flock_store_schema_supported(NULL));
+    }
+
+    // ---- v4: the Remote ID tail -------------------------------------------
+    {
+        // A drone round-trips with its operator position and aircraft type.
+        FlockStoreRec drone = sample();
+        drone.dev_class = (uint8_t)FlockClassDrone;
+        drone.lat = 40.712800f; // the aircraft
+        drone.lon = -74.006000f;
+        drone.op_lat = 40.720000f; // the pilot, ~1 km away
+        drone.op_lon = -74.010000f;
+        drone.ua_type = 2; // multirotor
+        char dl[FLOCK_STORE_LINE_MAX];
+        CHECK(flock_store_fmt_line(dl, sizeof(dl), &drone) > 0);
+        FlockStoreRec back;
+        CHECK(flock_store_parse_line(dl, &back));
+        CHECK(fabsf(back.op_lat - 40.72f) < 1e-5f);
+        CHECK(fabsf(back.op_lon - (-74.01f)) < 1e-5f);
+        CHECK_INT_EQ(back.ua_type, 2);
+        CHECK_INT_EQ(back.dev_class, (int)FlockClassDrone);
+        // The aircraft position must not be confused with the operator's.
+        CHECK(fabsf(back.lat - 40.7128f) < 1e-5f);
+        CHECK(back.lat != back.op_lat);
+
+        // A v3 line (no Remote ID tail) must load with the operator position
+        // NAN, never 0. 0/0 is a real place, and a zeroed field rendered
+        // "Pilot lat: 0.00000" on the detail screen as though it were a fix.
+        FlockStoreRec v3;
+        CHECK(flock_store_parse_line(
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,4,0,", &v3));
+        CHECK(isnan(v3.op_lat));
+        CHECK(isnan(v3.op_lon));
+        CHECK_INT_EQ(v3.ua_type, 0);
+        CHECK_INT_EQ(v3.dev_class, (int)FlockClassDrone);
+
+        // An out-of-range aircraft type is rejected rather than mislabelled:
+        // OdidUaType is a nibble.
+        FlockStoreRec junk;
+        CHECK(!flock_store_parse_line(
+            "E0:0A:F6:12:34:AB,x,-67,11,P,4,deadbeef,,,,42,1,1785000000,4,0,,40.72,-74.01,16",
+            &junk));
     }
 
     // Truncation: too small an output buffer yields 0, not a half-written line.

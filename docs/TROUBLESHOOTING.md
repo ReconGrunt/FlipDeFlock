@@ -146,9 +146,18 @@ Reboot the Flipper and try again without opening other screens first.
 
 ## Reports
 
-**No report file appears.** Reports only include detections you **marked**. Mark them
-first, then **Reports → Save Marked → Report**. Files land in
-`apps_data/flipdeflock/reports/`.
+**No report file appears.** `Export Marked (Redacted)` only includes detections you
+**marked**, so mark them first -- or use `Export All (Redacted)`, which takes every
+stored detection. Files land in `apps_data/flipdeflock/reports/`.
+
+**Which export should I send?** The redacted ones, always, unless you are keeping the
+file for yourself. They reduce each MAC to its OUI, drop the sighting time, your
+heading and your own labels, and replace any SSID that is not itself a Flock name
+with a shape (`AaaaAdd`) -- because a scan picks up every household network in range,
+and an SSID is frequently a surname or a street address that public wardriving
+databases can place on a map. Camera coordinates are kept; they are the point of the
+report. `Export All (RAW - private)` writes files suffixed `_RAW` and is the working
+copy for you, not something to attach to an issue or a map submission.
 
 **Save fails on a full session.** Reports stream row-by-row to the SD card, so memory
 isn't usually the limit — check free space on the SD card. If heap is genuinely too

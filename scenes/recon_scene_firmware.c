@@ -18,7 +18,29 @@ void recon_scene_firmware_on_enter(void* context) {
     ReconApp* app = context;
     Submenu* submenu = app->submenu;
     submenu_reset(submenu);
-    submenu_set_header(submenu, "ESP32 Firmware");
+    // NAME THE BUILD THAT IS ACTUALLY ON THE BOARD, not the file it came from.
+    // The companion reports it in the FLOCKCO banner (v0.88+); anything older has
+    // no build identity at all, which is the whole reason this exists -- an .bin
+    // filename on the SD card is chosen by hand, cannot be checked after
+    // flashing, and has been wrong. "unknown" here means "pre-v0.88 firmware",
+    // which is itself the useful answer.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    bool linked = app->esp_connected;
+    char build[12];
+    snprintf(build, sizeof(build), "%s", app->esp_build);
+    furi_mutex_release(app->mutex);
+    // Kept SHORT deliberately. "ESP32 Firmware (no link)" is 24 characters and
+    // ran off the right edge of the 128 px header, cut mid-word -- caught by
+    // looking at the screen, not by the build.
+    if(!linked) {
+        snprintf(app->text_store, RECON_TEXT_STORE, "ESP32 FW: no link");
+    } else if(build[0]) {
+        snprintf(app->text_store, RECON_TEXT_STORE, "ESP32 FW: v%s", build);
+    } else {
+        // Not an error: every companion before v0.88 reported no build at all.
+        snprintf(app->text_store, RECON_TEXT_STORE, "ESP32 FW: pre-0.88");
+    }
+    submenu_set_header(submenu, app->text_store);
     submenu_add_item(submenu, "Backup current FW -> SD", FwItemBackup, fw_submenu_cb, app);
     submenu_add_item(submenu, "Flash a .bin", FwItemFlash, fw_submenu_cb, app);
     view_dispatcher_switch_to_view(app->view_dispatcher, ReconViewSubmenu);

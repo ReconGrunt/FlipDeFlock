@@ -593,6 +593,108 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("WEND"), EspMsgWifiEnd); // must NOT be mistaken for "W,"
     CHECK_INT_EQ(P("BBEGIN"), EspMsgBleBegin);
     CHECK_INT_EQ(P("BEND"), EspMsgBleEnd); // must NOT be mistaken for "BLE,"
+    // --- RID: Remote ID transport line --------------------------------------
+    // RID,<addr12>,<rssi>,<hex>. The hex is the BLE service data starting at the
+    // 0x0D application code; this layer only unhexes it, and everything about
+    // what it MEANS is helpers/open_drone_id.c's problem.
+    CHECK_INT_EQ(P("RID,c0fd00000007,-42,0d000212424e4348"), EspMsgRemoteId);
+    {
+        static const uint8_t want[6] = {0xc0, 0xfd, 0x00, 0x00, 0x00, 0x07};
+        CHECK(mac_eq(m.u.rid.addr, want));
+        CHECK_INT_EQ(m.u.rid.rssi, -42);
+        CHECK_INT_EQ((int)m.u.rid.payload_len, 8);
+        CHECK_INT_EQ(m.u.rid.payload[0], 0x0d);
+        CHECK_INT_EQ(m.u.rid.payload[3], 0x12);
+        CHECK_INT_EQ(m.u.rid.payload[7], 0x48);
+    }
+
+    // Malformed shapes are DROPPED, not half-decoded. A truncated advert that
+    // yielded a few real bytes plus invented ones would let the decoder read
+    // coordinates out of nothing, and a plotted position is believed.
+    CHECK_INT_EQ(P("RID,c0fd00000007,-42,"), EspMsgIgnore); // no payload
+    CHECK_INT_EQ(P("RID,c0fd00000007,-42,zz"), EspMsgIgnore); // not hex at all
+    CHECK_INT_EQ(P("RID,nothex,-42,0d00"), EspMsgIgnore); // bad address
+    CHECK_INT_EQ(P("RID,c0fd00000007,-42"), EspMsgIgnore); // field missing
+
+    // An odd trailing nibble stops the walk rather than inventing the low half
+    // of a byte.
+    CHECK_INT_EQ(P("RID,c0fd00000007,-42,0d0002f"), EspMsgRemoteId);
+    CHECK_INT_EQ((int)m.u.rid.payload_len, 3);
+
+    // A payload longer than the buffer is clamped, never overrun. Legacy BLE
+    // advertising cannot produce this; hostile input can.
+    {
+        char big[600];
+        int o = snprintf(big, sizeof(big), "RID,c0fd00000007,-42,");
+        for(int i = 0; i < 200 && o + 2 < (int)sizeof(big); i++) o += snprintf(big + o, 3, "0d");
+        CHECK_INT_EQ(P(big), EspMsgRemoteId);
+        CHECK_INT_EQ((int)m.u.rid.payload_len, 64); // sizeof(payload), not 200
+    }
+
+    // --- bwc=1: the Axon body-camera tag ------------------------------------
+    // A FOURTH optional trailer on the BLE line. The split array had to grow from
+    // 9 to 10 slots for it: esp_split_fields() stops at `max` and GLUES the extra
+    // token onto the previous field rather than dropping it, so an unnoticed
+    // short array turns the flag into part of the mfg hex and it silently never
+    // fires. These asserts are what would catch that.
+    CHECK_INT_EQ(P("BLE,001122334455,-50,7,845,AX3,c809aa,bwc=1"), EspMsgBleDev);
+    CHECK(m.u.ble.bwc_tag);
+    CHECK_INT_EQ(m.u.ble.cat, 7);
+
+    // Present alongside every other trailer, in either order, still parses.
+    CHECK_INT_EQ(P("BLE,001122334455,-50,7,845,AX3,c809aa,rv=1,sep=1,bwc=1"), EspMsgBleDev);
+    CHECK(m.u.ble.bwc_tag);
+    CHECK(m.u.ble.raven_gatt);
+    CHECK(m.u.ble.tracker_separated);
+    CHECK_INT_EQ((int)m.u.ble.mfg_len, 3); // the hex did NOT swallow a trailer
+
+    CHECK_INT_EQ(P("BLE,001122334455,-50,7,845,AX3,bwc=1,rv=1"), EspMsgBleDev);
+    CHECK(m.u.ble.bwc_tag);
+    CHECK(m.u.ble.raven_gatt);
+
+    // Absent -> false, and a lookalike token must not set it.
+    CHECK_INT_EQ(P("BLE,001122334455,-50,1,2504,Penguin-1"), EspMsgBleDev);
+    CHECK(!m.u.ble.bwc_tag);
+    CHECK_INT_EQ(P("BLE,001122334455,-50,1,2504,Penguin-1,bwc=0"), EspMsgBleDev);
+    CHECK(!m.u.ble.bwc_tag);
+
+    // --- FLOCKCO banner: protocol version AND build version -----------------
+    // Two different questions. The protocol number answers "can these two talk";
+    // the build answers "which firmware is actually on the board", which nothing
+    // could answer before v0.88 -- the only label was the .bin filename someone
+    // typed, which cannot be verified after flashing.
+    CHECK_INT_EQ(P("FLOCKCO,1,0.88"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 1);
+    CHECK_STR_EQ(m.u.banner.build, "0.88");
+
+    // BACKWARD COMPATIBILITY, both directions.
+    // Older firmware sends no build -- must still report the protocol version and
+    // leave the build empty rather than inventing one.
+    CHECK_INT_EQ(P("FLOCKCO,1"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 1);
+    CHECK_STR_EQ(m.u.banner.build, "");
+
+    // Firmware older still sends no version field at all.
+    CHECK_INT_EQ(P("FLOCKCO"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 0);
+    CHECK_STR_EQ(m.u.banner.build, "");
+
+    // An empty build field is not a build.
+    CHECK_INT_EQ(P("FLOCKCO,1,"), EspMsgBanner);
+    CHECK_STR_EQ(m.u.banner.build, "");
+
+    // A future build string longer than the field is TRUNCATED, never overrun --
+    // this is radio-adjacent input arriving over a UART.
+    CHECK_INT_EQ(P("FLOCKCO,1,0.88-rc1-verylongsuffix"), EspMsgBanner);
+    CHECK(strlen(m.u.banner.build) < sizeof(m.u.banner.build));
+    CHECK_INT_EQ(m.u.banner.version, 1);
+
+    // A DIFFERENT protocol version still parses, so the mismatch surfaces as a
+    // flag rather than as a dropped line.
+    CHECK_INT_EQ(P("FLOCKCO,2,0.99"), EspMsgBanner);
+    CHECK_INT_EQ(m.u.banner.version, 2);
+    CHECK_STR_EQ(m.u.banner.build, "0.99");
+
     CHECK_INT_EQ(P("GARBAGE"), EspMsgIgnore);
     CHECK_INT_EQ(P(""), EspMsgIgnore);
 

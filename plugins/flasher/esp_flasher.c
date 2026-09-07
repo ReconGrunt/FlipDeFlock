@@ -20,6 +20,7 @@ struct EspFlasher {
     FuriHalSerialHandle* serial;
     FuriStreamBuffer* rx;
     EspFlasherLog log;
+    EspFlasherProgress progress;
     void* ctx;
     /** Suppress the library's debug_print while we make a call whose failure
      *  response is EXPECTED and already ignored. See esp_flasher_quiet(). */
@@ -81,11 +82,39 @@ uint32_t loader_port_remaining_time(void) {
     return (s_deadline > now) ? (s_deadline - now) : 0;
 }
 
-/* Manual bootloader entry: the user resets the board into download mode. */
 void loader_port_reset_target(void) {
 }
 
+/**
+ * Ask a RUNNING companion to put itself into UART download mode, so a reflash
+ * needs no hands on the board.
+ *
+ * WHY. On a board with no USB port and no auto-reset circuit -- the ReksLab
+ * Tri-Board, the CaracalDB multi-boards -- IO0 and EN are on buttons, wired to
+ * nothing the Flipper can drive. Verified on the bench 2026-09-07: without a
+ * human holding BOOT, the flasher reports "no sync" on all five attempts. That
+ * made every firmware change synchronous on a person being physically present,
+ * which is a miserable way to iterate and is why this was worth solving.
+ *
+ * The companion answers "bootloader" by setting RTC_CNTL_FORCE_DOWNLOAD_BOOT and
+ * resetting, and the ROM then enters download mode regardless of the strapping
+ * pins. Firmware from v0.88 onward understands it.
+ *
+ * BEST EFFORT, NEVER A REQUIREMENT. Anything older -- or a board running some
+ * other firmware entirely, or nothing at all -- ignores the line, and the manual
+ * "hold BOOT, tap RESET" path still works exactly as before. So this can only
+ * ever turn a manual flash into an automatic one; it cannot break one. The
+ * on-screen prompt is deliberately still shown for the same reason.
+ */
 void loader_port_enter_bootloader(void) {
+    if(!s_active) return;
+    static const char kCmd[] = "bootloader\n";
+    furi_hal_serial_tx(s_active->serial, (const uint8_t*)kCmd, sizeof(kCmd) - 1);
+    furi_hal_serial_tx_wait_complete(s_active->serial);
+    // The chip resets, the ROM loader starts and prints its own banner. Long
+    // enough for that to finish before the first SYNC goes out, short enough that
+    // a board which ignored the command has not eaten a retry.
+    furi_delay_ms(400);
 }
 
 esp_loader_error_t loader_port_change_transmission_rate(uint32_t rate) {
@@ -121,10 +150,20 @@ static void esp_flasher_rx_irq(FuriHalSerialHandle* handle, FuriHalSerialRxEvent
     }
 }
 
-EspFlasher* esp_flasher_alloc(FuriHalSerialId ch, EspFlasherLog log_cb, void* ctx) {
+/** Report 0..100 to the scene's progress bar. NULL-safe. */
+static void esp_flasher_progress(EspFlasher* f, int pct) {
+    if(f && f->progress) f->progress(f->ctx, pct);
+}
+
+EspFlasher* esp_flasher_alloc(
+    FuriHalSerialId ch,
+    EspFlasherLog log_cb,
+    EspFlasherProgress progress_cb,
+    void* ctx) {
     EspFlasher* f = malloc(sizeof(EspFlasher));
     if(!f) return NULL; // heap critically low; caller already handles a NULL link
     f->log = log_cb;
+    f->progress = progress_cb;
     f->ctx = ctx;
     f->quiet = false; // malloc, not calloc -- an uninitialised flag would drop logs
     f->rx = furi_stream_buffer_alloc(FLASH_RX_BUF, 1);
@@ -175,7 +214,15 @@ bool esp_flasher_connect(EspFlasher* f, uint32_t fast_baud) {
     // Manual bootloader entry (hold BOOT, tap RESET) is fiddly, so retry the SYNC
     // several times with a generous per-SYNC timeout and a pause between tries so
     // the user can re-tap RESET.
-    const int attempts = 5;
+    // 20, not 5. Each attempt is ~5 s of SYNC plus a 1.5 s pause, so five gave a
+    // ~30 second window -- and on a board with no auto-reset the operator has to
+    // physically hold BOOT and tap RESET inside it. That is a race against a
+    // human, and losing it looks identical to a hardware fault: "Connect failed,
+    // power-cycle the board". Twenty gives about two minutes, which is patience
+    // rather than pressure. It costs nothing when the board IS in download mode:
+    // the loop breaks on the first success, so a normal flash still starts
+    // instantly.
+    const int attempts = 20;
     esp_loader_error_t err = ESP_LOADER_ERROR_TIMEOUT;
     for(int i = 1; i <= attempts; i++) {
         if(s_abort) {
@@ -284,8 +331,10 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
         }
         done += want;
         int pct = (int)((uint64_t)done * 100 / img);
-        if(pct != last_pct && pct % 10 == 0) {
-            esp_flasher_logf(f, "  %d%%", pct);
+        // Every 2% rather than every 10%: it is a bar now, not a log line, so
+        // updating it costs nothing and a stalled flash is visible much sooner.
+        if(pct != last_pct && pct % 2 == 0) {
+            esp_flasher_progress(f, pct);
             last_pct = pct;
         }
     }
@@ -327,10 +376,27 @@ bool esp_flasher_flash_file(EspFlasher* f, Storage* storage, const char* path, u
         // return value was never enough: protocol_serial.c prints the status byte
         // name itself, so a successful flash ended with "Verified OK." followed by
         // "Error: COMMAND_FAILED", and users reasonably read the last line.
+        //
+        // Asks the ROM to reboot into the freshly written app (the `true`).
+        //
+        // BEST EFFORT, AND ON A CLASSIC ESP32 IT DOES NOT ACTUALLY WORK. Tested
+        // on the bench 2026-09-07: after a verified-good flash with reboot=true,
+        // the board stayed in the ROM loader -- a scan opened straight afterwards
+        // reported "ch 0", zero frames and no banner, across two fresh links.
+        // Same root cause as the COMMAND_FAILED above: this ROM's FLASH_END is
+        // unreliable, and there is no auto-reset circuit for the library to fall
+        // back on. Left as `true` because it is free and DOES work on parts with
+        // a working FLASH_END, but the message below must not promise it.
+        //
+        // So the operator still taps RESET. Say exactly that -- an earlier
+        // version of this line read "Done. ESP restarting." and that was a claim
+        // the hardware does not honour, which is worse than the manual
+        // instruction it replaced: it sends someone off believing a dead board is
+        // a working one.
         f->quiet = true;
-        esp_loader_flash_finish(false);
+        esp_loader_flash_finish(true);
         f->quiet = false;
-        esp_flasher_logf(f, "Done. Reset ESP to run.");
+        esp_flasher_logf(f, "Done. Tap RESET on ESP.");
     }
     return ok;
 }
@@ -391,8 +457,10 @@ bool esp_flasher_backup(EspFlasher* f, Storage* storage, const char* out_path) {
         }
         addr += n;
         int pct = (int)((uint64_t)addr * 100 / size);
-        if(pct != last_pct && pct % 10 == 0) {
-            esp_flasher_logf(f, "  %d%%", pct);
+        // Every 2% rather than every 10%: it is a bar now, not a log line, so
+        // updating it costs nothing and a stalled flash is visible much sooner.
+        if(pct != last_pct && pct % 2 == 0) {
+            esp_flasher_progress(f, pct);
             last_pct = pct;
         }
     }

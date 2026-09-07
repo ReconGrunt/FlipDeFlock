@@ -303,6 +303,37 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.88** - **Police drones, and exports redacted by default.**
+
+FlipDeFlock now decodes **Remote ID** (ASTM F3411), the broadcast every unmanned
+aircraft in US airspace is legally required to transmit, and shows the aircraft's
+serial, its type, its position -- and **the operator's position**. Over BLE and
+Wi-Fi both. This is the only method that reaches the fleet: of the five drone
+vendors a US police department actually buys from (Skydio, BRINC, Aerodome,
+Flock, Paladin), **only Skydio holds an IEEE MAC block at all**, so three of the
+five can never be found by prefix matching.
+
+Reports now come in three flavours: `Export Marked (Redacted)`, `Export All
+(Redacted)` and `Export All (RAW - private)`. The redacted files keep camera
+coordinates -- that is the point of the report -- but reduce every MAC to its OUI,
+drop the sighting time, your heading and your own labels, and show any SSID that
+is not itself a Flock name as a shape rather than a name. That last one matters: a
+scan sweeps up every household network in range, and an SSID is often a surname
+or a street address and is independently geolocatable. The RAW item names itself,
+sorts last, and writes files suffixed `_RAW`.
+
+Also: **survey mode**, which records every transmitter the companion sees rather
+than only the ones that matched, so an empty drive can be told apart from a
+missed detection; Axon body cameras by their `BWCDEVICE` tag rather than by MAC,
+which survives address randomisation; Utility BodyWorn and Digital Ally; four new
+field-observed Flock BLE names; and a real export bug fixed -- every exported map
+point used to be tagged as a Flock ALPR camera regardless of what it actually
+was, including Axon poles, acoustic sensors and unattributed hits.
+
+Seventeen prefixes the community tables carry were checked against the IEEE
+registry and **rejected**, including a Samsung block and thirteen Espressif ones
+that would have made this app detect its own companion board.
+
 **v0.83** - **Everything a real drive turned up.** A flat battery no longer costs
 you the session (hits flush every 30s instead of only on exit). Probe targets are
 no longer shown as device names, so a phone looking for "NETGEAR19" stops reading

@@ -3,6 +3,7 @@
 #include "esp_parser.h"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 int esp_hexval(char c) {
@@ -191,6 +192,7 @@ static EspMsgType parse_ble(char** f, int n, EspMsg* out) {
     size_t mfg_len = 0;
     bool raven_gatt = false;
     bool tracker_separated = false;
+    bool bwc_tag = false;
     for(int fi = 6; fi < n; fi++) {
         const char* t = f[fi];
         if(strchr(t, '=')) {
@@ -198,6 +200,8 @@ static EspMsgType parse_ble(char** f, int n, EspMsg* out) {
                 raven_gatt = true;
             else if(strcmp(t, "sep=1") == 0)
                 tracker_separated = true;
+            else if(strcmp(t, "bwc=1") == 0)
+                bwc_tag = true;
         } else if(mfg_len == 0) {
             for(size_t i = 0; mfg_len < sizeof(mfg); i += 2) {
                 int hi = esp_hexval(t[i]);
@@ -218,6 +222,7 @@ static EspMsgType parse_ble(char** f, int n, EspMsg* out) {
     out->u.ble.mfg_len = mfg_len;
     out->u.ble.raven_gatt = raven_gatt;
     out->u.ble.tracker_separated = tracker_separated;
+    out->u.ble.bwc_tag = bwc_tag;
     return EspMsgBleDev;
 }
 
@@ -226,10 +231,15 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
     out->type = EspMsgIgnore;
 
     if(strncmp(line, "FLOCKCO", 7) == 0) {
-        // FLOCKCO,<ver> -- the companion's wire-protocol version (absent on old FW).
-        char* f[2];
-        int n = esp_split_fields(line, f, 2);
+        // FLOCKCO,<proto>[,<build>] -- the wire-protocol version, then the
+        // companion's own build version. Both optional: firmware older than
+        // either simply sends fewer fields.
+        char* f[3];
+        int n = esp_split_fields(line, f, 3);
         out->u.banner.version = (n >= 2) ? (uint8_t)atoi(f[1]) : 0;
+        if(n >= 3 && f[2][0]) {
+            snprintf(out->u.banner.build, sizeof(out->u.banner.build), "%s", f[2]);
+        }
         out->type = EspMsgBanner;
         return out->type;
     }
@@ -372,13 +382,45 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
         return (out->type = EspMsgSurvey);
     }
 
+    // RID,<addr12>,<rssi>,<hex>  one ASTM F3411 Remote ID broadcast. The hex is
+    // the BLE service data starting at the 0x0D application code; it is carried
+    // across verbatim and decoded by helpers/open_drone_id.c.
+    if(strncmp(line, "RID,", 4) == 0) {
+        char* f[4];
+        int n = esp_split_fields(line, f, 4);
+        if(n < 4) return (out->type = EspMsgIgnore);
+        uint8_t addr[6];
+        if(!parse_mac_compact(f[1], addr)) return (out->type = EspMsgIgnore);
+        memcpy(out->u.rid.addr, addr, 6);
+        out->u.rid.rssi = (int8_t)atoi(f[2]);
+        size_t len = 0;
+        const char* t = f[3];
+        // Stop on the first non-hex or odd trailing nibble rather than guessing
+        // at it -- a half-decoded advert is worse than a dropped one, because the
+        // decoder downstream would read real fields out of invented bytes.
+        for(size_t i = 0; len < sizeof(out->u.rid.payload); i += 2) {
+            int hi = esp_hexval(t[i]);
+            if(hi < 0) break;
+            int lo = esp_hexval(t[i + 1]);
+            if(lo < 0) break;
+            out->u.rid.payload[len++] = (uint8_t)((hi << 4) | lo);
+        }
+        if(len == 0) return (out->type = EspMsgIgnore);
+        out->u.rid.payload_len = len;
+        return (out->type = EspMsgRemoteId);
+    }
+
     if(strncmp(line, "BLE,", 4) == 0) {
-        // BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1][,sep=1].
-        // 9 slots hold the 6 base fields plus all three optional trailers
-        // (either order, either absent), so no trailer gets folded back into
-        // <name>.
-        char* f[9];
-        int n = esp_split_fields(line, f, 9);
+        // BLE,<addr>,<rssi>,<cat>,<company>,<name>[,<mfghex>][,rv=1][,sep=1][,bwc=1].
+        // 10 slots hold the 6 base fields plus all FOUR optional trailers (any
+        // order, any absent), so no trailer gets folded back into <name>.
+        //
+        // GROW THIS WITH EVERY NEW TRAILER. esp_split_fields() stops splitting at
+        // `max`, so a short array does not drop the extra token -- it glues it
+        // onto the previous one, where the `key=` check then misses it silently.
+        // bwc=1 was the fourth trailer and needed this bumped from 9.
+        char* f[10];
+        int n = esp_split_fields(line, f, 10);
         return (out->type = parse_ble(f, n, out));
     }
     if(line[0] == 'W' && line[1] == ',') {

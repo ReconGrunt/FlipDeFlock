@@ -60,6 +60,7 @@ typedef enum {
     EspMsgChip, /**< CHIP: the board's real SoC, GPIO count and usable GPS pins */
     EspMsgSurvey, /**< SV: one wildcard-probe transmitter seen, matched or NOT */
     EspMsgBand, /**< BAND: the band selection actually in force */
+    EspMsgRemoteId, /**< RID: an ASTM F3411 Remote ID broadcast from an aircraft */
 } EspMsgType;
 
 /**
@@ -104,6 +105,15 @@ typedef struct {
             size_t mfg_len;
             bool raven_gatt;
             bool tracker_separated; /**< tracker advert was in separated state */
+            /**
+             * The advert carried Axon's "BWCDEVICE" service-data tag.
+             *
+             * MAC-INDEPENDENT and specific: it says the device is a BODY-WORN
+             * CAMERA, where the Axon OUI only ever says "something Axon made".
+             * That distinction survives address randomisation, which a prefix
+             * match does not.
+             */
+            bool bwc_tag;
         } ble;
         struct { // EspMsgStatus (S)
             uint32_t frames;
@@ -150,6 +160,26 @@ typedef struct {
             uint16_t count; /**< a camera probes forever; a phone bursts and stops */
         } survey;
 
+        struct { // EspMsgRemoteId (RID)
+            /**
+             * A Remote ID broadcast, forwarded RAW and decoded elsewhere.
+             *
+             * The companion recognises only the transport (BLE service data
+             * under UUID 0xFFFA with application code 0x0D) and hex-dumps what
+             * follows. Nothing here interprets it: helpers/open_drone_id.c does,
+             * because that file is pure C with host tests and this is
+             * attacker-supplied radio input. Keeping the decoder on one side of
+             * the wire is the lesson the duplicated OUI tables taught.
+             *
+             * 64 bytes is well above what BLE legacy advertising can carry (the
+             * entire AD is 31), so a real aircraft never fills it.
+             */
+            uint8_t addr[6];
+            int8_t rssi;
+            uint8_t payload[64];
+            size_t payload_len;
+        } rid;
+
         struct { // EspMsgChip (CHIP)
             /**
              * What the companion is actually running on. The app used to offer a
@@ -195,6 +225,17 @@ typedef struct {
         } action;
         struct { // EspMsgBanner (FLOCKCO)
             uint8_t version; /**< companion's announced wire-protocol version (0 = old FW) */
+            /**
+             * The companion's BUILD version ("0.88"), empty on firmware that
+             * predates it.
+             *
+             * SEPARATE FROM `version`, which is the wire-protocol number. The
+             * protocol number answers "can these two talk"; this answers "which
+             * firmware is actually on the board", which nothing could answer
+             * before and which is the question every confusing hardware session
+             * has turned on.
+             */
+            char build[12];
         } banner;
     } u;
 } EspMsg;

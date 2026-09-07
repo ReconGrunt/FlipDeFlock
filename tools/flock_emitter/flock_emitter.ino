@@ -74,7 +74,24 @@
  *
  *   0 mfg 0x09C8 + name "Penguin-1234567890"  FLOCK, serial decoded
  *   1 mfg 0x09C8 + name "FS Ext Battery"      FLOCK, model label not a serial
- *   2 Raven GATT service 0x3100               "Flock Raven (audio)"
+ *   2 Raven GATT service 0x3100            "Flock Raven (audio)"
+ *   3 mfg 0x09C8, undecodable payload      CONFIRMED on the mfg id ALONE
+ *   4 name "RWLS-38:5B:44:B3:0F:5A"      CONFIRMED by NAME alone
+ *   5 name "FS-1A2B3C"                   CONFIRMED by NAME alone
+ *   6 Remote ID (ASTM F3411)             DRONE, own class, + operator location
+ *
+ * Identity 6 is not a Flock device at all and must NOT come out as one: expect
+ * class "Drone" / "Unmanned aircraft", serial BENCH-DRONE-01, and an OPERATOR
+ * position about a kilometre from the aircraft position. It rotates Basic ID ->
+ * Location -> System from a single address, exactly as a real aircraft does, so
+ * it exercises the accumulate-across-adverts path rather than handing the
+ * detector everything in one packet.
+ *
+ * 4 and 5 set name_only, so they carry NO manufacturer data and no service
+ * UUID. That flag is the whole test: without it apply_ble_identity() attaches
+ * the 0x09C8 company id to them and they are Confirmed before the name is
+ * consulted -- which is what happened on their first run, against a companion
+ * that had never heard of either name.
  *
  * ---------------------------------------------------------------------------
  * HARDWARE / LIMITS
@@ -268,6 +285,32 @@ typedef struct {
     const char* name;
     const char* serial; /**< appended after the 0x09C8 company id; NULL = none */
     const char* service_uuid; /**< advertised service UUID, or NULL */
+    /**
+     * Advertise the GAP name and NOTHING ELSE -- no manufacturer data, no
+     * service UUID. For identities whose whole purpose is to test the NAMING
+     * tell.
+     *
+     * Without this flag the rig cannot test naming at all. apply_ble_identity()
+     * attaches the 0x09C8 company id to every identity that has no service UUID,
+     * so a "name-only" row still arrives carrying the strongest tell there is and
+     * is Confirmed on the manufacturer id before the name is ever consulted. Two
+     * such rows were added on 2026-09-07 and read as CONFIRMED on the FIRST bench
+     * run, with the companion still running firmware that had never heard of
+     * those names -- a pass that proved nothing. Caught only by asking why a
+     * detection that should have been impossible succeeded.
+     */
+    bool name_only;
+    /**
+     * Advertise an ASTM F3411 Remote ID broadcast instead of a Flock advert.
+     *
+     * The three messages below are sent in ROTATION from this one address, which
+     * is exactly how a real aircraft behaves: a BLE legacy advert carries ONE
+     * 25-byte message, so the serial, the aircraft position and the operator
+     * position arrive seconds apart and the detector has to accumulate them.
+     * A rig that sent all three at once would never exercise that, and merging
+     * across adverts is the part most likely to be wrong.
+     */
+    bool remote_id;
     const char* expect;
     /**
      * The BLE address this identity advertises from. DISTINCT PER IDENTITY, and
@@ -309,16 +352,22 @@ static const BleIdentity BLE_IDS[] = {
     {"Penguin-1234567890",
      "TN72023022000771",
      NULL,
+     false,
+     false,
      "FLOCK, serial TN72023022000771",
      {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x01}},
     {"FS Ext Battery",
      NULL,
      NULL,
+     false,
+     false,
      "FLOCK, no serial (model label, not a serial)",
      {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x02}},
     {"bench-raven",
      NULL,
      "00003100-0000-1000-8000-00805f9b34fb",
+     false,
+     false,
      "Flock Raven (audio)",
      {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x03}},
     // THE REGRESSION CANARY. 0x09C8 with a payload that yields NO decodable
@@ -332,10 +381,104 @@ static const BleIdentity BLE_IDS[] = {
     {"bench-mfgonly",
      "A1",
      NULL,
+     false,
+     false,
      "FLOCK Confirmed on mfg id ALONE (no serial)",
      {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x04}},
+    // NAME-ONLY tells, added 2026-09-07 with the field-observed patterns.
+    //
+    // No manufacturer data and no GATT service, so the GAP name is the ONLY
+    // thing that can classify these -- which is exactly what makes them a test.
+    // The patterns live in three places (the companion's ble_do_scan, the app's
+    // flock_ble_name_is_flock, and the emitter here), and when they were added
+    // the companion's copy was the one that could silently not learn them: a
+    // device it files as cat=0 never reaches the app's scorer at all, so the app
+    // would look correct in isolation while the pair found nothing. These two
+    // rows fail on the bench in that case instead of in someone's car.
+    //
+    // "RWLS-..." is verbatim from the field report the prefix came from -- the
+    // unit appends its own MAC, whose OUI (38:5b:44, Silicon Labs) is the
+    // corroboration that got that prefix into the OUI table in the same commit.
+    {"RWLS-38:5B:44:B3:0F:5A",
+     NULL,
+     NULL,
+     true,
+     false,
+     "FLOCK by NAME alone (RWLS- prefix)",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x05}},
+    // The shaped form. "FS-" plus exactly six hex; the negative cases ("FS-12",
+    // "FS-XYZQRS", trailing junk) are covered by the host tests, because an
+    // emitter can only ever demonstrate the positive.
+    {"FS-1A2B3C",
+     NULL,
+     NULL,
+     true,
+     false,
+     "FLOCK by NAME alone (FS-XXXXXX unit id)",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x06}},
+    // REMOTE ID. Not a Flock device at all -- it must come out as its own class
+    // ("Drone" / "Unmanned aircraft"), never as a camera. Rotates Basic ID ->
+    // Location -> System from this one address so the detector has to accumulate
+    // across adverts to end up holding the serial, the aircraft position and the
+    // operator position at the same time.
+    {"bench-drone",
+     NULL,
+     NULL,
+     false,
+     true,
+     "DRONE: serial BENCH-DRONE-01 + operator location",
+     {0xC0, 0xFD, 0x00, 0x00, 0x00, 0x07}},
 };
 #define BLE_ID_COUNT (sizeof(BLE_IDS) / sizeof(BLE_IDS[0]))
+
+// ---- Remote ID (ASTM F3411) bench messages --------------------------------
+//
+// Three encoded 25-byte messages, sent in rotation from one address.
+//
+// COORDINATES ARE A DELIBERATE, PUBLIC, OBVIOUSLY-FAKE PLACE (lower Manhattan),
+// not wherever this board happens to be. A bench rig that transmitted its own
+// real position would write the operator's location into every capture, log and
+// screenshot taken while testing -- and those get attached to issues.
+//
+// Aircraft 40.7128 / -74.0060, operator 40.7200 / -74.0100, i.e. about a
+// kilometre apart, so a bearing to the operator is visibly different from a
+// bearing to the drone and a test cannot pass by confusing the two.
+//
+// THESE EXACT BYTES ARE PINNED BY test_open_drone_id.c. Hand-encoding a
+// little-endian int32 is precisely the thing to get wrong, and it is invisible
+// on hardware -- the first version of this block decoded to -74.0264 and
+// 40.7564, which are perfectly plausible coordinates a few kilometres away and
+// would have "passed" any test that only checked a drone appeared. If you edit a
+// coordinate here, update that test in the same commit; it decodes these arrays
+// with the real decoder and asserts the degrees.
+static const uint8_t ODID_BASIC_ID[25] = {
+    0x02, // Basic ID, protocol version 2
+    0x12, // id type 1 (serial), UA type 2 (multirotor)
+    'B', 'E', 'N', 'C', 'H', '-', 'D', 'R', 'O', 'N', 'E', '-', '0', '1',
+    0, 0, 0, 0, 0, 0, // id padding to 20 bytes
+    0, 0, 0 // reserved
+};
+static const uint8_t ODID_LOCATION[25] = {
+    0x12, // Location, protocol version 2
+    0x00, // status/flags: SpeedMult 0, EW 0
+    90, // direction 90 deg
+    40, // speed 40 * 0.25 = 10 m/s
+    0xC0, 0x47, 0x44, 0x18, // latitude  407128000 -> 40.7128
+    0xA0, 0x94, 0xE3, 0xD3, // longitude -740060000 -> -74.0060
+    0x00, 0x00, // baro altitude: unknown
+    0x60, 0x09, // geo altitude 2400 -> 200 m
+    0x98, 0x08, // height 2200 -> 100 m
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+};
+static const uint8_t ODID_SYSTEM[25] = {
+    0x42, // System, protocol version 2
+    0x01, // operator location type: live GPS
+    0x00, 0x61, 0x45, 0x18, // operator latitude  407200000 -> 40.7200
+    0x60, 0xF8, 0xE2, 0xD3, // operator longitude -740100000 -> -74.0100
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};
+static const uint8_t* const ODID_ROTATION[3] = {ODID_BASIC_ID, ODID_LOCATION, ODID_SYSTEM};
+static uint8_t g_odid_step = 0;
 
 // XUNTONG company id 0x09C8, little-endian on the wire.
 static const uint8_t XUNTONG_LE[2] = {0xC8, 0x09};
@@ -556,9 +699,46 @@ static void apply_ble_identity(int idx) {
     g_adv->setDeviceAddress(bd, BLE_ADDR_TYPE_RANDOM);
 
     BLEAdvertisementData data;
-    data.setName(id->name);
+    // THE NAME IS OMITTED FROM A REMOTE ID ADVERT, and it has to be.
+    //
+    // BLE legacy advertising carries 31 bytes total. One ODID service-data
+    // element is 2 (len+type) + 2 (UUID 0xFFFA) + 1 (app code) + 1 (counter) +
+    // 25 (message) = EXACTLY 31. Adding "bench-drone" as a name AD costs another
+    // 13, and the flags AD another 3, for 47 into a 31-byte packet -- the stack
+    // rejects the whole thing and the board advertises NO Remote ID at all.
+    //
+    // That is precisely what happened on the first bench run: RWLS- and FS-1A2B3C
+    // (which fit easily) both came back CONFIRMED while the drone never appeared
+    // once, and it read like a companion-side failure. It was this. The name
+    // still goes out in the SCAN RESPONSE below, which is a separate 31 bytes, so
+    // the identity is still attributable in the log.
+    if(!id->remote_id) data.setName(id->name);
 
-    if(!id->service_uuid) {
+    // REMOTE ID: service data under UUID 0xFFFA, first byte the 0x0D application
+    // code, then a message counter, then one 25-byte message. Cycling the
+    // message each call is what makes the detector accumulate rather than
+    // receive everything at once.
+    if(id->remote_id) {
+        std::string sd;
+        sd.push_back((char)0x0D);
+        sd.push_back((char)g_odid_step);
+        const uint8_t* msg = ODID_ROTATION[g_odid_step % 3];
+        g_odid_step++;
+        for(size_t i = 0; i < 25; i++) sd.push_back((char)msg[i]);
+        data.setServiceData(BLEUUID((uint16_t)0xFFFA), fmfg(sd));
+        // PRINT WHAT WAS ACTUALLY BUILT, not what we intended. The library's
+        // addData() silently RETURNS when a payload would exceed the 31-byte
+        // legacy limit -- no error, no log, the element just is not there. That
+        // is how the first version of this identity advertised nothing at all
+        // while every line of code looked right, and it cost a bench run to find.
+        // An advert that is not exactly 31 bytes here is a bug.
+        std::string pl = data.getPayload();
+        Serial.printf("[RID ] advert payload %u bytes: ", (unsigned)pl.size());
+        for(size_t i = 0; i < pl.size(); i++) Serial.printf("%02x", (uint8_t)pl[i]);
+        Serial.printf("\n");
+    }
+
+    if(!id->service_uuid && !id->name_only && !id->remote_id) {
         // Manufacturer-specific data: the 2-byte company id, then the serial if
         // this identity has one. flock_ble_extract_serial() digs the serial back
         // out of exactly this layout. The no-serial case ("FS Ext Battery") still

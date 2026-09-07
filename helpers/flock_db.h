@@ -55,6 +55,16 @@ typedef enum {
                       *  sells both ALPR poles and hand-held radios on one OUI, so
                       *  calling either "ALPR" would invent a detection. The VENDOR
                       *  is what we actually know; the kind is not. */
+    FlockClassDrone, /**< Unmanned aircraft, identified by its ASTM F3411 Remote
+                       *  ID broadcast or by a drone-manufacturer OUI.
+                       *
+                       *  ITS OWN CLASS, not folded into ALPR or Gear. A drone is
+                       *  the one thing here that MOVES and FOLLOWS, so the
+                       *  operator response to it is different from anything else
+                       *  the app reports -- and a Remote ID broadcast tells us
+                       *  where the pilot is standing, which no other class has an
+                       *  equivalent of. Calling it a camera would also be an
+                       *  over-claim: plenty of aircraft carry no camera at all. */
 } FlockDevClass;
 
 /**
@@ -89,6 +99,21 @@ typedef enum {
     FlockVendorVerkada, /**< Verkada. */
     FlockVendorGenetec, /**< Genetec (AutoVu). */
     FlockVendorAvigilon, /**< Avigilon Alta (Motorola-owned). */
+    FlockVendorUtility, /**< Utility, Inc -- BodyWorn body-worn cameras. */
+    FlockVendorDigitalAlly, /**< Digital Ally -- FirstVU body-worn cameras. */
+    /**
+     * A drone manufacturer, named by the OUI vendor lookup rather than by this
+     * enum.
+     *
+     * ONE VALUE FOR ALL OF THEM, deliberately. The useful identification of an
+     * aircraft is its Remote ID broadcast -- which carries the operator's own
+     * serial or registration and needs no vendor guess -- and the OUI table here
+     * is only a fallback for aircraft whose Remote ID we did not catch. Spending
+     * an enum value per manufacturer would imply the vendor is the answer; it is
+     * not, and for the three US police-drone vendors that hold no IEEE block at
+     * all (BRINC, Aerodome, Paladin) a vendor enum could never say anything.
+     */
+    FlockVendorDrone,
 } FlockVendor;
 
 /**

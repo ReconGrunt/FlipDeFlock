@@ -4,11 +4,32 @@
 #include <string.h>
 
 /**
- * 29 OUI prefixes observed in fielded Flock Safety deployments.
+ * 31 OUI prefixes observed in fielded Flock Safety deployments.
  * Mostly @NitekryDPaul research; 82:6b:f2 from DeFlockJoplin field testing;
  * the last entry b4:1e:52 is Flock Safety's own IEEE-registered OUI (GainSec).
  * These are generic vendor prefixes (Liteon, Espressif, etc.), hence OUI-only
  * matches are scored "possible", never "confirmed".
+ *
+ * ADDED 2026-09-07 after a sweep of the current community tables, each prefix
+ * resolved against the IEEE MA-L registry before acceptance (the memory rule:
+ * verify by REGISTRY ORGANISATION NAME, never by the list it came from):
+ *   e0:0a:f6  Liteon -- the same vendor as 21 of the entries below, so it is
+ *             consistent with the module Flock actually buys. From plume tier 2.
+ *   38:5b:44  Silicon Laboratories -- accepted because it is corroborated by a
+ *             FIELD-OBSERVED BLE NAME rather than by a list: "RWLS-38:5B:44:B3:
+ *             0F:5A", a Flock unit that appends its own MAC to its GAP name. We
+ *             already carry three SiLabs prefixes (58:8e:81, ec:1b:bd, 90:35:ea).
+ *
+ * REJECTED in the same sweep, and now ENFORCED by TOO_GENERIC in
+ * tools/check_oui_parity.py so they cannot be quietly re-imported: 48:27:ea is
+ * SAMSUNG (phones and hotspots -- literally the false-positive class a user
+ * already reported), thirteen Espressif prefixes (chip vendor; they would make
+ * this app detect its own companion board), f0:9f:c2 Ubiquiti, 8c:1f:64 and
+ * 4c:6e:44 which belong to the IEEE Registration Authority itself (shared
+ * MA-M/MA-S blocks -- a 3-byte match there names nobody), and d8:a0:d8 which is
+ * not registered in MA-L at all. simeononsecurity/flock-finder ships 48:27:ea
+ * and a4:cf:12; zmattmanz/plume ships all of the above. Widening recall from
+ * those tables wholesale would cost precision, which the project rules forbid.
  *
  * SOURCE OF TRUTH is now nitekry/nite-oui-collection ->
  * groups/flockers/my_tested_flock.md, a per-prefix table with Confidence and
@@ -82,7 +103,7 @@ static const uint8_t flock_ouis[][3] = {
     {0xe8, 0xd0, 0xfc}, {0xe0, 0x4f, 0x43}, {0xb8, 0x1e, 0xa4}, {0x70, 0x08, 0x94},
     {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x3c, 0x71, 0xbf}, {0x58, 0x00, 0xe3},
     {0x90, 0x35, 0xea}, {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69}, {0x82, 0x6b, 0xf2},
-    {0xb4, 0x1e, 0x52},
+    {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6}, {0x38, 0x5b, 0x44},
 };
 
 #define FLOCK_OUI_COUNT (sizeof(flock_ouis) / sizeof(flock_ouis[0]))
@@ -185,7 +206,7 @@ bool axon_oui_match(const uint8_t* mac) {
 
 /*
  * ===========================================================================
- * VENDOR-EXCLUSIVE OUIs (12 across 5 vendors) -- competitor surveillance kit.
+ * VENDOR-EXCLUSIVE OUIs (15 across 7 vendors) -- competitor surveillance kit.
  * ===========================================================================
  *
  * WHY THESE ARE A DIFFERENT KIND OF EVIDENCE FROM flock_ouis[].
@@ -272,6 +293,22 @@ static const uint8_t ubicquia_ouis[][3] = {
  * past, which is the precision failure this project refuses.
  *
  * NOT Motorola Mobility (Lenovo) -- see the trap list above.
+ *
+ * FIELD EVIDENCE AGAINST THIS TABLE, recorded 2026-09-07 and NOT yet acted on.
+ * soyboi1312/all-cameras-are-beacons audited its own captures and found that ALL
+ * 27 Motorola Wi-Fi OUI hits were confirmed NOT to be police equipment; it now
+ * boots Motorola matching OFF by default and requires an explicit opt-in. Their
+ * stated cause is that these blocks also carry Sierra Wireless AirLink and
+ * Cradlepoint vehicle routers -- transit buses and fleet vehicles, not body cams.
+ *
+ * Left ON here for now, for one reason: this table has never claimed a product.
+ * It maps to FlockClassGear ("vendor known, kind not determined") and its label
+ * reads "Motorola Solutions", so a hit says exactly what the evidence supports
+ * and no more -- which is the thing that made their version misleading and does
+ * not apply to ours. But 27 out of 27 is not a rounding error, and if a future
+ * capture reproduces it here, the honest move is to drop these prefixes rather
+ * than to keep a rung that is almost always wrong. Do not treat this note as
+ * settled; treat it as the next thing to measure.
  */
 static const uint8_t motorola_ouis[][3] = {
     {0x00, 0x04, 0x7d},
@@ -336,6 +373,113 @@ static const uint8_t avigilon_ouis[][3] = {
 #define AVIGILON_OUI_COUNT (sizeof(avigilon_ouis) / sizeof(avigilon_ouis[0]))
 
 /**
+ * Utility, Inc -- "BodyWorn" body-worn cameras.
+ *
+ * Both prefixes are EXCLUSIVE MA-L blocks registered to "Utility, Inc" of
+ * Decatur, GA (IEEE, checked 2026-09-07), so unlike the Flock silicon prefixes
+ * a match here does name one company. It still does not name a PRODUCT: the
+ * class stays "body-worn" because that is what this vendor ships, and a bare OUI
+ * match still scores possible like every other.
+ *
+ * Corroborated by a BLE naming tell as well -- adverts containing
+ * "BodyWorn Remote" (nite-oui-collection, 2025-08), which the companion matches
+ * independently of the MAC and which therefore survives address randomisation.
+ */
+static const uint8_t utility_ouis[][3] = {
+    {0x00, 0x09, 0xbc}, {0x00, 0x16, 0xed},
+};
+
+#define UTILITY_OUI_COUNT (sizeof(utility_ouis) / sizeof(utility_ouis[0]))
+
+/**
+ * Digital Ally, Inc -- "FirstVU" body-worn and in-car cameras.
+ *
+ * Exclusive MA-L block registered to "Digital Ally, Inc." of Grain Valley, MO
+ * (IEEE, checked 2026-09-07).
+ *
+ * NOT ADDED alongside these, and the reasons are the interesting part:
+ *   fc:01:9e  VIEVU -- a real body-camera block, but Axon bought VIEVU in 2018
+ *             and discontinued the line. Adding a prefix for hardware that is
+ *             largely out of service buys recall we cannot demonstrate and adds
+ *             a row nobody can verify.
+ *   d4:2d:c5  i-PRO Co., Ltd -- a genuine surveillance vendor, but its range runs
+ *             from body cameras to fixed network cameras to industrial sensors.
+ *             That is the Motorola problem again: the vendor is knowable and the
+ *             PRODUCT is not, so it could only ever be class Gear, and no field
+ *             observation ties this block to police kit specifically.
+ */
+static const uint8_t digitalally_ouis[][3] = {
+    {0x00, 0x23, 0xbd},
+};
+
+#define DIGITALALLY_OUI_COUNT (sizeof(digitalally_ouis) / sizeof(digitalally_ouis[0]))
+
+
+/**
+ * Drone manufacturers (24), as a FALLBACK to Remote ID -- never the main event.
+ *
+ * READ THE LIMITS BEFORE TRUSTING THIS TABLE.
+ *
+ * 1. IT CANNOT SEE THE FLEET THAT MATTERS. Resolved against the IEEE registry on
+ *    2026-09-07: of the five vendors a US police department realistically buys
+ *    from today -- Skydio, BRINC, Aerodome, Flock and Paladin -- only Skydio
+ *    holds an IEEE block. BRINC, Aerodome and Paladin hold NOTHING, so their
+ *    radios transmit under whatever module vendor they bought. Three of the five
+ *    are structurally invisible to any prefix match, forever. That is why
+ *    helpers/open_drone_id.c exists and why it is the primary path: Remote ID is
+ *    a legal broadcast mandate and does not care who built the aircraft.
+ *
+ * 2. A HIT HERE IS NOT A POLICE DRONE. DJI's blocks are on more hobbyist
+ *    quadcopters than anything else. The class says "unmanned aircraft" and the
+ *    vendor says "Drone"; neither claims a police deployment, and nothing in a
+ *    MAC could. Scored like every other bare-OUI match -- possible.
+ *
+ * 3. MA-L HOLDERS ONLY. Autel Robotics, Yuneec, Inspired Flight, Quantum
+ *    Systems, ideaForge, ACSL, Cyon, UAV Navigation and Anduril all appear in
+ *    community drone lists, and every one of them sits inside an IEEE
+ *    Registration Authority MA-M/MA-S block (8c:1f:64, ec:5b:cd, e0:b6:f5,
+ *    34:b5:f3, ac:86:d1, 24:a1:0d, b4:4d:43, e8:b4:70). Those blocks are shared
+ *    by hundreds of unrelated companies, and this table is three bytes wide, so
+ *    matching them would flag arbitrary hardware as an aircraft. They are in
+ *    TOO_GENERIC in tools/check_oui_parity.py for that reason.
+ *
+ * DELIBERATELY EXCLUDED, though registered to DJI: f8:40:68 (DJI Ronin, camera
+ * gimbals) and 20:1f:55 (DJI Osmo, handheld cameras). Both are DJI and neither
+ * flies. Reporting a photographer's gimbal as an aircraft overhead is exactly the
+ * over-claim FlockDevClass exists to prevent.
+ *
+ * ALSO EXCLUDED as look-alikes: 4c:48:da and 00:1f:64 are "Beijing Autelan
+ * Technology", a NETWORKING company, not Autel Robotics -- the same
+ * substring-of-a-vendor-name trap that put Axon Networks and Motorola Mobility on
+ * the misattributed list.
+ *
+ * DUPLICATED in the ESP sketch under the same hand-sync rule as the tables above
+ * and covered by the same CI parity gate.
+ */
+static const uint8_t drone_ouis[][3] = {
+    // SZ DJI Technology
+    {0x60, 0x60, 0x1f}, {0x34, 0xd2, 0x62}, {0x48, 0x1c, 0xb9}, {0xe4, 0x7a, 0x2c},
+    {0x58, 0xb8, 0x58}, {0x04, 0xa8, 0x5a}, {0x8c, 0x58, 0x23}, {0x0c, 0x9a, 0xe6},
+    {0x88, 0x29, 0x85}, {0x4c, 0x43, 0xf6},
+    // DJI Baiwang Technology
+    {0x9c, 0x5a, 0x8a}, {0xec, 0x72, 0xf7}, {0x34, 0x91, 0xf0},
+    // Skydio -- the ONLY one of the five US police-drone vendors with a block
+    {0x38, 0x1d, 0x14},
+    // Parrot SA
+    {0x00, 0x12, 0x1c}, {0x00, 0x26, 0x7e}, {0x90, 0x03, 0xb7}, {0x90, 0x3a, 0xe6},
+    {0xa0, 0x14, 0x3d},
+    // US defence / public-safety airframes
+    {0xb0, 0x30, 0xc8}, // Teal Drones
+    {0x00, 0x1a, 0xf9}, // AeroVironment
+    {0x14, 0xdd, 0x48}, // Shield AI
+    {0xec, 0x71, 0x5e}, // Freefly Systems
+    {0x74, 0xb8, 0x0f}, // Zipline International
+};
+
+#define DRONE_OUI_COUNT (sizeof(drone_ouis) / sizeof(drone_ouis[0]))
+
+
+/**
  * The one place a MAC becomes a (vendor, class) pair.
  *
  * A SINGLE TABLE ON PURPOSE. flock_class_from_mac() used to answer "what class"
@@ -368,6 +512,9 @@ static const FlockVendorTable flock_vendor_tables[] = {
     {verkada_ouis, VERKADA_OUI_COUNT, FlockVendorVerkada, FlockClassGear},
     {genetec_ouis, GENETEC_OUI_COUNT, FlockVendorGenetec, FlockClassGear},
     {avigilon_ouis, AVIGILON_OUI_COUNT, FlockVendorAvigilon, FlockClassGear},
+    {utility_ouis, UTILITY_OUI_COUNT, FlockVendorUtility, FlockClassBodycam},
+    {digitalally_ouis, DIGITALALLY_OUI_COUNT, FlockVendorDigitalAlly, FlockClassBodycam},
+    {drone_ouis, DRONE_OUI_COUNT, FlockVendorDrone, FlockClassDrone},
 };
 
 #define FLOCK_VENDOR_TABLE_COUNT (sizeof(flock_vendor_tables) / sizeof(flock_vendor_tables[0]))
@@ -390,7 +537,11 @@ bool vendor_exclusive_oui_match(const uint8_t* mac) {
     const FlockVendorTable* vt = vendor_row_for_mac(mac);
     // Flock / SoundThinking / Axon are excluded on purpose: they have their own
     // matchers and their own (weaker, shared-silicon) evidence rules. This asks
-    // only about the vendor-exclusive competitor prefixes added in v0.77.
+    // about the vendor-exclusive competitor prefixes added in v0.77, and about
+    // the drone manufacturers added in v0.88 -- both are blocks a single company
+    // holds outright, which is what makes them worth a rung at all. It is the
+    // shared silicon prefixes, not the exclusive ones, that need the weaker
+    // treatment.
     return vt && vt->vendor != FlockVendorFlock && vt->vendor != FlockVendorSoundThinking &&
            vt->vendor != FlockVendorAxon;
 }
@@ -429,6 +580,17 @@ const char* flock_vendor_str(FlockVendor vendor) {
         return "Genetec";
     case FlockVendorAvigilon:
         return "Avigilon";
+    case FlockVendorUtility:
+        return "Utility";
+    case FlockVendorDigitalAlly:
+        return "DigitalAlly";
+    case FlockVendorDrone:
+        // The manufacturer, when we can name one at all, comes from the OUI
+        // vendor lookup and is shown separately -- this column only says the
+        // class of thing. For an aircraft identified by Remote ID there may be
+        // no manufacturer to name and no need for one: it broadcast its own
+        // registration.
+        return "Drone";
     case FlockVendorUnknown:
     default:
         // "-", never "Unknown": this lands in a narrow report column and a list
@@ -466,6 +628,12 @@ const char* flock_device_long_str(FlockVendor vendor, FlockDevClass cls) {
         return "Genetec (AutoVu)";
     case FlockVendorAvigilon:
         return "Avigilon (Motorola)";
+    case FlockVendorUtility:
+        return "Utility BodyWorn"; // 16 chars
+    case FlockVendorDigitalAlly:
+        return "Digital Ally FirstVU"; // 20 chars, at the limit
+    case FlockVendorDrone:
+        return "Unmanned aircraft"; // 17 chars
     case FlockVendorUnknown:
     default:
         // THE FIX THE VENDOR FIELD EXISTS FOR. This case used to fall into
@@ -477,6 +645,8 @@ const char* flock_device_long_str(FlockVendor vendor, FlockDevClass cls) {
             return "Acoustic sensor";
         case FlockClassBodycam:
             return "Body/in-car kit";
+        case FlockClassDrone:
+            return "Unmanned aircraft";
         case FlockClassGear:
             return "Surveillance gear";
         case FlockClassAlpr:
@@ -499,6 +669,8 @@ const char* flock_class_str(FlockDevClass cls) {
         return "Axon";
     case FlockClassGear:
         return "Gear";
+    case FlockClassDrone:
+        return "Drone";
     case FlockClassAlpr:
     default:
         return "ALPR";

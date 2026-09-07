@@ -69,7 +69,14 @@ FlockConfidence flock_ble_confidence(uint16_t company, const char* name, bool ra
     // class carries that distinction, this function only answers "how sure".
     if(company == AXON_BLE_COMPANY_ID) return FlockConfidenceConfirmed;
     if(raven_gatt) return FlockConfidenceConfirmed;
-    if(ci_prefix(name, "PENGUIN") || ci_contains(name, "FS EXT")) return FlockConfidenceConfirmed;
+    // Delegates to flock_ble_name_is_flock() rather than repeating the patterns.
+    // It used to inline them, and when the field-observed names (Pigvision,
+    // RWLS-, FlockCam, FS-XXXXXX) were added to the helper on 2026-09-07 this
+    // line did not learn them -- the helper went green while the function that
+    // actually scores a detection still returned Possible. Caught only because
+    // the new tests assert through flock_ble_confidence(), not through the
+    // helper. One definition, one place to extend.
+    if(flock_ble_name_is_flock(name)) return FlockConfidenceConfirmed;
 
     // Nothing Flock-specific left. The only other way the companion classifies a
     // device as Flock is an OUI prefix on the BLE address, and those prefixes are
@@ -87,8 +94,51 @@ FlockConfidence flock_ble_confidence(uint16_t company, const char* name, bool ra
     return FlockConfidencePossible;
 }
 
+/**
+ * "FS-" + exactly six hex digits, the whole name -- Flock's post-"Penguin"
+ * unit-id GAP name (zmattmanz/plume, "newer naming convention").
+ *
+ * ANCHORED AND SHAPED, deliberately. A bare "FS-" prefix is two letters and
+ * would confirm a camera on any device that happens to start that way; it is
+ * the same shape of mistake as the unanchored "flock-" substring that shipped
+ * `Flock-Guest` as CONFIRMED in v0.46. Requiring the full six-hex form and
+ * nothing after it is what makes this safe to stake a Confirmed on -- the exact
+ * rule is_flock_provisioning_ssid() applies to "Flock-XXXXXX" on the Wi-Fi side.
+ */
+static bool is_fs_unit_name(const char* name) {
+    if(!name) return false;
+    if(!(ascii_upper(name[0]) == 'F' && ascii_upper(name[1]) == 'S' && name[2] == '-')) {
+        return false;
+    }
+    for(int i = 3; i < 9; i++) {
+        char c = name[i]; // '\0' (short name) is not hex -> correctly rejected
+        bool hex = (c >= '0' && c <= '9') || (ascii_upper(c) >= 'A' && ascii_upper(c) <= 'F');
+        if(!hex) return false;
+    }
+    return name[9] == '\0';
+}
+
 bool flock_ble_name_is_flock(const char* name) {
-    return ci_prefix(name, "PENGUIN") || ci_contains(name, "FS EXT");
+    // Flock's own product naming. Every entry here is staked on CONFIRMED -- this
+    // function is what flock_ble_confidence() consults for the naming rung -- so
+    // the bar is "a string no ordinary device would choose", not "contains flock".
+    //
+    // NOT ADDED, on purpose: a bare "FLOCK" prefix. The BLE path has no Likely
+    // rung, so it would promote anything merely flock-ish straight to Confirmed,
+    // which is precisely the v0.46 `Flock-Guest` over-claim. The Wi-Fi side gets
+    // to score a loose "flock" substring as LIKELY; here there is no such landing
+    // spot, so loose patterns are excluded rather than softened.
+    if(ci_prefix(name, "PENGUIN") || ci_contains(name, "FS EXT")) return true;
+    // Field-observed Flock BLE names, all long and vendor-specific enough to
+    // stand alone (zmattmanz/plume, corroborated by the flock-you lineage):
+    //   PIGVISION  -- Flock's Pigvision units
+    //   FLOCKCAM   -- names the product, not the vendor family
+    //   RWLS-      -- observed as "RWLS-38:5B:44:B3:0F:5A", the unit's own MAC
+    //                 appended; the prefix alone is four letters plus a dash and
+    //                 has no ordinary-device meaning.
+    if(ci_prefix(name, "PIGVISION") || ci_prefix(name, "FLOCKCAM")) return true;
+    if(ci_prefix(name, "RWLS-")) return true;
+    return is_fs_unit_name(name);
 }
 
 /**
@@ -267,7 +317,7 @@ FlockBleModel flock_ble_model_ex(const char* serial, const char* name, bool rave
     // external battery stays FlockBleModelGeneric.
     (void)serial;
 
-    if(name && (ci_prefix(name, "PENGUIN") || ci_prefix(name, "FS EXT"))) {
+    if(flock_ble_name_is_flock(name)) {
         return FlockBleModelGeneric;
     }
     if(serial && serial[0]) {

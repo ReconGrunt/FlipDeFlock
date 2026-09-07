@@ -75,6 +75,11 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
         // the same handle when entering a scan scene. Identical discipline to
         // alert_pending: the worker only ever raises, the GUI tick acts.
         recon_app_request_gps_cfg(app);
+        if(m->u.banner.build[0]) {
+            furi_mutex_acquire(app->mutex, FuriWaitForever);
+            snprintf(app->esp_build, sizeof(app->esp_build), "%s", m->u.banner.build);
+            furi_mutex_release(app->mutex);
+        }
         break;
     case EspMsgWifiBegin:
         recon_app_wifi_begin(app);
@@ -138,6 +143,10 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             m->u.survey.rssi,
             m->u.survey.channel,
             m->u.survey.count);
+        break;
+    case EspMsgRemoteId:
+        recon_app_report_remote_id(
+            app, m->u.rid.addr, m->u.rid.rssi, m->u.rid.payload, m->u.rid.payload_len);
         break;
     case EspMsgLocate:
         recon_app_set_locate_rssi(app, m->u.locate.rssi);

@@ -12,6 +12,7 @@
 #include "helpers/flock_store.h"
 #include "helpers/scan_session.h"
 #include "helpers/report_fmt.h"
+#include "helpers/open_drone_id.h"
 
 #include <math.h>
 #include <string.h>
@@ -87,6 +88,10 @@ void recon_app_report_flock(
             entry->lat = NAN;
             entry->lon = NAN;
             entry->heading = NAN;
+            // Remote ID fields, NAN rather than 0 for the same reason as above:
+            // 0/0 is a real place and would plot as one.
+            entry->op_lat = NAN;
+            entry->op_lon = NAN;
             entry->count = 0;
         }
     }
@@ -147,7 +152,12 @@ void recon_app_report_flock(
         }
         // Geotag with the current fix per the hysteresis rule (haven't tagged yet,
         // or a meaningfully stronger sighting) -- see detect_rules.h.
-        if(flock_geotag_should_update(
+        // A Remote ID position is the AIRCRAFT saying where IT is, to GPS
+        // accuracy. Our geotag is where the OBSERVER was standing. Letting the
+        // weaker fact overwrite the stronger one would silently turn a real
+        // aircraft position into our own, which is both wrong and unnoticeable.
+        if(!entry->pos_broadcast &&
+           flock_geotag_should_update(
                app->gps_valid, !isnan(entry->lat), rssi, entry->geotag_rssi)) {
             entry->lat = app->gps_lat;
             entry->lon = app->gps_lon;
@@ -417,6 +427,138 @@ void recon_app_set_ble_tell(ReconApp* app, const uint8_t mac[6], uint8_t tell) {
             break;
         }
     }
+    furi_mutex_release(app->mutex);
+}
+
+void recon_app_report_remote_id(
+    ReconApp* app,
+    const uint8_t addr[6],
+    int8_t rssi,
+    const uint8_t* payload,
+    size_t payload_len) {
+    OdidReport rep;
+    odid_report_init(&rep);
+    // Decode BEFORE taking the lock: this is pure work on a stack buffer and the
+    // mutex is also held by the UI thread on every redraw.
+    if(!odid_parse_ble_service_data(payload, payload_len, &rep)) return;
+
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->diag_flock_msgs++;
+
+    uint32_t now = furi_get_tick();
+    FlockEntry* entry = NULL;
+    for(size_t i = 0; i < app->flock_count; i++) {
+        if(memcmp(app->flock[i].mac, addr, 6) == 0) {
+            entry = &app->flock[i];
+            break;
+        }
+    }
+
+    if(!entry) {
+        if(app->flock_count < RECON_FLOCK_MAX) {
+            entry = &app->flock[app->flock_count++];
+        } else {
+            // Same eviction rule as recon_app_report_flock(): reclaim the least
+            // valuable ARCHIVED row, never a live one.
+            int victim = -1;
+            for(size_t i = 0; i < app->flock_count; i++) {
+                if(!app->flock[i].archived) continue;
+                if(victim < 0 || flock_store_evict_better(
+                                     (uint8_t)app->flock[i].confidence,
+                                     app->flock[i].seen_epoch,
+                                     (uint8_t)app->flock[victim].confidence,
+                                     app->flock[victim].seen_epoch)) {
+                    victim = (int)i;
+                }
+            }
+            if(victim >= 0)
+                entry = &app->flock[victim];
+            else
+                app->diag_rej_full++;
+        }
+        if(entry) {
+            memset(entry, 0, sizeof(FlockEntry));
+            memcpy(entry->mac, addr, 6);
+            entry->first_tick = now;
+            entry->lat = NAN;
+            entry->lon = NAN;
+            entry->heading = NAN;
+            entry->op_lat = NAN;
+            entry->op_lon = NAN;
+        }
+    }
+    if(!entry) {
+        furi_mutex_release(app->mutex);
+        return;
+    }
+
+    app->diag_accepted++;
+    uint8_t prev_conf = (uint8_t)entry->confidence;
+    entry->count++;
+    entry->last_tick = now;
+    entry->archived = false;
+    if(rssi != 0 && (entry->rssi == 0 || rssi > entry->rssi)) entry->rssi = rssi;
+    entry->ftype = 'L'; // arrived over BLE
+    entry->dev_class = (uint8_t)FlockClassDrone;
+
+    // CONFIRMED, and this is not the usual kind of claim. Every other detection
+    // in the app is an inference from a shared vendor prefix or from frame
+    // behaviour. This is the aircraft transmitting its own identity because 14
+    // CFR Part 89 requires it to. What is confirmed is "a Remote ID broadcast was
+    // received", i.e. something is flying and announcing itself -- NOT that it is
+    // a police drone, which no signature could establish. The class says
+    // "unmanned aircraft" and stops there.
+    if((uint8_t)FlockConfidenceConfirmed > (uint8_t)entry->confidence) {
+        entry->confidence = FlockConfidenceConfirmed;
+    }
+
+    // MERGE, never replace. One BLE legacy advert carries ONE message and the
+    // aircraft cycles types, so the serial arrives in one advert and the operator
+    // position in another. Overwriting on each advert would make both fields
+    // flicker and would never show them together.
+    if(rep.have_id) {
+        if(rep.uas_id[0]) {
+            strncpy(entry->ssid, rep.uas_id, sizeof(entry->ssid) - 1);
+            entry->ssid[sizeof(entry->ssid) - 1] = '\0';
+        }
+        entry->ua_type = rep.ua_type;
+    }
+    if(!isnan(rep.lat) && !isnan(rep.lon)) {
+        // The AIRCRAFT's own position, which is a strictly better fact than our
+        // geotag of where we were standing. pos_broadcast records the difference
+        // so the map and the report can say which one they are showing, and so
+        // the geotag path stops overwriting it.
+        entry->lat = rep.lat;
+        entry->lon = rep.lon;
+        entry->pos_broadcast = true;
+    }
+    if(!isnan(rep.op_lat) && !isnan(rep.op_lon)) {
+        entry->op_lat = rep.op_lat;
+        entry->op_lon = rep.op_lon;
+    }
+
+    entry->seen_epoch = furi_hal_rtc_get_timestamp();
+
+    // Alert on the same path as every other detection -- set the flag here and
+    // let the GUI tick raise it, because this runs on the ESP worker thread.
+    if(flock_alert_should_fire_ex(
+           prev_conf,
+           (uint8_t)entry->confidence,
+           entry->alerted,
+           false,
+           now,
+           app->alert_last_tick,
+           app->alert_have_fired,
+           flock_alert_min_conf_rung(app->settings.alert_min_conf))) {
+        entry->alerted = true;
+        app->alert_pending = true;
+        app->alert_last_tick = now;
+        app->alert_have_fired = true;
+        memcpy(app->alert_card_mac, entry->mac, 6);
+        app->alert_card_tick = now;
+    }
+
+    app->hits_dirty = true;
     furi_mutex_release(app->mutex);
 }
 
@@ -991,6 +1133,9 @@ static void recon_hits_rec_from_entry(FlockStoreRec* r, const FlockEntry* e) {
     r->ftype = e->ftype;
     r->conf = (uint8_t)e->confidence;
     r->dev_class = e->dev_class;
+    r->op_lat = e->op_lat;
+    r->op_lon = e->op_lon;
+    r->ua_type = e->ua_type;
     r->hidden = e->hidden;
     r->ie_fp = e->ie_fp;
     r->lat = e->lat;
@@ -1142,6 +1287,13 @@ void recon_diag_save(ReconApp* app) {
     uint8_t band_req = app->settings.esp_band;
     uint8_t backend = app->settings.backend;
     uint8_t proto = app->esp_proto_version;
+    // The COMPANION's build, next to the app's. A field report that says only
+    // which app version produced it answers half the question: the pair is what
+    // was tested, and a companion left over from an older release is a leading
+    // cause of "it detects nothing" reports. "-" means firmware older than v0.88,
+    // which reported no build at all.
+    char esp_build[12];
+    snprintf(esp_build, sizeof(esp_build), "%s", app->esp_build[0] ? app->esp_build : "-");
     uint32_t table = (uint32_t)app->flock_count;
     app->diag_start_epoch = 0; // one row per session, not one per teardown call
     furi_mutex_release(app->mutex);
@@ -1156,18 +1308,19 @@ void recon_diag_save(ReconApp* app) {
         if(storage_file_size(file) == 0) {
             furi_string_cat_str(
                 s,
-                "# FlipDeFlock session diagnostics v1 -- counts only, no MAC/SSID/position\n"
-                "start,end,dur_s,ver,backend,band_req,band_act,band_ch,proto,"
+                "# FlipDeFlock session diagnostics v2 -- counts only, no MAC/SSID/position\n"
+                "start,end,dur_s,ver,esp_ver,backend,band_req,band_act,band_ch,proto,"
                 "esp_lines,esp_dropped,esp_reboots,esp_frames,esp_hits,"
                 "reports,accepted,rej_conf,rej_full,table\n");
         }
         furi_string_cat_printf(
             s,
-            "%lu,%lu,%lu,%s,%u,%u,%u,%u,%u,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
+            "%lu,%lu,%lu,%s,%s,%u,%u,%u,%u,%u,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
             (unsigned long)start,
             (unsigned long)end,
             (unsigned long)(end - start),
             RECON_VERSION,
+            esp_build,
             (unsigned)backend,
             (unsigned)band_req,
             (unsigned)band_act,
@@ -1223,6 +1376,12 @@ static void recon_hits_add(ReconApp* app, const FlockStoreRec* r) {
     e->confidence = (FlockConfidence)r->conf;
     e->dev_class = r->dev_class;
     e->hidden = r->hidden;
+    // Remote ID. NAN for anything that is not an aircraft, or that was saved
+    // before v4 -- never 0, which is a real place and would draw a pilot marker
+    // in the Gulf of Guinea.
+    e->op_lat = r->op_lat;
+    e->op_lon = r->op_lon;
+    e->ua_type = r->ua_type;
     e->ie_fp = r->ie_fp;
     e->lat = r->lat;
     e->lon = r->lon;

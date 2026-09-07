@@ -22,7 +22,7 @@
 /** Schema marker written as the file's first line. A future format change bumps
  *  the version; a line the loader does not recognise means "ignore this file",
  *  never "parse it anyway and get the columns wrong". */
-#define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v3"
+#define FLOCK_STORE_SCHEMA "# FlipDeFlock hits v4"
 
 /** The v1 marker, still accepted on READ. v2 only APPENDS columns (`class`,
  *  `hidden`) and reorders nothing, so a v1 record is a complete v2 record minus
@@ -49,12 +49,31 @@
 #define FLOCK_STORE_MARK_REPORT    (1u << 0)
 #define FLOCK_STORE_MARK_CONFIRMED (1u << 1)
 
-/** Column header, written as the second line for anyone opening the file. */
-#define FLOCK_STORE_HEADER \
-    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class,hidden,label"
+/** The v3 marker, still accepted on READ. v4 appends the three Remote ID
+ *  columns and reorders nothing, so a v3 record is a complete v4 record minus
+ *  fields that were never an aircraft's anyway. */
+#define FLOCK_STORE_SCHEMA_V3 "# FlipDeFlock hits v3"
 
-/** Number of comma-separated columns in a v3 record line. */
-#define FLOCK_STORE_COLS 16
+/** Column header, written as the second line for anyone opening the file. */
+#define FLOCK_STORE_HEADER                                                             \
+    "mac,ssid,rssi,channel,ftype,conf,ie_fp,lat,lon,heading,count,marked,epoch,class," \
+    "hidden,label,op_lat,op_lon,ua_type"
+
+/** Number of comma-separated columns in a v4 record line. */
+#define FLOCK_STORE_COLS 19
+
+/**
+ * Columns in a v3 record line (v4 minus the three Remote ID columns).
+ *
+ * v4 appends `op_lat`, `op_lon` and `ua_type` -- the OPERATOR's position and the
+ * aircraft type from an ASTM F3411 broadcast. They are STORED rather than
+ * re-derived because they cannot be re-derived: a drone is heard once, in
+ * passing, and the pilot's location is the single most useful field in the row.
+ * Before this, a saved drone reloaded with those fields ZEROED, and 0/0 is a
+ * real point in the Gulf of Guinea -- the detail screen duly rendered
+ * "Pilot lat: 0.00000" as though it were a fix.
+ */
+#define FLOCK_STORE_COLS_V3 16
 
 /** Columns in a v2 record line (v3 minus the trailing `label`). */
 #define FLOCK_STORE_COLS_V2 15
@@ -63,7 +82,7 @@
 #define FLOCK_STORE_COLS_V1 13
 
 /**
- * True if `line` is a schema marker this build can read (v1, v2 or v3). Anything
+ * True if `line` is a schema marker this build can read (v1..v4). Anything
  * else -- including a NEWER marker -- must make the caller ignore the file
  * whole, since a future format may reuse or reorder columns.
  */
@@ -108,6 +127,17 @@ typedef struct {
                                          *  operator calls it are different facts,
                                          *  and conflating them loses the evidence.
                                          *  Empty in a v1/v2 file. */
+    /**
+     * ASTM F3411 Remote ID, for FlockClassDrone rows. NAN / 0 when absent, which
+     * is what every pre-v4 file and every non-aircraft row means.
+     *
+     * op_lat/op_lon are the OPERATOR's position -- the pilot, not the aircraft,
+     * whose own position is in lat/lon. They must default to NAN and not 0: the
+     * standard uses 0/0 as its "no value" marker and it is also a real place, so
+     * a zeroed field renders as a confident fix in the middle of the ocean.
+     */
+    float op_lat, op_lon;
+    uint8_t ua_type; /**< OdidUaType; 0 = unknown/not an aircraft */
 } FlockStoreRec;
 
 /**
@@ -130,7 +160,17 @@ typedef struct {
  * documented fail-safe -- an old build refuses a class it cannot label rather
  * than guessing "ALPR" and printing "Flock" over a Motorola radio.
  */
-#define FLOCK_STORE_MAX_DEV_CLASS 3u /* FlockClassGear */
+/**
+ * Highest device class a stored row may carry. Rows above it are REJECTED
+ * OUTRIGHT by the parser, not clamped.
+ *
+ * KEEP THIS IN STEP WITH FlockDevClass. It was left at 3 when FlockClassDrone (4)
+ * was added, and the failure was silent and total: a Remote ID drone detection
+ * was written to hits.csv correctly, then dropped on the next load, so the whole
+ * row vanished the moment the app restarted and never appeared in an export.
+ * Nothing warned -- the row simply was not there.
+ */
+#define FLOCK_STORE_MAX_DEV_CLASS 4u /* FlockClassDrone */
 
 /**
  * Format one record as a CSV line, including the trailing newline. Returns the

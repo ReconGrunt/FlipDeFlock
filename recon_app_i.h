@@ -297,6 +297,30 @@ typedef struct {
     uint32_t first_tick;
     uint32_t last_tick;
     uint32_t seen_epoch; /**< RTC Unix seconds at the last sighting, 0 if never stored */
+
+    /* ---- ASTM F3411 Remote ID (FlockClassDrone only) --------------------- */
+    /**
+     * The OPERATOR's position, straight out of the aircraft's own System
+     * message. NAN until one arrives.
+     *
+     * The single most actionable field in the app. Everything else FlipDeFlock
+     * finds is fixed infrastructure you can walk away from; a drone follows you,
+     * and this says where the person flying it is standing. It is broadcast in
+     * the clear because federal law requires it.
+     */
+    float op_lat, op_lon;
+    uint8_t ua_type; /**< OdidUaType -- multirotor, fixed wing, ... */
+    /**
+     * lat/lon came from the aircraft's OWN Remote ID broadcast rather than from
+     * our geotag of where we were standing when we heard it.
+     *
+     * These are not the same claim and must not be shown as one. A geotag says
+     * "the observer was here"; a Remote ID position says "the aircraft was
+     * there", to GPS accuracy, possibly hundreds of metres away and a few hundred
+     * feet up. Merging them silently would put a marker on the map that means
+     * whichever one happened to arrive last.
+     */
+    bool pos_broadcast;
 } FlockEntry;
 
 /** One access point seen by the WiFi security scan (companion firmware). */
@@ -496,6 +520,19 @@ typedef struct {
                             *  long drives as a cosmetic annoyance, when it was the ESP
                             *  resetting and dropping detections. */
     uint8_t esp_proto_version; /**< companion wire-protocol version (FLOCKCO banner; 0 = unknown) */
+    /**
+     * The companion's BUILD version from the FLOCKCO banner, "" if the firmware
+     * predates it (anything before v0.88).
+     *
+     * The answer to "which firmware is actually on the board", which nothing
+     * could answer before. Filenames on the SD card were the only label and they
+     * cannot be verified after flashing -- a card here carried
+     * companion_forensic/gatefix/survey/ungated .bin files that say nothing at
+     * all, and companion_v073/v077/v087 whose labels nobody can check. Shown on
+     * the ESP32 Firmware screen and written into diag.csv, so a field report says
+     * which pair produced it.
+     */
+    char esp_build[12];
 
     /* ---- session diagnostics (see RECON_DIAG_PATH) ----------------------
      * Counted app-side so they can be compared against the companion's OWN
@@ -567,6 +604,16 @@ typedef struct {
     volatile bool fw_running;
     volatile bool fw_ok;
     volatile bool fw_log_dirty; /**< log changed -> re-render */
+    /**
+     * Flash/backup progress, 0..100, or -1 when no transfer is running.
+     *
+     * Kept OUT of fw_log because a percentage REPLACES itself rather than
+     * accumulating. Logging it appended a line per step, so the operator had to
+     * scroll a text box to find the current figure -- on a 128x64 screen, during
+     * the one operation they cannot walk away from.
+     */
+    volatile int fw_pct;
+    char fw_status[40]; /**< current flasher action, shown above the progress bar */
 
     char text_store[RECON_TEXT_STORE];
 } ReconApp;
@@ -590,6 +637,28 @@ void recon_app_report_flock(
     uint32_t ie_fp,
     FlockDevClass dev_class,
     bool hidden);
+
+/**
+ * Record/merge an ASTM F3411 Remote ID broadcast from an unmanned aircraft.
+ *
+ * SEPARATE FROM recon_app_report_flock() rather than more parameters on it: the
+ * evidence is a different kind. A Flock detection is an inference from a MAC
+ * prefix and some frame behaviour; this is the aircraft stating its own
+ * registration and its own coordinates because the law says it must. It also
+ * carries a field nothing else has -- the operator's position.
+ *
+ * `payload` is the raw BLE service data starting at the 0x0D application code,
+ * exactly as the companion forwarded it. Decoded here, via the host-tested
+ * helpers/open_drone_id.c, rather than on the companion.
+ *
+ * Thread-safe (takes app->mutex internally); called from the ESP worker thread.
+ */
+void recon_app_report_remote_id(
+    ReconApp* app,
+    const uint8_t addr[6],
+    int8_t rssi,
+    const uint8_t* payload,
+    size_t payload_len);
 
 /** Update the cached ESP status line (thread-safe). */
 void recon_app_set_esp_status(

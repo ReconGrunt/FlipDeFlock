@@ -8,9 +8,12 @@
  * vendored under lib/esp-serial-flasher). This port + worker is original
  * (GPL-3.0-or-later).
  *
- * Bootloader entry is MANUAL: the user puts the ESP32 into download/bootloader
- * mode (hold BOOT, tap RESET) before connecting. reset/enter-bootloader port
- * hooks are no-ops (board-agnostic).
+ * Bootloader entry: loader_port_enter_bootloader() first asks a RUNNING v0.88+
+ * companion to enter UART download mode in software ("bootloader" command). That
+ * works on ESP32-S2/S3/C3, whose ROM honours RTC_CNTL_FORCE_DOWNLOAD_BOOT. The
+ * CLASSIC ESP32 has no such bit and decides boot mode purely from GPIO0 at
+ * reset, so on those boards entry stays MANUAL (hold BOOT, tap RESET) and the
+ * on-screen prompt is still shown.
  */
 
 #include <furi_hal_serial.h>
@@ -20,11 +23,18 @@
 
 typedef struct EspFlasher EspFlasher;
 
-/** Log/progress sink. `line` is a NUL-terminated message (no trailing newline). */
+/** Log sink. `line` is a NUL-terminated message (no trailing newline). */
 typedef void (*EspFlasherLog)(void* ctx, const char* line);
 
+/** Progress sink, 0..100. Separate from the log -- see flasher_plugin_api.h. */
+typedef void (*EspFlasherProgress)(void* ctx, int pct);
+
 /** Acquire the UART (disables the expansion module). NULL on failure. */
-EspFlasher* esp_flasher_alloc(FuriHalSerialId ch, EspFlasherLog log_cb, void* ctx);
+EspFlasher* esp_flasher_alloc(
+    FuriHalSerialId ch,
+    EspFlasherLog log_cb,
+    EspFlasherProgress progress_cb,
+    void* ctx);
 void esp_flasher_free(EspFlasher* f);
 
 /**

@@ -49,17 +49,32 @@
 #include <stdint.h>
 
 #define FLASHER_PLUGIN_APP_ID      "flipdeflock_flasher"
-#define FLASHER_PLUGIN_API_VERSION 1
+#define FLASHER_PLUGIN_API_VERSION 2
 
 /** Opaque to the app: it only ever holds and passes back the pointer. */
 typedef struct EspFlasher EspFlasher;
 
-/** Log/progress sink. `line` is a NUL-terminated message (no trailing newline). */
+/** Log sink. `line` is a NUL-terminated message (no trailing newline). */
 typedef void (*EspFlasherLog)(void* ctx, const char* line);
+
+/**
+ * Progress sink, 0..100. SEPARATE FROM THE LOG ON PURPOSE.
+ *
+ * Progress used to be logged as ordinary lines ("  10%", "  20%", ...), which
+ * meant a flash appended eleven lines to a scrolling text box and the operator
+ * had to scroll to find the current one. Percentage is a value that REPLACES
+ * itself, not an event that accumulates, so it gets its own channel and the
+ * scene renders it as a single bar that stays put.
+ */
+typedef void (*EspFlasherProgress)(void* ctx, int pct);
 
 typedef struct {
     /** Acquire the UART (disables the expansion module). NULL on failure. */
-    EspFlasher* (*alloc)(FuriHalSerialId ch, EspFlasherLog log_cb, void* ctx);
+    EspFlasher* (*alloc)(
+        FuriHalSerialId ch,
+        EspFlasherLog log_cb,
+        EspFlasherProgress progress_cb,
+        void* ctx);
 
     /** Release the UART and free. NULL-safe. */
     void (*free)(EspFlasher* f);

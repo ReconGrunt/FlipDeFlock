@@ -5,6 +5,8 @@
 
 typedef enum {
     ReportItemSave,
+    ReportItemSaveAll,
+    ReportItemSaveRaw,
     ReportItemFalsePos,
     ReportItemClear,
     ReportItemClearSaved,
@@ -34,8 +36,22 @@ static void recon_scene_reports_build_menu(ReconApp* app) {
     submenu_reset(submenu);
     snprintf(app->text_store, RECON_TEXT_STORE, "Reports (%d marked)", marked);
     submenu_set_header(submenu, app->text_store);
+    // REDACTION IS THE DEFAULT POSITION, and it is expressed as separate menu
+    // items rather than a setting. A setting is decided once, months before the
+    // export that matters, and then forgotten; the label under the cursor is read
+    // every time. The one item that writes an unredacted file says so in its own
+    // name and sorts last, so it cannot be reached by muscle memory aimed at the
+    // first entry.
     submenu_add_item(
-        submenu, "Save Marked -> Report", ReportItemSave, recon_scene_reports_submenu_cb, app);
+        submenu, "Export Marked (Redacted)", ReportItemSave, recon_scene_reports_submenu_cb, app);
+    submenu_add_item(
+        submenu, "Export All (Redacted)", ReportItemSaveAll, recon_scene_reports_submenu_cb, app);
+    submenu_add_item(
+        submenu,
+        "Export All (RAW - private)",
+        ReportItemSaveRaw,
+        recon_scene_reports_submenu_cb,
+        app);
     // Redacted export for reporting a WRONG detection. Separate item rather than
     // an option on the one above, because the two files have opposite jobs: that
     // report is evidence about cameras and carries coordinates, this one is
@@ -75,16 +91,29 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
     bool consumed = false;
 
     if(event.type == SceneManagerEventTypeCustom) {
-        if(event.event == ReportItemSave) {
+        if(event.event == ReportItemSave || event.event == ReportItemSaveAll ||
+           event.event == ReportItemSaveRaw) {
+            uint8_t flags = 0;
+            if(event.event != ReportItemSaveRaw) flags |= ReconExportRedact;
+            if(event.event != ReportItemSave) flags |= ReconExportAll;
             char path[128] = {0};
-            bool ok = recon_report_save_flock(app, path, sizeof(path));
+            bool ok = recon_report_save_flock(app, path, sizeof(path), flags);
             if(app->settings.sound) {
                 notification_message(app->notifications, ok ? &sequence_success : &sequence_error);
             }
+            // The popup names the posture as well. All three items write into the
+            // same folder and only the filename tells them apart, so the last
+            // thing on screen after a save should be WHICH kind was written --
+            // not a generic "Report Saved" that reads identically for all three.
+            const char* fail_text =
+                (event.event == ReportItemSave) ? "Mark detections first" : "No detections yet";
             recon_scene_reports_show_popup(
                 app,
-                ok ? "Report Saved" : "Nothing to Save",
-                ok ? "See apps_data/\nflipdeflock/reports" : "Mark detections first");
+                ok ? ((flags & ReconExportRedact) ? "Redacted Report" : "RAW Report") :
+                     "Nothing to Save",
+                ok ? ((flags & ReconExportRedact) ? "OUI only, no times,\nno other SSIDs" :
+                                                    "Full MACs + SSIDs.\nDo not share.") :
+                     fail_text);
             consumed = true;
         } else if(event.event == ReportItemFalsePos) {
             char path[128] = {0};

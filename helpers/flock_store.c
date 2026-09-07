@@ -159,6 +159,10 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
     fmt_coord(lat_s, sizeof(lat_s), r->lat, "");
     fmt_coord(lon_s, sizeof(lon_s), r->lon, "");
     fmt_coord(head_s, sizeof(head_s), r->heading, "");
+    // Remote ID operator position, same empty-means-absent convention.
+    char op_lat_s[16], op_lon_s[16];
+    fmt_coord(op_lat_s, sizeof(op_lat_s), r->op_lat, "");
+    fmt_coord(op_lon_s, sizeof(op_lon_s), r->op_lon, "");
 
     // ftype is one of a small known set; anything else is written as empty
     // rather than risking a comma or quote landing mid-record.
@@ -168,7 +172,7 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
     int n = snprintf(
         out,
         out_len,
-        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u,%u,%s\n",
+        "%s,%s,%d,%u,%s,%u,%08lx,%s,%s,%s,%lu,%u,%lu,%u,%u,%s,%s,%s,%u\n",
         mac_s,
         ssid_esc,
         r->rssi,
@@ -188,7 +192,10 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
         (unsigned long)r->epoch,
         r->dev_class,
         r->hidden ? 1u : 0u,
-        label_esc);
+        label_esc,
+        op_lat_s,
+        op_lon_s,
+        r->ua_type);
 
     if(n < 0 || (size_t)n >= out_len) {
         if(out_len) out[0] = '\0';
@@ -203,6 +210,12 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     // Build into a scratch record so a failure part-way leaves *out untouched.
     FlockStoreRec r;
     memset(&r, 0, sizeof(r));
+    // NAN, NOT the memset's 0. A pre-v4 file carries no operator position, and
+    // 0/0 is a real point in the Gulf of Guinea -- leaving these zeroed made the
+    // detail screen render "Pilot lat: 0.00000" as if it were a fix. lat/lon/
+    // heading are overwritten unconditionally below, so they need no such guard.
+    r.op_lat = NAN;
+    r.op_lon = NAN;
 
     // Strip a trailing CRLF/LF without mutating the caller's buffer: the field
     // reader stops at NUL, so copy into a bounded local first.
@@ -226,7 +239,8 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     if(*p != '\0') return false; // more columns than the schema allows
     // Exactly a v2 line, or exactly a v1 line (v2 minus the trailing class).
     // Any other count is a malformed record, not a version we tolerate.
-    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V2 && ncols != FLOCK_STORE_COLS_V1)
+    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V3 &&
+       ncols != FLOCK_STORE_COLS_V2 && ncols != FLOCK_STORE_COLS_V1)
         return false;
 
     if(!fs_parse_mac(f[0], r.mac)) return false;
@@ -280,15 +294,26 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     // v2 only. A v1 line stops at 13 columns and keeps the memset defaults of 0
     // -- FlockClassAlpr and hidden-never-observed, which is what every v1
     // detection actually was.
-    if(ncols == FLOCK_STORE_COLS || ncols == FLOCK_STORE_COLS_V2) {
+    if(ncols == FLOCK_STORE_COLS || ncols == FLOCK_STORE_COLS_V3 ||
+       ncols == FLOCK_STORE_COLS_V2) {
         if(!fs_parse_u32(f[13], &u) || u > FLOCK_STORE_MAX_DEV_CLASS) return false;
         r.dev_class = (uint8_t)u;
         if(!fs_parse_u32(f[14], &u) || u > 1) return false;
         r.hidden = (u != 0);
     }
-    // v3 only. A v1/v2 line stops short and keeps the empty label, which is
-    // exactly what those files meant: the operator never named this device.
+    // v4 only: the Remote ID tail. Anything older keeps op_lat/op_lon at NAN --
+    // set by the caller's memset-then-init, NOT left at 0, because 0/0 is a real
+    // location and would draw a pilot marker in the Gulf of Guinea.
     if(ncols == FLOCK_STORE_COLS) {
+        if(!fs_parse_coord(f[16], &r.op_lat)) return false;
+        if(!fs_parse_coord(f[17], &r.op_lon)) return false;
+        if(!fs_parse_u32(f[18], &u) || u > 15u) return false; // OdidUaType is a nibble
+        r.ua_type = (uint8_t)u;
+    }
+
+    // v3 and later. A v1/v2 line stops short and keeps the empty label, which is
+    // exactly what those files meant: the operator never named this device.
+    if(ncols == FLOCK_STORE_COLS || ncols == FLOCK_STORE_COLS_V3) {
         // Precision, not a bare %s: f[] is an escaped-SSID-sized buffer and the
         // label is deliberately shorter, so the compiler rightly flags the
         // unbounded form under -Werror=format-truncation.
@@ -301,8 +326,8 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
 
 bool flock_store_schema_supported(const char* line) {
     if(!line) return false;
-    return strcmp(line, FLOCK_STORE_SCHEMA) == 0 || strcmp(line, FLOCK_STORE_SCHEMA_V2) == 0 ||
-           strcmp(line, FLOCK_STORE_SCHEMA_V1) == 0;
+    return strcmp(line, FLOCK_STORE_SCHEMA) == 0 || strcmp(line, FLOCK_STORE_SCHEMA_V3) == 0 ||
+           strcmp(line, FLOCK_STORE_SCHEMA_V2) == 0 || strcmp(line, FLOCK_STORE_SCHEMA_V1) == 0;
 }
 
 bool flock_store_evict_better(uint8_t conf_a, uint32_t epoch_a, uint8_t conf_b, uint32_t epoch_b) {

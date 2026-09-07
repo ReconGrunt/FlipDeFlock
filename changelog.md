@@ -1,5 +1,171 @@
 # Changelog
 
+## v0.88
+
+**Police drones, redacted exports by default, and a sweep of the current
+community signature tables.**
+
+> Internally this work ran across five iterations (0.88-0.92) with no tag cut in
+> between. It ships as ONE release, numbered to follow the repo's release tags
+> rather than the internal bumps: v0.87 was the last tag, so this is v0.88. The
+> `survey.csv` fixes below were previously reachable only through a nightly.
+
+### Added
+
+**Remote ID -- unmanned aircraft (ASTM F3411 / Open Drone ID).** FlipDeFlock now
+decodes the broadcast every drone in US airspace is legally required to transmit,
+and reports the aircraft's self-declared serial or registration, its type, its
+own GPS position, and **the operator's position**. Received over BLE service data
+(UUID `0xFFFA`, application code `0x0D`) and over Wi-Fi beacons (vendor IE
+`FA:0B:BC`, type `0x0D`) -- DJI favours the Wi-Fi form, so a BLE-only receiver
+misses whole fleets while appearing to work.
+
+Why this and not a MAC table: every US police-drone vendor was resolved against
+the IEEE registry on 2026-09-07. Of the five a department realistically buys from
+-- Skydio, BRINC, Aerodome, Flock and Paladin -- **only Skydio holds a block at
+all**. BRINC, Aerodome and Paladin hold nothing, so their radios transmit under
+whatever module vendor they bought. Three of the five are structurally invisible
+to prefix matching, permanently. Remote ID does not care who built the aircraft.
+
+Everything else this app finds is fixed infrastructure you can walk away from. A
+drone follows you, and the operator location is the one field that changes what a
+person can actually do about it.
+
+Decoding happens on the Flipper, in `helpers/open_drone_id.c`, never on the
+companion: it is attacker-reachable radio input whose output gets plotted on a
+map, and the Flipper side is the side with host tests. The companion only
+recognises the transport and forwards raw bytes.
+
+- **New device class, `Drone` / "Unmanned aircraft".** Its own class rather than
+  folded into ALPR: plenty of aircraft carry no camera, and calling one a camera
+  would be the over-claim the class enum exists to prevent. A Remote ID detection
+  confirms that *something is flying and announcing itself* -- never that it is a
+  police drone, which no signature could establish.
+- **24 drone-manufacturer OUIs** as a fallback (DJI, Skydio, Parrot, Teal,
+  AeroVironment, Shield AI, Freefly, Zipline). MA-L holders only.
+
+**Body-worn cameras.**
+
+- **Axon by the `BWCDEVICE` service-data tag**, which is MAC-independent and
+  survives address randomisation, and which says the device is a body-worn camera
+  *specifically* -- where the Axon OUI can only say "something Axon made", and
+  Axon now ships fixed ALPR poles on that same block. The companion reads BLE
+  service data at all for the first time.
+- **Utility, Inc "BodyWorn"** and **Digital Ally "FirstVU"**, both on exclusive
+  IEEE blocks, plus the `BodyWorn Remote` BLE naming tell.
+
+**Exports, redacted by default.** Three items instead of one: `Export Marked
+(Redacted)`, `Export All (Redacted)` and `Export All (RAW - private)`. The
+redacted files reduce every MAC to its OUI, omit the sighting time, the observer
+heading and your own labels, and show any SSID that did not itself match a Flock
+naming rule as a shape (`AaaaAdd`) rather than a name. Camera coordinates are
+kept -- they are the point of the report; what is removed is the detail that
+describes the operator rather than the camera.
+
+The SSID rule matters most in practice. A scan sweeps up every household network
+in range, an SSID is frequently a surname or a street address, and it is
+independently geolocatable through public wardriving databases. Anyone scanning
+their own neighbourhood ends up with their own home network in that table, and
+the old single export published it verbatim.
+
+The unredacted item sorts last, names itself, and writes files suffixed `_RAW`,
+so the copy that must not be attached to a public issue is distinguishable from
+the shareable one after it has left the device. All three formats -- Markdown,
+GeoJSON and KML -- take the same redaction decision, so a name withheld in the
+table cannot reappear in the GeoJSON.
+
+**Survey mode -- record what is actually in the air, not only what we recognise.**
+A diagnostic report on issue #25 showed 83,916 frames captured and zero
+candidates, proving the radio worked and that nothing in the air matched our
+tables. That is unfalsifiable from a detection log, which by definition contains
+only what was already recognised. The companion now keeps a table of every
+transmitter it sees regardless of whether anything matched, and the app writes it
+to `survey.csv` with the OUI, frame counts, best RSSI and the probe IE-skeleton
+fingerprint -- which is derived from the shape of a probe request rather than from
+the address, so it survives MAC randomisation.
+
+**Signatures.**
+
+- Four field-observed Flock BLE names: `Pigvision*`, `FlockCam*`, `RWLS-*`
+  (observed as `RWLS-38:5B:44:B3:0F:5A`, the unit appending its own MAC) and the
+  shaped `FS-XXXXXX` unit id. A bare `Flock` prefix is deliberately still NOT a
+  BLE tell: that path has no Likely rung to land on, so a loose match would
+  promote anything flock-ish straight to Confirmed -- the v0.46 `Flock-Guest`
+  over-claim, on the side that cannot absorb it.
+- Two OUIs, each verified against the IEEE registry first: `e0:0a:f6` (Liteon,
+  the vendor behind 21 of the existing entries) and `38:5b:44` (Silicon
+  Laboratories, corroborated by the `RWLS-` name rather than by a list).
+
+### Fixed
+
+- **Every exported map point claimed to be a Flock ALPR camera.** The GeoJSON and
+  KML writers hardcoded `man_made=surveillance`, `surveillance:type=ALPR` and
+  `manufacturer="Flock Safety"` on every row, so an Axon pole, a Ubicquia
+  streetlight, a SoundThinking acoustic sensor and a hit on a MAC in no table at
+  all were all written out as Flock cameras -- into the file that gets uploaded to
+  a public map. Same over-claim `FlockVendor` was introduced to kill in v0.77,
+  which had survived in the export layer after the UI was fixed. Tags now follow
+  the device class, `manufacturer` is emitted only when a vendor table actually
+  matched, and an aircraft gets no OSM tags at all, because
+  `man_made=surveillance` means a permanent installation and a drone is a
+  transient observation that has already moved.
+
+- **A scan shorter than the survey poll interval produced no file at all.** The
+  survey was requested once when a scan opened -- when the companion's table is
+  still empty -- then not again for thirty seconds, and the save returned early
+  with no rows. Every short session produced nothing, with no way to tell a
+  feature that had not run from one that was broken. Reported on issue #25 by an
+  operator whose sessions were 7, 14 and 26 seconds. The table is now pulled one
+  last time before the link is torn down, the poll is 10 s and no longer wastes
+  its first request on an empty table, and the file is written even when nothing
+  was seen. Verified with a 7-second scan.
+
+- **Survey counts were cumulative since the companion booted, not per scan.**
+  They live in the companion's RAM and kept accumulating until it was
+  power-cycled, so a phone seen around a house for a few hours climbed into the
+  hundreds and read exactly like the persistent emitter a camera produces --
+  inverting the one thing the survey is for. The board's table is now cleared at
+  the start of every scan.
+
+- **`flock_ble_confidence()` kept its own copy of the BLE name patterns** instead
+  of calling `flock_ble_name_is_flock()`. Adding a name to the helper left the
+  function that actually scores a detection unchanged, so the helper went green
+  while nothing shipped. Caught because the new tests assert through the scoring
+  entry point rather than through the helper. All three copies now delegate.
+
+### Notes on what was NOT added
+
+The current community tables were swept and most of what they carry was rejected,
+each prefix resolved against the IEEE MA-L registry first: `48:27:ea` is
+**Samsung** (phones and hotspots -- the exact false-positive class a user already
+reported here), thirteen prefixes are **Espressif** (a chip vendor; they would
+make this app detect its own companion board), `f0:9f:c2` is **Ubiquiti**,
+`8c:1f:64` and `4c:6e:44` belong to the **IEEE Registration Authority** itself so
+a three-byte match there names nobody, and `d8:a0:d8` is not registered at all.
+`f8:a2:d6` is on those lists too and is retracted upstream.
+`tools/check_oui_parity.py` now blocks all of them, so widening recall by
+importing wholesale fails CI instead of shipping.
+
+Also rejected: DJI's `f8:40:68` (Ronin gimbals) and `20:1f:55` (Osmo handhelds)
+-- genuinely DJI, but neither flies; eight drone prefixes that sit inside shared
+IEEE Registration Authority blocks; `fc:01:9e` (VIEVU, discontinued by Axon in
+2018); and `d4:2d:c5` (i-PRO, whose range runs from body cameras to fixed cameras
+to industrial sensors, so the vendor is knowable and the product is not).
+
+Motorola: an outside field audit found all 27 of its Motorola Wi-Fi OUI hits were
+confirmed *not* police equipment, and that project now ships Motorola matching
+off by default. Ours is left on, because unlike theirs it has never claimed a
+product -- the class is "vendor known, kind not determined" and the label reads
+"Motorola Solutions". But 27 out of 27 is not a rounding error. Recorded in the
+table comment as the next thing to measure rather than quietly acted on.
+
+**Why a drive can legitimately return almost nothing.** Current Flock Falcons
+backhaul over LTE rather than Wi-Fi, and a 2025 firmware update turned off the
+Bluetooth beacon these detectors historically keyed on. What is left is a
+sporadic wildcard probe request, which is brief and easy to miss from a moving
+car. A quiet scan is now frequently the truth about the air rather than a fault
+in the detector -- which is what survey mode is for.
+
 ## v0.87
 
 **A bench "false positive" that was not one, and the three real defects it

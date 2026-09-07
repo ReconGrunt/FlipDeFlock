@@ -332,6 +332,86 @@ and here it is not hypothetical:
 `test_flock_db.c` asserts each resolves to no vendor. Verify at the registry by
 **organisation name** before adding anything.
 
+## Unmanned aircraft (Remote ID)
+
+Drones are found by **ASTM F3411 Remote ID**, not by a MAC table, and the reason
+is worth stating plainly because it decides the whole design.
+
+Every US police-drone vendor was resolved against the IEEE registry on
+2026-09-07. Of the five a department realistically buys from today:
+
+| Vendor | IEEE block |
+|---|---|
+| Skydio | `38:1d:14` |
+| BRINC | **none** |
+| Aerodome | **none** |
+| Flock | `b4:1e:52` (the company block, not a drone block) |
+| Paladin | **none** |
+
+Three of the five hold nothing at all, so their radios transmit under whatever
+module vendor they bought -- the same shared-prefix problem that already forced
+Flock's Liteon prefixes down to "possible". **A prefix table cannot see the
+modern police fleet, and never will.**
+
+Remote ID can. It is a legal broadcast mandate (FAA 14 CFR Part 89), sent in the
+clear with no association or pairing, and vendor-independent by construction: the
+aircraft announces its own serial or registration, its own position, and -- in the
+System message -- **the operator's position**.
+
+FlipDeFlock decodes it over both transports the companion can hear:
+
+- **BLE**, service data under 16-bit UUID `0xFFFA` with application code `0x0D`.
+- **Wi-Fi beacons and probe responses**, vendor-specific IE with OUI `FA:0B:BC`
+  and vendor type `0x0D`. DJI in particular favours this form, so a BLE-only
+  receiver misses whole fleets while appearing to work.
+
+A Remote ID detection is scored **Confirmed**, and it is worth being precise
+about what that confirms: *a Remote ID broadcast was received*, so something is
+flying and announcing itself. It is **not** a claim that the aircraft is a police
+drone -- no signature could establish that, and the class says only "unmanned
+aircraft".
+
+Decoding happens on the Flipper (`helpers/open_drone_id.c`), never on the
+companion, which only recognises the transport and forwards raw bytes. That is
+deliberate: this is attacker-reachable radio input whose output is plotted on a
+map, and the Flipper side is the side with host tests.
+
+### Drone manufacturer OUIs (fallback only)
+
+24 prefixes, **MA-L holders only**: SZ DJI Technology, DJI Baiwang, Skydio,
+Parrot, Teal Drones, AeroVironment, Shield AI, Freefly, Zipline. A hit is scored
+like any other bare OUI (possible) and is **not** evidence of a police drone --
+DJI's blocks sit on far more hobbyist quadcopters than anything else.
+
+**Rejected**, and enforced by `tools/check_oui_parity.py`:
+
+- `f8:40:68` (DJI Ronin) and `20:1f:55` (DJI Osmo) -- genuinely DJI, but gimbals
+  and handheld cameras. Neither flies.
+- `4c:48:da`, `00:1f:64` -- "Beijing Autelan Technology", a networking company,
+  not Autel Robotics. The same substring-of-a-vendor-name trap as Axon Networks.
+- `ec:5b:cd`, `e0:b6:f5`, `34:b5:f3`, `ac:86:d1`, `24:a1:0d`, `b4:4d:43`,
+  `e8:b4:70`, `18:d7:93` -- Autel Robotics, Yuneec, Inspired Flight, Quantum
+  Systems, Cyon, UAV Navigation and Anduril all appear in community drone lists,
+  and every one of them holds only a /28 inside a shared IEEE Registration
+  Authority block. This table is three bytes wide, so matching them would flag
+  arbitrary unrelated hardware as an aircraft.
+
+## Body-worn cameras
+
+- **Axon** -- OUI `00:25:df` (their only IEEE block), plus the **`BWCDEVICE`**
+  ASCII tag in BLE service data. The tag is the stronger of the two: it is
+  MAC-independent, so it survives address randomisation, and it identifies a
+  body-worn camera *specifically*, where the OUI can only ever say "something Axon
+  made" -- and Axon now ships fixed ALPR poles on that same block.
+- **Utility, Inc ("BodyWorn")** -- OUIs `00:09:bc`, `00:16:ed`, plus adverts whose
+  name contains `BodyWorn Remote`.
+- **Digital Ally ("FirstVU")** -- OUI `00:23:bd`.
+
+**Rejected**: `fc:01:9e` (VIEVU -- a real body-camera block, but Axon bought the
+company in 2018 and discontinued the line) and `d4:2d:c5` (i-PRO -- a genuine
+surveillance vendor whose range runs from body cameras to fixed network cameras
+to industrial sensors, so the vendor is knowable and the product is not).
+
 ## Coverage outside the United States
 
 Worth stating plainly, because the gap is structural rather than something a

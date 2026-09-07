@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ReconGrunt
 #include "flock_detail_view.h"
 #include "../recon_app_i.h"
+#include "../helpers/open_drone_id.h"
 #include "../helpers/report_fmt.h"
 #include "../helpers/flock_ble.h" // FlockBleTell / flock_ble_tell_str
 #include "ui_widgets.h"
@@ -64,6 +65,9 @@ typedef enum {
     FdSaved, /**< archived entries only */
     FdHidden, /**< hidden-SSID beaconing observed */
     FdIeFp, /**< a probe IE-fingerprint was captured */
+    FdUaType, /**< aircraft type, from a Remote ID Basic ID message */
+    FdOpLat, /**< OPERATOR latitude -- the pilot, not the aircraft */
+    FdOpLon,
     FdKindCount,
 } FdLineKind;
 
@@ -214,6 +218,19 @@ static bool fd_format(char* buf, size_t len, FdLineKind kind, const FlockEntry* 
         // catch its MAC-randomized twins.
         snprintf(buf, len, "IE-fp: %08lx", (unsigned long)e->ie_fp);
         return false;
+    case FdUaType:
+        snprintf(buf, len, "Type: %s", odid_ua_type_str(e->ua_type));
+        return false;
+    case FdOpLat:
+        // THE OPERATOR, NOT THE AIRCRAFT, and the label has to say so on its own
+        // -- these rows sit directly under Lat/Lon, which are the drone's
+        // position, and the two are typically a kilometre apart. A row reading
+        // just "Lat:" twice would be read as a redraw glitch, and acted on.
+        snprintf(buf, len, "Pilot lat: %.5f", (double)e->op_lat);
+        return false;
+    case FdOpLon:
+        snprintf(buf, len, "Pilot lon: %.5f", (double)e->op_lon);
+        return false;
     default:
         buf[0] = '\0';
         return false;
@@ -276,6 +293,17 @@ static void flock_detail_view_draw_callback(Canvas* canvas, void* _model) {
     }
     // Where a stored hit came from, in wall-clock terms. Only meaningful for an
     // archived entry: a live one's seen_epoch is "moments ago" by definition.
+    // Remote ID rows. Only an aircraft has them, and only once the relevant
+    // message type has actually arrived -- an aircraft cycles message types, so
+    // the operator position turns up seconds after the serial and these rows
+    // appear when it does.
+    if(e.dev_class == (uint8_t)FlockClassDrone) {
+        kinds[n++] = FdUaType;
+        if(!isnan(e.op_lat) && !isnan(e.op_lon)) {
+            kinds[n++] = FdOpLat;
+            kinds[n++] = FdOpLon;
+        }
+    }
     if(e.archived && e.seen_epoch) kinds[n++] = FdSaved;
     if(e.hidden) kinds[n++] = FdHidden;
     if(e.ie_fp != 0) kinds[n++] = FdIeFp;

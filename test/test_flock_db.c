@@ -193,7 +193,85 @@ void suite_flock_db(void) {
     // here as well as in the CI parity gate. If you intentionally change the
     // table, update this number AND both files' count comments in the same
     // commit -- that is the drift 93beede left behind for five releases.
-    CHECK_INT_EQ((int)flock_oui_count(), 29);
+    CHECK_INT_EQ((int)flock_oui_count(), 31);
+
+    // The 2026-09-07 community-table sweep, pinned both ways. Every prefix here
+    // was resolved against the IEEE MA-L registry before the verdict; the
+    // organisation name is the whole argument, not the list it appeared on.
+    static const uint8_t added_liteon[6] = {0xe0, 0x0a, 0xf6, 0x01, 0x02, 0x03};
+    static const uint8_t added_silabs[6] = {0x38, 0x5b, 0x44, 0x01, 0x02, 0x03};
+    CHECK(flock_oui_match(added_liteon)); // Liteon, same vendor as 21 built-ins
+    CHECK(flock_oui_match(added_silabs)); // SiLabs, corroborated by "RWLS-38:5B:44:.."
+
+    // REJECTED, and asserted absent so a future "let's widen recall" import
+    // cannot land them quietly. tools/check_oui_parity.py::TOO_GENERIC blocks
+    // them at CI; this is the same claim at the library boundary, so the rule
+    // survives someone editing only one of the two.
+    static const uint8_t samsung[6] = {0x48, 0x27, 0xea, 0, 0, 0}; // phones/hotspots
+    static const uint8_t espressif[6] = {0xa4, 0xcf, 0x12, 0, 0, 0}; // our OWN board
+    static const uint8_t ubiquiti[6] = {0xf0, 0x9f, 0xc2, 0, 0, 0};
+    static const uint8_t ieee_ra[6] = {0x8c, 0x1f, 0x64, 0, 0, 0}; // shared MA-M/S block
+    CHECK(!flock_oui_match(samsung));
+    CHECK(!flock_oui_match(espressif));
+    CHECK(!flock_oui_match(ubiquiti));
+    CHECK(!flock_oui_match(ieee_ra));
+    // f8:a2:d6 is on the same community lists and was tempting for the same
+    // reason (it IS Liteon) -- it is covered by the retracted[] block above,
+    // which is where a third removal would also belong.
+
+    // --- v0.88 vendor tables: drones and body cams --------------------------
+    //
+    // Each vendor is asserted to resolve to ITS OWN vendor and class. The whole
+    // point of these tables is attribution, so a table that matched but named the
+    // wrong company would be worse than no table -- that is the Motorola Mobility
+    // failure the misattributed list exists for.
+    static const uint8_t dji[6] = {0x60, 0x60, 0x1f, 1, 2, 3};
+    static const uint8_t skydio[6] = {0x38, 0x1d, 0x14, 1, 2, 3};
+    static const uint8_t utility[6] = {0x00, 0x09, 0xbc, 1, 2, 3};
+    static const uint8_t dally[6] = {0x00, 0x23, 0xbd, 1, 2, 3};
+    CHECK_INT_EQ(flock_vendor_from_mac(dji), FlockVendorDrone);
+    CHECK_INT_EQ(flock_vendor_from_mac(skydio), FlockVendorDrone);
+    CHECK_INT_EQ(flock_vendor_from_mac(utility), FlockVendorUtility);
+    CHECK_INT_EQ(flock_vendor_from_mac(dally), FlockVendorDigitalAlly);
+    CHECK_STR_EQ(flock_class_str(FlockClassDrone), "Drone");
+    CHECK_STR_EQ(flock_device_long_str(FlockVendorDrone, FlockClassDrone), "Unmanned aircraft");
+    CHECK_STR_EQ(flock_device_long_str(FlockVendorUtility, FlockClassBodycam), "Utility BodyWorn");
+
+    // A drone OUI must NEVER come back as a Flock camera -- the exact over-claim
+    // FlockVendor was introduced to stop. Nor may it reach the Flock matcher.
+    CHECK(!flock_oui_match(dji));
+    CHECK(!flock_oui_match(utility));
+    CHECK_INT_EQ(flock_vendor_of(dji, ""), FlockVendorDrone);
+
+    // REJECTED drone-adjacent prefixes. Every one appears in a community drone
+    // list; every one would misattribute.
+    static const uint8_t ronin[6] = {0xf8, 0x40, 0x68, 0, 0, 0}; // DJI, but a gimbal
+    static const uint8_t osmo[6] = {0x20, 0x1f, 0x55, 0, 0, 0}; // DJI, but a handheld
+    static const uint8_t autelan[6] = {0x4c, 0x48, 0xda, 0, 0, 0}; // networking, not Autel
+    static const uint8_t autel_ma_m[6] = {0xec, 0x5b, 0xcd, 0, 0, 0}; // shared IEEE block
+    static const uint8_t vievu[6] = {0xfc, 0x01, 0x9e, 0, 0, 0}; // discontinued line
+    static const uint8_t ipro[6] = {0xd4, 0x2d, 0xc5, 0, 0, 0}; // product not knowable
+    CHECK_INT_EQ(flock_vendor_from_mac(ronin), FlockVendorUnknown);
+    CHECK_INT_EQ(flock_vendor_from_mac(osmo), FlockVendorUnknown);
+    CHECK_INT_EQ(flock_vendor_from_mac(autelan), FlockVendorUnknown);
+    CHECK_INT_EQ(flock_vendor_from_mac(autel_ma_m), FlockVendorUnknown);
+    CHECK_INT_EQ(flock_vendor_from_mac(vievu), FlockVendorUnknown);
+    CHECK_INT_EQ(flock_vendor_from_mac(ipro), FlockVendorUnknown);
+
+    // Every device label still fits the detail screen's 20-character row. The
+    // longest new one ("Digital Ally FirstVU") is exactly at the limit, so this
+    // is the check that catches the next one that is not.
+    for(int v = 0; v <= (int)FlockVendorDrone; v++) {
+        for(int c = 0; c <= (int)FlockClassDrone; c++) {
+            CHECK((int)strlen(flock_device_long_str((FlockVendor)v, (FlockDevClass)c)) <= 20);
+            // 13 is the incumbent ceiling, set by "SoundThinking", which has
+            // shipped in the narrow report/list column since v0.77. A new vendor
+            // wider than the widest existing one is the thing worth catching --
+            // not SoundThinking itself, which is a real company name and is not
+            // going to be abbreviated to make a test pass.
+            CHECK((int)strlen(flock_vendor_str((FlockVendor)v)) <= 13);
+        }
+    }
 
     // --- extra OUIs (user signatures merged OVER the built-ins) --------------
     static const uint8_t extra[][3] = {{0x11, 0x22, 0x33}};
