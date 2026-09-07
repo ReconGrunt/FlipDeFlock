@@ -732,9 +732,14 @@ static void apply_ble_identity(int idx) {
         // is how the first version of this identity advertised nothing at all
         // while every line of code looked right, and it cost a bench run to find.
         // An advert that is not exactly 31 bytes here is a bug.
-        std::string pl = data.getPayload();
-        Serial.printf("[RID ] advert payload %u bytes: ", (unsigned)pl.size());
-        for(size_t i = 0; i < pl.size(); i++) Serial.printf("%02x", (uint8_t)pl[i]);
+        // `auto` + length() + [] on purpose: getPayload() returns std::string on
+        // core 2.x and Arduino String on 3.x, and this sketch only has the
+        // one-way fmfg() shim. Naming the type compiled here on 2.0.17 and broke
+        // the 3.x CI job. length() and operator[] exist on BOTH, so this needs no
+        // shim at all.
+        auto pl = data.getPayload();
+        Serial.printf("[RID ] advert payload %u bytes: ", (unsigned)pl.length());
+        for(size_t i = 0; i < pl.length(); i++) Serial.printf("%02x", (uint8_t)pl[i]);
         Serial.printf("\n");
     }
 
