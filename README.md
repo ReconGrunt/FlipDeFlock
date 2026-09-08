@@ -310,6 +310,11 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.90** - Fixes a bug that left a GPIO companion board unpowered whenever the
+Flipper was plugged in. The app stood down from raising the 5V rail whenever USB
+was present, on the assumption that the header was fed from VBUS. It isn't, so on
+a tethered Flipper the board stayed dead and scans reported no frames at all.
+
 **v0.89** - Same features as v0.88, cut so the release tag is green. Two build
 compatibility fixes: the bench emitter now builds on Arduino core 3.x, and the
 companion builds for the ESP32-C5. Neither affected a shipped file. The in-app

@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.90
+
+### Fixed
+
+- **The app never powered a GPIO companion board while the Flipper was plugged
+  in**, so on a tethered Flipper the board stayed dead and every scan reported
+  `ESP 0/s` with no frames.
+
+  The auto-5V path stood down whenever USB was present, on the reasoning that
+  "with VBUS present the header's 5V is fed from it, so a board that needs 5V
+  already has it". That is not true: the Flipper does not pass VBUS through to
+  pin 1, and the rail is the charger's boost either way. Measured on the bench,
+  tethered, with the header dead and the companion answering nothing: a single
+  `power 5v 1` brought the board straight up on the same cable.
+
+  Because the rail is off after every power cycle and the app refused to raise
+  it while plugged in, anyone who works with the Flipper connected had a
+  companion that simply never came up.
+
+  It now attempts the enable instead of standing down. If the charger really
+  does refuse while drawing from VBUS it re-arms quietly rather than showing a
+  false "5V refused", which is what the old stand-down was written to avoid. On
+  battery a refusal is still reported as a real fault.
+
 ## v0.89
 
 Same features as v0.88. This release exists because v0.88's CI went red after the

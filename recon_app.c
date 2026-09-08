@@ -254,35 +254,29 @@ void recon_app_esp_power_tick(ReconApp* app) {
 
     // Outside the lock: these are HAL calls that talk to the charger IC over
     // I2C, and holding the app mutex across them would stall the ESP worker.
-    // USB ATTACHED: DO NOTHING, AND SAY NOTHING.
+    // USB ATTACHED: TRY ANYWAY, BUT STAY QUIET IF IT REFUSES.
     //
-    // The charger cannot run the 5V boost while VBUS is being supplied by a
-    // host -- OTG and charging are mutually exclusive on this part. Found the
-    // hard way: on a tethered Flipper the enable silently does not take, and the
-    // first version of this reported "5V refused" on a perfectly healthy device.
-    // Every user who runs the app plugged into a laptop or a power bank would
-    // have seen that, every time, for a fault that does not exist.
+    // This used to return early whenever VBUS was above 4 V, on the stated
+    // reasoning that "with VBUS present the header's 5V is fed from it, so a
+    // board that needs 5V already has it".
     //
-    // Nothing is lost by standing down here. With VBUS present the header's 5V
-    // is fed from it, so a board that needs 5V already has it. The case this
-    // feature exists for -- h00die's -- is a Flipper on battery, where the boost
-    // is the only source and does come up.
-    if(furi_hal_power_get_usb_voltage() > 4.0f) {
-        // RE-ARM rather than consume the one attempt. Standing down here is not
-        // a decision about the board, it is a decision about this moment: unplug
-        // the cable and the boost becomes available and relevant. Consuming the
-        // attempt would mean a Flipper that was charging when the app opened
-        // never powers the rail for the rest of the session, which is exactly
-        // the "plug in to top up, then unplug and go" case.
-        //
-        // Resetting the wait tick too keeps the I2C read to once per grace
-        // period rather than once per tick.
-        furi_mutex_acquire(app->mutex, FuriWaitForever);
-        app->otg_attempted = false;
-        app->esp_link_wait_tick = 0;
-        furi_mutex_release(app->mutex);
-        return;
-    }
+    // THAT REASONING IS WRONG, and it was measured wrong on 2026-09-07. With the
+    // Flipper tethered to a PC the header was dead: the companion answered
+    // nothing and the scan header read "ESP 0/s" with zero frames. A single
+    // `power 5v 1` on the CLI brought the board up immediately, same cable, same
+    // session. The Flipper does not pass VBUS through to pin 1; that rail is the
+    // charger's boost either way, and asking for it works while plugged in.
+    //
+    // The cost of the old behaviour was the whole feature, for anyone who works
+    // with the Flipper plugged in: the rail is off after every power cycle, the
+    // app refused to raise it while tethered, and the board simply never came up.
+    //
+    // So try. The one thing to preserve from the old note is the SILENCE: the
+    // charger genuinely cannot boost while it is drawing from VBUS on some
+    // supplies, and the first version of this feature reported "5V refused" on
+    // healthy hardware every time a user was charging. A refusal with VBUS
+    // present is expected, so it re-arms quietly instead of raising a fault.
+    bool vbus = furi_hal_power_get_usb_voltage() > 4.0f;
 
     if(furi_hal_power_is_otg_enabled()) {
         // The user switched it on themselves. Leave it entirely alone -- in
@@ -310,9 +304,16 @@ void recon_app_esp_power_tick(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     if(ok) {
         app->otg_on_by_us = true;
+    } else if(vbus) {
+        // Expected while the charger is drawing from VBUS. Re-arm silently so it
+        // comes up the moment the cable is pulled, and do NOT show a fault: this
+        // is the false "5V refused" that the old stand-down was written to avoid.
+        app->otg_attempted = false;
+        app->esp_link_wait_tick = 0;
     } else {
-        // Surfaced rather than retried. Retrying a boost that just faulted is
-        // how you cook a board, and the operator can see the reason on screen.
+        // On battery a refusal is real. Surfaced rather than retried: retrying a
+        // boost that just faulted is how you cook a board, and the operator can
+        // see the reason on screen.
         app->otg_failed = true;
     }
     furi_mutex_release(app->mutex);
