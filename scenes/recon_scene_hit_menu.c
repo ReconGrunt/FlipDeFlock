@@ -15,6 +15,7 @@
 // slower deliberate actions without taking a key away from the fast ones, and
 // without a trip back to the main menu.
 #include "../recon_app_i.h"
+#include "../helpers/sig_db.h"
 
 typedef enum {
     HitMenuConfirm,
@@ -85,11 +86,28 @@ bool recon_scene_hit_menu_on_event(void* context, SceneManagerEvent event) {
     }
 
     bool deleted = false;
+    // Captured under the lock, acted on after it: writing to the SD card while
+    // holding app->mutex would stall the ESP worker behind the filesystem.
+    uint32_t learn_fp = 0;
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     if(app->hit_menu_idx >= 0 && app->hit_menu_idx < (int)app->flock_count) {
         FlockEntry* e = &app->flock[app->hit_menu_idx];
         if(event.event == HitMenuConfirm) {
             e->confirmed = !e->confirmed;
+            // TEACH THE APP, but only on the way ON and only from a real
+            // fingerprint.
+            //
+            // This is the one moment the app is handed ground truth: the
+            // operator physically looked at the thing. A fingerprint hashes the
+            // SHAPE of a probe request rather than the address, so it still
+            // matches after the device randomises its MAC -- which every modern
+            // Flock camera does, and which is precisely why the OUI tables find
+            // nothing on them (issue #25).
+            //
+            // Un-confirming does NOT unlearn. Removing a signature because
+            // somebody toggled a menu item twice would make detection depend on
+            // UI fidgeting; forgetting is its own explicit action in Reports.
+            if(e->confirmed) learn_fp = e->ie_fp;
         } else if(event.event == HitMenuMark) {
             e->marked = !e->marked;
         } else if(event.event == HitMenuDelete) {
@@ -113,6 +131,11 @@ bool recon_scene_hit_menu_on_event(void* context, SceneManagerEvent event) {
     } else {
         recon_hits_save(app);
     }
+
+    // Silent on failure by design: the confirmation itself already succeeded and
+    // is saved, and a full or unwritable card must not make "I saw it" look like
+    // it did not register.
+    if(learn_fp) sig_db_learn_fp(app->storage, learn_fp);
     scene_manager_previous_scene(app->scene_manager);
     return true;
 }

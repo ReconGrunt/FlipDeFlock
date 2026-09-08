@@ -13,9 +13,26 @@
  * The extras are merged OVER the built-ins via the flock_db_set_extra_*
  * registrars: they can only ADD matches, never remove or weaken a built-in.
  *
+ * A SECOND, APP-OWNED FILE sits alongside it:
+ *
+ *     RECON_APP_FOLDER "/learned.txt"       (apps_data/flipdeflock/learned.txt)
+ *
+ * That one holds IE fingerprints the OPERATOR taught the app, by using
+ * "Confirm: I saw it" on a detection they physically looked at. It is the only
+ * file this module writes, and it exists because a fingerprint is the one thing
+ * that survives MAC randomisation -- which is what every modern Flock camera
+ * now uses, so the OUI tables never match them (issue #25).
+ *
+ * Learned fingerprints are merged into the SAME user tier as signatures.json,
+ * so they are capped at the candidate "Class?" rung and can never auto-Confirm.
+ * That cap is the whole safety argument: an operator picking the wrong row out
+ * of a survey -- easy, since a camera and a passing phone look alike in a list
+ * -- costs a weak lead, not a false camera.
+ *
  * Posture (every line of this file honours these):
- *   - LOAD-ONLY: never writes the file, never touches the network. Parsing is
- *     done entirely on-device from a local file at app start.
+ *   - NEVER TOUCHES THE NETWORK. Everything is local, on-device, at app start.
+ *   - WRITES ONLY learned.txt, and only on an explicit operator confirmation.
+ *     signatures.json is the user's file and is never modified.
  *   - FAIL-SAFE: if the file is absent, empty, malformed, or oversized,
  *     sig_db_load returns NULL and registers NOTHING -- the built-ins stay
  *     fully intact and detection keeps working. A bad user file can never
@@ -70,6 +87,28 @@ SigDb* sig_db_load(Storage* storage);
  * built-ins) and free the handle and everything it owns. NULL-safe.
  */
 void sig_db_free(SigDb* db);
+
+/**
+ * Append `fp` to learned.txt, so this device is recognised again after it
+ * randomises its MAC.
+ *
+ * Called when the operator confirms they SAW a device. Skips fp == 0 (no
+ * fingerprint captured) and duplicates. Failure is silent and harmless: the
+ * detection is unaffected, the operator just does not gain the signature.
+ *
+ * Does NOT take effect until the next app start, because the loaded arrays are
+ * registered with flock_db for the session. Saying so is better than rebuilding
+ * the registration underneath a running scan.
+ *
+ * @return true if a new fingerprint was written.
+ */
+bool sig_db_learn_fp(Storage* storage, uint32_t fp);
+
+/** Delete learned.txt. Returns true if it existed and is gone. */
+bool sig_db_forget_learned(Storage* storage);
+
+/** How many fingerprints learned.txt currently holds (0 if absent). */
+size_t sig_db_learned_count(Storage* storage);
 
 #ifdef __cplusplus
 }

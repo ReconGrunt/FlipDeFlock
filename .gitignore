@@ -50,3 +50,8 @@ docs/CATALOG_SUBMISSION.md
 
 # Agent working instructions (kept local, not part of the project)
 CLAUDE.md
+
+# Unverified signature candidates from field reports (kept local -- see the file
+# itself for why). Promote an entry to docs/signatures.seed.json or a built-in
+# table only once a SECOND independent sighting confirms it.
+CANDIDATES.md

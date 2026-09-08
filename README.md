@@ -310,6 +310,12 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.91** - The app can now learn. Confirming a detection you actually looked at
+saves its probe fingerprint, so the same camera is caught again after its MAC
+randomises -- which every modern Flock unit does. Learned signatures are capped
+at "Class?", never Confirmed, and Reports has a Forget Learned option. Nothing
+is ever sent anywhere.
+
 **v0.90** - Fixes a bug that left a GPIO companion board unpowered whenever the
 Flipper was plugged in. The app stood down from raising the 5V rail whenever USB
 was present, on the assumption that the header was fed from VBUS. It isn't, so on

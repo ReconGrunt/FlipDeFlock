@@ -285,6 +285,137 @@ static void sig_db_destroy(SigDb* db) {
     free(db);
 }
 
+/* ---- learned fingerprints (learned.txt) --------------------------------- */
+
+/**
+ * Plain text, one 8-hex fingerprint per line, '#' comments ignored.
+ *
+ * NOT JSON, deliberately. Teaching the app one fingerprint has to be an APPEND:
+ * a JSON array would mean read, parse, re-serialise and rewrite the whole file
+ * on every confirmation, which turns a one-line write into a path that can lose
+ * the existing contents if it is interrupted. A line-oriented file appends in
+ * one write, and a corrupt or half-written line is skipped by the reader
+ * instead of poisoning the parse.
+ */
+#define SIG_LEARNED_PATH RECON_APP_FOLDER "/learned.txt"
+#define SIG_LEARNED_HEADER                                                       \
+    "# FlipDeFlock learned fingerprints v1\n"                                    \
+    "# One 8-hex probe IE fingerprint per line, written when you use\n"          \
+    "# \"Confirm: I saw it\" on a detection you looked at with your own eyes.\n" \
+    "# These score \"Class?\" only -- never Confirmed. Delete this file to\n"    \
+    "# forget them all.\n"
+
+/** Parse one line as an 8-hex fingerprint. Returns 0 for blank/comment/bad. */
+static uint32_t sig_learned_parse_line(const char* line, size_t len) {
+    size_t i = 0;
+    while(i < len && (line[i] == ' ' || line[i] == '\t')) i++;
+    if(i >= len || line[i] == '#') return 0;
+    uint32_t v = 0;
+    size_t digits = 0;
+    for(; i < len; i++) {
+        char c = line[i];
+        if(c == '\r' || c == '\n') break;
+        int d;
+        if(c >= '0' && c <= '9')
+            d = c - '0';
+        else if(c >= 'a' && c <= 'f')
+            d = c - 'a' + 10;
+        else if(c >= 'A' && c <= 'F')
+            d = c - 'A' + 10;
+        else
+            return 0; // any junk -> skip the whole line rather than guess
+        if(++digits > 8) return 0;
+        v = (v << 4) | (uint32_t)d;
+    }
+    // Exactly 8 hex digits, and 0 is the "no fingerprint" sentinel everywhere
+    // else in the codebase, so it can never be a learned value.
+    return (digits == 8) ? v : 0;
+}
+
+/**
+ * Read learned.txt into a caller-supplied array. Returns how many were stored.
+ * Absent file, unreadable file and garbage lines all yield 0 extra entries --
+ * the same fail-safe posture as the JSON path.
+ */
+static size_t sig_learned_read(Storage* storage, uint32_t* out, size_t max) {
+    if(!storage || !out || !max) return 0;
+    File* file = storage_file_alloc(storage);
+    size_t n = 0;
+    if(storage_file_open(file, SIG_LEARNED_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
+        uint64_t size = storage_file_size(file);
+        if(size > 0 && size <= SIG_MAX_FILE) {
+            char* buf = malloc((size_t)size + 1);
+            if(buf) {
+                size_t got = storage_file_read(file, buf, (uint16_t)size);
+                if(got == (size_t)size) {
+                    buf[got] = '\0';
+                    size_t start = 0;
+                    for(size_t i = 0; i <= got && n < max; i++) {
+                        if(i == got || buf[i] == '\n') {
+                            uint32_t fp = sig_learned_parse_line(buf + start, i - start);
+                            if(fp) {
+                                bool dup = false;
+                                for(size_t k = 0; k < n; k++) {
+                                    if(out[k] == fp) {
+                                        dup = true;
+                                        break;
+                                    }
+                                }
+                                if(!dup) out[n++] = fp;
+                            }
+                            start = i + 1;
+                        }
+                    }
+                }
+                free(buf);
+            }
+        }
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    return n;
+}
+
+size_t sig_db_learned_count(Storage* storage) {
+    uint32_t tmp[SIG_MAX_IE_FPS];
+    return sig_learned_read(storage, tmp, SIG_MAX_IE_FPS);
+}
+
+bool sig_db_learn_fp(Storage* storage, uint32_t fp) {
+    // 0 is "no fingerprint captured" everywhere in this codebase. A BLE-only or
+    // beacon-only detection has none, and confirming one of those must not write
+    // a wildcard entry that then matches every device with no fingerprint.
+    if(!storage || fp == 0) return false;
+
+    uint32_t have[SIG_MAX_IE_FPS];
+    size_t n = sig_learned_read(storage, have, SIG_MAX_IE_FPS);
+    for(size_t i = 0; i < n; i++) {
+        if(have[i] == fp) return false; // already known
+    }
+    if(n >= SIG_MAX_IE_FPS) return false; // bounded, same cap as the JSON path
+
+    storage_common_mkdir(storage, RECON_APP_FOLDER);
+    File* file = storage_file_alloc(storage);
+    bool ok = false;
+    if(storage_file_open(file, SIG_LEARNED_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
+        if(storage_file_size(file) == 0) {
+            const char* h = SIG_LEARNED_HEADER;
+            storage_file_write(file, h, strlen(h));
+        }
+        char line[12];
+        int len = snprintf(line, sizeof(line), "%08lx\n", (unsigned long)fp);
+        ok = len > 0 && storage_file_write(file, line, (uint16_t)len) == (uint16_t)len;
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    return ok;
+}
+
+bool sig_db_forget_learned(Storage* storage) {
+    if(!storage) return false;
+    return storage_simply_remove(storage, SIG_LEARNED_PATH);
+}
+
 /** Read the whole signatures file into a fresh, NUL-terminated buffer. */
 static char* sig_read_file(Storage* storage, size_t* out_len) {
     File* file = storage_file_alloc(storage);
@@ -311,12 +442,66 @@ static char* sig_read_file(Storage* storage, size_t* out_len) {
     return buf;
 }
 
+/**
+ * Fold learned.txt into db->ie_fps, growing or allocating the array as needed.
+ *
+ * Merged into the SAME user tier as signatures.json rather than a tier of its
+ * own, because they carry the same weight: both are unverified, both cap at
+ * "Class?", and giving learned entries their own rung would be inventing a
+ * confidence level nobody has justified.
+ */
+static void sig_merge_learned(SigDb* db, Storage* storage) {
+    uint32_t learned[SIG_MAX_IE_FPS];
+    size_t ln = sig_learned_read(storage, learned, SIG_MAX_IE_FPS);
+    if(!ln) return;
+
+    size_t have = db->ie_fps ? db->ie_fp_count : 0;
+    if(have >= SIG_MAX_IE_FPS) return;
+
+    uint32_t* merged = malloc(sizeof(uint32_t) * SIG_MAX_IE_FPS);
+    if(!merged) return; // fail-safe: keep whatever the JSON gave us
+    size_t n = 0;
+    for(size_t i = 0; i < have && n < SIG_MAX_IE_FPS; i++) merged[n++] = db->ie_fps[i];
+    for(size_t i = 0; i < ln && n < SIG_MAX_IE_FPS; i++) {
+        bool dup = false;
+        for(size_t k = 0; k < n; k++) {
+            if(merged[k] == learned[i]) {
+                dup = true;
+                break;
+            }
+        }
+        if(!dup) merged[n++] = learned[i];
+    }
+    free(db->ie_fps);
+    db->ie_fps = merged;
+    db->ie_fp_count = n;
+}
+
 SigDb* sig_db_load(Storage* storage) {
     if(!storage) return NULL;
 
     size_t len = 0;
     char* js = sig_read_file(storage, &len);
-    if(!js) return NULL; // absent / empty / oversized / read error -> built-ins only
+    if(!js) {
+        // NO signatures.json, but there may still be a learned.txt -- and for
+        // most operators there will be, because learning is a menu action while
+        // hand-writing JSON is not. Returning early here meant every fingerprint
+        // taught to the app was silently ignored unless the user ALSO happened to
+        // keep a signatures file.
+        SigDb* only_learned = calloc(1, sizeof(SigDb));
+        if(!only_learned) return NULL;
+        sig_merge_learned(only_learned, storage);
+        if(!only_learned->ie_fps) {
+            free(only_learned);
+            return NULL; // nothing at all -> built-ins only, exactly as before
+        }
+        only_learned->extras = (FlockDbExtras){
+            .ie_fps = only_learned->ie_fps,
+            .ie_fp_count = only_learned->ie_fp_count,
+        };
+        flock_db_set_extras(&only_learned->extras);
+        return only_learned;
+    }
 
     jsmntok_t* tokens = malloc(sizeof(jsmntok_t) * SIG_MAX_TOKENS);
     if(!tokens) {
@@ -374,6 +559,8 @@ SigDb* sig_db_load(Storage* storage) {
 
     free(tokens);
     free(js);
+
+    sig_merge_learned(db, storage);
 
     // Nothing usable parsed -> behave exactly like an absent file.
     if(!db->ouis && !db->confirmed && !db->likely && !db->ie_fps) {

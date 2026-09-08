@@ -70,8 +70,22 @@
     "Drop apps_data/flipdeflock/\n"   \
     "signatures.json to add OUIs,\n"  \
     "SSID & IE-fp signatures.\n"      \
-    "Load-only, offline,\n"           \
-    "fail-safe.\n \n"                 \
+    "Offline and fail-safe. Your\n"   \
+    "file is never modified.\n \n"    \
+    "LEARNING\n"                      \
+    "'Confirm: I saw it' on a hit\n"  \
+    "you actually looked at saves\n"  \
+    "its probe fingerprint to\n"      \
+    "learned.txt, so the same unit\n" \
+    "is caught again after it\n"      \
+    "randomises its MAC. Learned\n"   \
+    "signatures score 'Class?'\n"     \
+    "only, never Confirmed, so a\n"   \
+    "wrong tap costs a weak lead,\n"  \
+    "not a false camera.\n"           \
+    "Reports > Forget Learned\n"      \
+    "wipes them. Nothing is ever\n"   \
+    "sent anywhere.\n \n"             \
     "WIRING\n"                        \
     "ESP32 on USART\n"                \
     "(pin13 TX / pin14 RX).\n"        \

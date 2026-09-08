@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.91
+
+### Added
+
+- **The app learns.** Using "Confirm: I saw it" on a detection now saves its
+  probe fingerprint to `apps_data/flipdeflock/learned.txt`, so the same unit is
+  caught again after it randomises its MAC -- which every modern Flock camera
+  does, and which is why the OUI tables find nothing on them (issue #25).
+
+  Learned fingerprints merge into the same tier as a `signatures.json`
+  fingerprint and are capped at "Class?", never Confirmed. Picking the wrong
+  row out of a list of several is easy, so a mis-confirmation costs a weak
+  lead, not a false camera. Un-confirming does not unlearn -- forgetting is its
+  own action, **Reports -> Forget Learned**, which shows how many are stored
+  and deletes the file. Nothing is ever transmitted anywhere.
+
+  Verified end to end on hardware: confirmed a live detection, restarted the
+  app with hits.csv cleared, and the same fingerprint on a fresh session (no
+  carried-over confirmed flag) raised that device from Likely to Class? on its
+  own -- proof the learning is keyed on the fingerprint, not remembered by MAC.
+
 ## v0.90
 
 ### Fixed

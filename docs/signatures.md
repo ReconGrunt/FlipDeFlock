@@ -8,9 +8,13 @@ without rebuilding by dropping a JSON file on the Flipper's SD card at:
 apps_data/flipdeflock/signatures.json
 ```
 
-It's **load-only** (read once at app start, never written, never networked) and
-**fail-safe**: if the file is missing, empty, malformed, or oversized, the app
-silently falls back to the built-ins — a bad file can't break detection.
+**Your file is never written to** (read once at app start), nothing is ever
+networked, and it's **fail-safe**: if the file is missing, empty, malformed, or
+oversized, the app silently falls back to the built-ins, so a bad file can't
+break detection.
+
+The app does write **one** file of its own, `learned.txt`, and only when you
+explicitly confirm a detection. See [Learned fingerprints](#learned-fingerprints).
 
 Two files ship in this folder, and they are not the same thing:
 
@@ -18,6 +22,36 @@ Two files ship in this folder, and they are not the same thing:
 |------|------------|
 | [`signatures.example.json`](signatures.example.json) | A **placeholder template**. Its values (`aa:bb:cc`, `deadbeef`, …) match nothing real — copy it and replace them with your own captures. |
 | [`signatures.seed.json`](signatures.seed.json) | **Real but unverified** candidate prefixes, tracked upstream and not yet corroborated in the field. See [Seed signatures](#seed-signatures) below before you use it. |
+
+## Learned fingerprints
+
+`apps_data/flipdeflock/learned.txt` is written by the app, not by you.
+
+When you use **Confirm: I saw it** on a detection you physically looked at, its
+probe IE fingerprint is appended there. Next time that unit probes, it matches
+again **even though its MAC has changed** — which matters because current Flock
+cameras use randomised addresses, so the OUI tables never touch them. Six of the
+seven devices in the first real field capture we got (issue #25) had locally
+administered MACs.
+
+Rules it follows:
+
+- **Capped at "Class?"**, never Confirmed, exactly like a `signatures.json`
+  fingerprint. Picking the wrong row out of a list of seven is easy, so a
+  mis-confirmation has to cost a weak lead rather than a false camera.
+- **Un-confirming does not unlearn.** Detection must not depend on whether
+  somebody toggled a menu item twice. Forgetting is its own action:
+  **Reports → Forget Learned**, which shows how many are stored and deletes the
+  file.
+- A fingerprint of `00000000` is never stored — that is the "no fingerprint
+  captured" sentinel, and storing it would match every device that has none.
+- Plain text, one 8-hex value per line, `#` comments ignored. It is a line file
+  rather than JSON so that teaching the app one fingerprint is a single append
+  instead of a read-modify-rewrite of the whole file.
+- Bounded at 32 entries, the same cap as the JSON path.
+- Nothing is transmitted. There is no sync, no upload, and no account. If you
+  want a fingerprint to reach other people, send it to the issue tracker and it
+  goes through the same corroboration every other signature does.
 
 ## Schema
 

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ReconGrunt
 #include "../recon_app_i.h"
 #include "../helpers/recon_report.h"
+#include "../helpers/sig_db.h"
 
 typedef enum {
     ReportItemSave,
@@ -10,6 +11,7 @@ typedef enum {
     ReportItemFalsePos,
     ReportItemClear,
     ReportItemClearSaved,
+    ReportItemForgetLearned,
 } ReportItem;
 
 static void recon_scene_reports_submenu_cb(void* context, uint32_t index) {
@@ -65,6 +67,15 @@ static void recon_scene_reports_build_menu(ReconApp* app) {
     if(app->settings.save_hits || archived > 0) {
         submenu_add_item(
             submenu, "Clear Saved Hits", ReportItemClearSaved, recon_scene_reports_submenu_cb, app);
+    }
+    // Only when there is something to forget, and it says HOW MANY -- a learned
+    // signature is otherwise completely invisible: it lives in a file, changes
+    // scoring on a later drive, and nothing on screen would ever mention it.
+    size_t learned = sig_db_learned_count(app->storage);
+    if(learned > 0) {
+        snprintf(app->text_store, RECON_TEXT_STORE, "Forget Learned (%u)", (unsigned)learned);
+        submenu_add_item(
+            submenu, app->text_store, ReportItemForgetLearned, recon_scene_reports_submenu_cb, app);
     }
 }
 
@@ -134,6 +145,14 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
             furi_mutex_release(app->mutex);
             recon_scene_reports_build_menu(app);
             recon_scene_reports_show_popup(app, "Marks Cleared", "");
+            consumed = true;
+        } else if(event.event == ReportItemForgetLearned) {
+            bool gone = sig_db_forget_learned(app->storage);
+            recon_scene_reports_build_menu(app);
+            recon_scene_reports_show_popup(
+                app,
+                gone ? "Learned Cleared" : "Nothing Learned",
+                gone ? "Takes effect on\nnext app start" : "");
             consumed = true;
         } else if(event.event == ReportItemClearSaved) {
             recon_hits_clear(app); // deletes hits.csv AND drops the restored entries
