@@ -43,9 +43,9 @@
     "SURVEY\n"                        \
     "Logs every transmitter the\n"    \
     "board hears, matched or not,\n"  \
-    "to survey.csv. Tells an empty\n" \
-    "street apart from a camera\n"    \
-    "we do not recognise.\n \n"       \
+    "to survey.csv. Tells an\n"       \
+    "empty street apart from a\n"     \
+    "camera we do not know.\n \n"     \
     "LOCATOR (Companion)\n"           \
     "Hunt a marked device by\n"       \
     "signal: a hot/cold meter\n"      \
@@ -67,18 +67,20 @@
     "GeoJSON and KML under\n"         \
     "apps_data/flipdeflock/\n"        \
     "reports.\n"                      \
-    "REDACTED BY DEFAULT: MACs\n"     \
-    "drop to their OUI, times and\n"  \
-    "heading go, and any SSID that\n" \
-    "is not a Flock name shows as\n"  \
-    "a shape. Camera coordinates\n"   \
+    "REDACTED BY DEFAULT.\n"          \
+    "MACs drop to their OUI,\n"       \
+    "times and heading go, and\n"     \
+    "any SSID that is not a\n"        \
+    "Flock name shows as a\n"         \
+    "shape. Camera coordinates\n"     \
     "are kept.\n"                     \
     "'RAW' writes everything and\n"   \
-    "names the file _RAW. That one\n" \
-    "is for you, not for sharing.\n"  \
-    "Share-to-DeFlock shows a QR\n"   \
-    "to submit from your phone\n"     \
-    "(no network).\n \n"              \
+    "names the file _RAW. That\n"     \
+    "one is for you, not for\n"       \
+    "sharing.\n"                      \
+    "Share-to-DeFlock shows a\n"      \
+    "QR to submit from your\n"        \
+    "phone (no network).\n \n"        \
     "SIGNATURES\n"                    \
     "Drop apps_data/flipdeflock/\n"   \
     "signatures.json to add OUIs,\n"  \
@@ -89,13 +91,14 @@
     "'Confirm: I saw it' on a hit\n"  \
     "you actually looked at saves\n"  \
     "its probe fingerprint to\n"      \
-    "learned.txt, so the same unit\n" \
-    "is caught again after it\n"      \
-    "randomises its MAC. Learned\n"   \
-    "signatures score 'Class?'\n"     \
-    "only, never Confirmed, so a\n"   \
-    "wrong tap costs a weak lead,\n"  \
-    "not a false camera.\n"           \
+    "learned.txt, so the same\n"      \
+    "unit is caught again after\n"    \
+    "it randomises its MAC.\n"        \
+    "Learned signatures score\n"      \
+    "'Class?' only, never\n"          \
+    "Confirmed, so a wrong tap\n"     \
+    "costs a weak lead, not a\n"      \
+    "false camera.\n"                 \
     "Reports > Forget Learned\n"      \
     "wipes them. Nothing is ever\n"   \
     "sent anywhere.\n \n"             \
