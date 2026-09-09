@@ -6,8 +6,9 @@
 
 FlipDeFlock is a Flipper Zero app that pairs the Flipper with an ESP32 board to
 survey the radio around you for surveillance gear: Flock Safety and other ALPR
-hardware, SoundThinking acoustic sensors, Axon and Utility body-worn police
-cameras, and drones. The Flipper is the screen, GPS tagger, and logger; the ESP32
+hardware, SoundThinking acoustic sensors, body-worn police cameras (Axon, Utility
+BodyWorn, Digital Ally), competitor camera vendors (Ubicquia, Motorola Solutions,
+Verkada, Genetec, Avigilon), drones, and BLE trackers planted on you. The Flipper is the screen, GPS tagger, and logger; the ESP32
 does the Wi-Fi sniffing its BLE-only radio can't. It's for security assessments,
 anti-surveillance awareness, and CTF/research.
 
@@ -173,25 +174,48 @@ Set **Board Mode** in Settings to match your ESP32 firmware:
 Each item is a screen in the app. Screens marked *(companion)* need the companion
 firmware; in Marauder mode they explain what's missing.
 
-- **Flock / ALPR Detect** — the main camera hunt. Finds Flock Safety / ALPR cameras
-  over Wi-Fi (and BLE, with the companion), geotags them, and lets you mark them
-  for a report. Each row carries a confidence tag (see
+- **Flock / ALPR Detect** — the main hunt. Finds surveillance hardware over Wi-Fi
+  (and BLE, with the companion), geotags it, and lets you mark it for a report.
+  Each row carries a confidence tag (see
   [Detection confidence](#detection-confidence)) and shows its source — probe,
-  beacon, or BLE — in the detail view. Set **Alert on
-  hit** in Settings (Vibrate / Beep / both) to be told about a camera you aren't
-  watching the screen for — it fires once per device, and never for an OUI-only
-  "Possible" lead. Three device classes are distinguished rather than lumped
-  together: Flock/ALPR cameras, SoundThinking acoustic sensors (`ST`), and Axon
-  body-worn / in-car police equipment (`AX`).
+  beacon, BLE, or Remote ID — in the detail view. Set **Alert on hit** in Settings
+  (Vibrate / Beep / both) to be told about something you aren't watching the
+  screen for — it fires once per device, and never for an OUI-only "Possible"
+  lead.
+
+  **Five device classes are kept apart rather than lumped together**, because
+  calling one of these another is the failure mode the whole confidence system
+  exists to prevent:
+
+  | Row tag | Class | What it covers |
+  |---|---|---|
+  | *(none)* | ALPR camera | Flock Safety and other plate readers |
+  | `ST:` | Acoustic sensor | SoundThinking / ShotSpotter — listens, does not read plates |
+  | `AX:` | Body-worn camera | Axon, Utility BodyWorn, Digital Ally — moves with a person, says nothing about a pole |
+  | `VG:` | Vendor gear, kind unknown | Ubicquia, Motorola Solutions, Verkada, Genetec, Avigilon — one OUI carries plate readers *and* hand-held radios, so the vendor is stated and the product is not |
+  | `DR:` | Unmanned aircraft | see **Drones** below |
+
+- **Drones (Remote ID)** — decodes the ASTM F3411 broadcast that every unmanned
+  aircraft in US airspace is required to transmit, over both BLE and Wi-Fi. You
+  get the aircraft's serial or registration, its type, its position, and **the
+  operator's position**. This is the only method that reaches the fleet: of the
+  five drone vendors a US police department realistically buys from (Skydio,
+  BRINC, Aerodome, Flock, Paladin), only Skydio holds an IEEE MAC block, so a
+  prefix list cannot see the other four. A detection confirms that something is
+  flying and announcing itself — never that it is a police drone, which no
+  signature could establish.
 - **Flock Map** — a live map around your GPS position: you're at center, cameras
   are plotted by bearing and distance, dot size is confidence, with a heading tick
   and a scale bar. Left/Right zoom, OK re-fits. Needs a GPS fix; ungeotagged
   cameras aren't plotted.
 - **Locator** *(companion)* — hunt a marked device by live signal strength: a
   hot/cold meter that climbs as you get closer, peak-hold, and a warmer/colder
-  trend. Mark a target from any Flock detection. Works without GPS (a fix only adds a "strongest here" note).
-  There's no compass arrow — direction-finding a transmitter needs a directional
-  antenna, so you close in by walking.
+  trend. Mark a target from any Flock, Wi-Fi or BLE detection. **That includes
+  BLE trackers** — AirTag, Tile, SmartTag, Google Find My, and other Flipper
+  Zeros — so if something has been planted on your car, this is how you walk it
+  down. Works without GPS (a fix only adds a "strongest here" note). There's no
+  compass arrow — direction-finding a transmitter needs a directional antenna, so
+  you close in by walking.
 - **ESP32 Firmware** — backs up the board's current firmware to SD, then flashes a
   `.bin` (companion, Marauder, or a backup) at `0x0`, straight from the Flipper.
   Put the ESP in bootloader/download mode first (hold **BOOT**, tap **RESET**). It
@@ -200,8 +224,34 @@ firmware; in Marauder mode they explain what's missing.
   always allows a re-flash. Built on Espressif's esp-serial-flasher. **Back up
   before you flash.**
 - **Reports** — writes to `apps_data/flipdeflock/reports/`: Markdown,
-  DeFlock-compatible GeoJSON, and KML. Reports stream row-by-row to SD, so a large scan won't run
-  the Flipper out of memory. Pull them with qFlipper or a card reader.
+  DeFlock-compatible GeoJSON, and KML. Reports stream row-by-row to SD, so a large
+  scan won't run the Flipper out of memory. Pull them with qFlipper or a card
+  reader.
+
+  **Redacted by default.** Three items: `Export Marked (Redacted)`, `Export All
+  (Redacted)`, `Export All (RAW - private)`. The redacted files keep camera
+  coordinates, because that is the point of the report, and drop what describes
+  *you*: MACs fall back to their OUI, sighting times and heading are omitted,
+  your own labels are left out, and any SSID that is not itself a Flock name is
+  replaced by its shape (`AaaaAdd`). That last one matters — a scan sweeps up
+  every household network in range, and an SSID is frequently a surname or a
+  street address that public wardriving databases can place on a map. The RAW
+  item sorts last, names itself, and writes files suffixed `_RAW`.
+
+- **Survey** — every wildcard-probe transmitter the board hears, matched or not,
+  written to `survey.csv` with its OUI, frame count, best RSSI and probe
+  fingerprint. This is what tells an empty street apart from a camera running
+  hardware we don't recognise yet. Counts are per scan, not since the board
+  booted. Park where you can see a camera and the row standing well above its
+  neighbours is that camera.
+
+- **Learning** — `Confirm: I saw it` on a detection you physically looked at
+  saves its probe fingerprint to `learned.txt`, so the same unit is caught again
+  **after it randomises its MAC** — which current Flock cameras do, and which is
+  why OUI tables miss them. Learned signatures are capped at `Class?` and can
+  never reach Confirmed, so a mis-tap costs a weak lead rather than a false
+  camera. Un-confirming does not unlearn; *Reports → Forget Learned* shows the
+  count and deletes the file. Nothing is ever transmitted.
 - **Save hits** *(Settings, on by default)* — keeps your detections across app
   restarts in `apps_data/flipdeflock/hits.csv`, so closing the app doesn't throw
   a scan away. Restored hits come back in the list and on the map, showing the age
@@ -276,13 +326,15 @@ exact dB. `-33dB` closer to 0 means physically closer.
 - **ESP** (or `...`) — companion connected / still waiting
 - **ch / frames / hits** — channel · 802.11 frames captured · Flock detections, counted this session (reset each time you open the screen)
 - **row tag** — `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only · `*` marked
-- **`ST` after the tag** — a SoundThinking (ShotSpotter) acoustic sensor, not an ALPR camera. Untagged rows are cameras; the detail screen names the class in full
-- **`AX` after the tag** — Axon body-worn or in-car police equipment. Not fixed infrastructure: it moves with a person or a vehicle, so it says nothing about a camera on a pole
+- **`ST:` before the name** — a SoundThinking (ShotSpotter) acoustic sensor, not an ALPR camera. Untagged rows are cameras; the detail screen names the class in full
+- **`AX:`** — a body-worn police camera (Axon, Utility BodyWorn, Digital Ally). Not fixed infrastructure: it moves with a person or a vehicle, so it says nothing about a camera on a pole
+- **`VG:`** — vendor gear of undetermined kind (Ubicquia, Motorola Solutions, Verkada, Genetec, Avigilon). The vendor is known, the product is not: one OUI carries plate readers and hand-held radios alike
+- **`DR:`** — an unmanned aircraft, detected by its Remote ID broadcast
 - **GPS badge** - filled `GPS 9` = locked with 9 satellites, filled `GPS` = locked but nothing reported a satellite count (normal on the `Phone` source), hollow `GPS` = on and searching. A fault names what to fix and never says "GPS", because a filled badge starting with those three letters reads as a lock: `!PORT` = GPS and the ESP are on the same UART (put GPS on the other one, LPUART / pins 15-16), `!PIN` = the companion refused that ESP GPS Pin, `!FW` = the companion never answered so reflash it — or, on the `Phone` source, this firmware has no location service (needs Unleashed). Phone-only faults: `!APP` = nothing paired, open qUnleashed · `!PERM` = the phone denied location permission · `!LOC` = the phone's location is off, or the paired device has no receiver · `!ACC` = fixes are arriving but coarser than 100 m, so go outside · `!ERR` = the companion app reported a fault
 - Marauder mode shows `rx <n>  hits <n>` instead (serial heartbeat + detection count)
 
 **Locator**
-- **mark first** — the report star on any Flock detection adds it to the Locator pool
+- **mark first** — the report star on any Flock, Wi-Fi or BLE detection adds it to the Locator pool, including BLE trackers (AirTag / Tile / SmartTag / Find My / Flipper)
 - **meter / dB** — climbs as you get closer; `WARMER`/`colder` is the trend, the tick above the bar is peak-hold. `out of range` means the target went quiet — walk back to where it was loudest
 
 ## Build from source
@@ -309,6 +361,12 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.92** - The README and the in-app About screen now list everything the app
+actually detects; both were describing three device classes when there are five.
+Two real labelling bugs fell out of that audit: a drone rendered untagged in the
+list, which by the list's own rule means "ALPR camera", and body-worn cameras
+from Utility and Digital Ally were exported with the class "Axon".
 
 **v0.91** - The app can now learn. Confirming a detection you actually looked at
 saves its probe fingerprint, so the same camera is caught again after its MAC

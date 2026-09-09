@@ -1,5 +1,31 @@
 # Changelog
 
+## v0.92
+
+Documentation and labelling caught up with what the app can actually detect. Two
+of the gaps were real mislabelling bugs, not just stale prose.
+
+### Fixed
+
+- **A drone rendered untagged in the detection list, which by the list's own
+  rule means "ALPR camera".** `ST:`, `AX:` and `VG:` existed precisely so one
+  class is never announced as another, and the drone class shipped without its
+  tag. Remote ID detections now carry `DR:`.
+
+- **`flock_class_str(FlockClassBodycam)` returned "Axon"**, but that class now
+  covers Axon, Utility BodyWorn and Digital Ally. A Utility detection exported
+  with vendor "Utility" and class "Axon" -- a wrong attribution in the one column
+  whose job is to say what the thing is. It reads "Body cam" now; the vendor is
+  already stated beside it.
+
+### Changed
+
+- README and the in-app About screen now list everything the app detects. Both
+  described three device classes when there are five, named only three vendors of
+  eleven, and did not mention drones, survey mode, learned fingerprints, redacted
+  exports, or that the Locator can hunt BLE trackers (AirTag, Tile, SmartTag,
+  Find My, other Flippers) as well as cameras.
+
 ## v0.91
 
 ### Added

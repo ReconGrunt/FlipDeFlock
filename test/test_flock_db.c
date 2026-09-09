@@ -62,7 +62,7 @@ void suite_flock_db(void) {
     CHECK(!flock_oui_match(axon)); // not an ALPR
     CHECK(!soundthinking_oui_match(axon)); // not an acoustic sensor
     CHECK_INT_EQ(flock_class_from_mac(axon), FlockClassBodycam);
-    CHECK_STR_EQ(flock_class_str(FlockClassBodycam), "Axon");
+    CHECK_STR_EQ(flock_class_str(FlockClassBodycam), "Body cam"); // covers Axon, Utility, Digital Ally
     // The long label must not contain the word "camera" -- see flock_class_long_str.
     CHECK(strstr(flock_class_long_str(FlockClassBodycam), "camera") == NULL);
     // An Axon OUI is still an OUI match for method-labelling purposes.

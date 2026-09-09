@@ -666,7 +666,11 @@ const char* flock_class_str(FlockDevClass cls) {
     case FlockClassAcoustic:
         return "Acoustic";
     case FlockClassBodycam:
-        return "Axon";
+        // NOT "Axon". This class covers Axon, Utility BodyWorn and Digital Ally,
+        // so naming one vendor here printed "Utility / Axon" in a report's
+        // Vendor+Class pair -- a wrong attribution in the one column whose job is
+        // to say WHAT the thing is, while the vendor is already stated beside it.
+        return "Body cam";
     case FlockClassGear:
         return "Gear";
     case FlockClassDrone:

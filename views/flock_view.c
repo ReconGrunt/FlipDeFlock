@@ -762,8 +762,9 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         canvas_draw_str(canvas, 2, y + 8, cbuf);
         ui_icon_radio(canvas, 8, y + 1, r->ftype == 'L');
 
-        // "ST " marks a SoundThinking acoustic sensor, "AX " Axon body-worn or
-        // in-car police kit. Untagged rows are ALPR cameras -- the common case
+        // "ST:" acoustic sensor, "AX:" body-worn police camera, "VG:" vendor
+        // gear of unknown kind, "DR:" unmanned aircraft. Untagged rows are ALPR
+        // cameras -- the common case
         // stays as terse as it was, and the list never silently presents a
         // gunshot sensor or a body camera as a camera on a pole. Three chars each
         // so the tagged and untagged rows still line up.
@@ -781,6 +782,12 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             // radios and building cameras as well as plate readers -- the same
             // reason ST and AX exist. Spelled out in Help under ROW MARKS.
             cls = "VG:";
+        else if(r->dev_class == FlockClassDrone)
+            // An aircraft. This was MISSING when the drone class landed, so every
+            // Remote ID detection rendered untagged -- which by the rule above
+            // means "ALPR camera", i.e. the list announced a passing drone as a
+            // camera on a pole. Exactly the over-claim ST/AX/VG exist to prevent.
+            cls = "DR:";
 
         char line[48];
         if(r->label[0] != '\0') {

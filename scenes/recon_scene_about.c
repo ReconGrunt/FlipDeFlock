@@ -19,9 +19,16 @@
     "IE fingerprints. OUI-only\n"     \
     "hits are 'Possible' - verify\n"  \
     "by eye, never assume.\n"         \
-    "Also acoustic sensors and\n"     \
-    "body-worn police cameras,\n"     \
-    "each named as what it is.\n \n"  \
+    "Five classes kept apart, so\n"   \
+    "one is never announced as\n"     \
+    "another: ALPR cameras, ST:\n"    \
+    "acoustic sensors, AX: body\n"    \
+    "cams (Axon / Utility /\n"        \
+    "Digital Ally), VG: vendor\n"     \
+    "gear of unknown kind\n"          \
+    "(Ubicquia, Motorola,\n"          \
+    "Verkada, Genetec, Avigilon),\n"  \
+    "DR: unmanned aircraft.\n \n"     \
     "DRONES (Remote ID)\n"            \
     "Decodes the ASTM F3411\n"        \
     "broadcast every drone in US\n"   \
@@ -44,6 +51,11 @@
     "signal: a hot/cold meter\n"      \
     "that climbs as you get\n"        \
     "closer. Works without GPS.\n"    \
+    "Also targets BLE trackers -\n"   \
+    "AirTag, Tile, SmartTag,\n"       \
+    "Find My, other Flippers -\n"     \
+    "so you can walk down a tag\n"    \
+    "planted on your car.\n"          \
     "No compass arrow (that needs\n"  \
     "a directional antenna).\n \n"    \
     "FLOCK MAP\n"                     \
@@ -53,7 +65,8 @@
     "REPORTS\n"                       \
     "Export to Markdown, DeFlock\n"   \
     "GeoJSON and KML under\n"         \
-    "apps_data/flipdeflock/reports.\n"\
+    "apps_data/flipdeflock/\n"        \
+    "reports.\n"                      \
     "REDACTED BY DEFAULT: MACs\n"     \
     "drop to their OUI, times and\n"  \
     "heading go, and any SSID that\n" \
