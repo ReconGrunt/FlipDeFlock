@@ -11,6 +11,7 @@ typedef enum {
     StartItemAbout,
     StartItemFlockMap,
     StartItemSavedHits,
+    StartItemSurvey,
     StartItemDeflockShare,
     StartItemLocator,
     StartItemSupport,
@@ -59,6 +60,11 @@ void recon_scene_start_on_enter(void* context) {
     // worked out, bin the junk. Deliberately not buried in Reports -- going
     // through a drive's hits is a primary job, not an export option.
     submenu_add_item(submenu, "Saved Hits", StartItemSavedHits, recon_scene_start_submenu_cb, app);
+    // What was in the air, matched or not. Sits next to Saved Hits because it is
+    // the same post-drive question asked of the rows detection threw away -- and
+    // for a camera on a randomised MAC, which no OUI table can ever match, it is
+    // the only place it shows up at all (issue #25).
+    submenu_add_item(submenu, "Air Survey", StartItemSurvey, recon_scene_start_submenu_cb, app);
     submenu_add_item(
         submenu, "ESP32 Firmware", StartItemFirmware, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Reports", StartItemReports, recon_scene_start_submenu_cb, app);
@@ -92,7 +98,8 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
         case StartItemFlockMap:
             scene_manager_next_scene(app->scene_manager, ReconSceneFlockMap);
             break;
-            break;
+        case StartItemSurvey:
+            scene_manager_next_scene(app->scene_manager, ReconSceneSurvey);
             break;
         case StartItemFirmware:
             scene_manager_next_scene(app->scene_manager, ReconSceneFirmware);

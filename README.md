@@ -238,20 +238,36 @@ firmware; in Marauder mode they explain what's missing.
   street address that public wardriving databases can place on a map. The RAW
   item sorts last, names itself, and writes files suffixed `_RAW`.
 
-- **Survey** — every wildcard-probe transmitter the board hears, matched or not,
-  written to `survey.csv` with its OUI, frame count, best RSSI and probe
-  fingerprint. This is what tells an empty street apart from a camera running
-  hardware we don't recognise yet. Counts are per scan, not since the board
-  booted. Park where you can see a camera and the row standing well above its
-  neighbours is that camera.
+- **Air Survey** — every wildcard-probe transmitter the board hears, matched or
+  not, on the device and ranked. This is what tells an empty street apart from a
+  camera running hardware we don't recognise yet, and for a camera that
+  randomises its MAC — which current ones do — it is usually the only place it
+  appears at all, because there is no vendor prefix for any OUI table to match.
 
-- **Learning** — `Confirm: I saw it` on a detection you physically looked at
-  saves its probe fingerprint to `learned.txt`, so the same unit is caught again
+  Rows are ranked on how persistently a device probes measured against
+  everything else in the capture, how close it is, and whether one fingerprint is
+  turning up on several addresses. `~` marks a randomised address and `g` a
+  commodity scan pattern shared with phones, which sinks to the bottom however
+  loud it is. Counts are per scan, not since the board booted. Park where you can
+  see a camera and the row standing well above its neighbours is that camera.
+
+  It is not a detection list and nothing in it enters the hit table. A high rank
+  means the device behaves the way a fixed installation behaves, which a busy
+  access point also does. Still written to `survey.csv` as well.
+
+- **Learning** — `Confirm: I saw it` on a device you physically looked at saves
+  its probe fingerprint to `learned.txt`, so the same unit is caught again
   **after it randomises its MAC** — which current Flock cameras do, and which is
-  why OUI tables miss them. Learned signatures are capped at `Class?` and can
-  never reach Confirmed, so a mis-tap costs a weak lead rather than a false
-  camera. Un-confirming does not unlearn; *Reports → Forget Learned* shows the
-  count and deletes the file. Nothing is ever transmitted.
+  why OUI tables miss them. Available both on a detection and on an Air Survey
+  row; the survey is the one that matters for a randomised camera, since it never
+  becomes a detection in the first place.
+
+  Learned signatures are capped at `Class?` and can never reach Confirmed, so a
+  mis-tap costs a weak lead rather than a false camera. Commodity scan patterns —
+  the ones carried by phones and ordinary IoT gear — are refused outright, so the
+  easiest mistake to make cannot be made. Un-confirming does not unlearn;
+  *Reports → Forget Learned* shows the count and deletes the file. Nothing is ever
+  transmitted.
 - **Save hits** *(Settings, on by default)* — keeps your detections across app
   restarts in `apps_data/flipdeflock/hits.csv`, so closing the app doesn't throw
   a scan away. Restored hits come back in the list and on the map, showing the age
@@ -361,6 +377,24 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.93** - **Air Survey**, on the device. Everything probing nearby, matched or
+not, ranked so the most camera-shaped behaviour is at the top. A modern Flock
+camera randomises its MAC, so it matches no vendor table, scores nothing and is
+dropped before it reaches the detection list — standing next to one looked exactly
+like standing on an empty street. The survey was already being collected and
+written to `survey.csv`; it just wasn't on screen, so the only way to use it was
+to pull the card.
+
+"I saw it" now works on a survey row too. Learning was added in v0.91 but hung off
+the detection list, which a randomised camera never reaches, so it couldn't be
+aimed at the devices it was built for.
+
+Also fixes a way to poison your own detection: confirming a row wrote whatever
+fingerprint it carried, with no check, so one mis-tap on a passing phone taught
+the app a pattern that then flagged ordinary devices as ALPR candidates. Three
+known-generic scan patterns are now refused, at match time as well as when
+learning, so a card already carrying one goes inert on upgrade.
 
 **v0.92** - The README and the in-app About screen now list everything the app
 actually detects; both were describing three device classes when there are five.
@@ -493,7 +527,7 @@ cameras-only from v0.79 on.
 ```
 application.fam          manifest
 recon_app.c / _i.h       lifecycle, shared state, settings
-scenes/                  start, flock, locator, map, firmware,
+scenes/                  start, flock, locator, map, firmware, survey,
                          reports, deflock_handoff, settings, about
 views/                   flock list, on-device map, DeFlock QR, locator HUD
 helpers/
@@ -504,6 +538,7 @@ helpers/
   gps_rpc / gps_rpc_convert          phone GPS via the Unleashed RPC location service
   recon_report / report_escape       Markdown + GeoJSON + KML writers
   scan_session / alerts              scan lifecycle, detection alert gating
+  survey_rank                        ranks the air survey (not a detection path)
   flock_ble / oui_vendor             BLE Flock signatures, IEEE vendor lookup
 lib/esp-serial-flasher/  vendored Espressif flasher (Apache-2.0)
 lib/qrcodegen/           vendored Nayuki QR Code generator (MIT)

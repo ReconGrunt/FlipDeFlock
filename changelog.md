@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.93
+
+The app could not show you a camera that randomises its MAC, and it could not be
+taught one either. Both of those are fixed, and a way to poison your own
+detection is closed off.
+
+### Added
+
+- **Air Survey, on the device.** Everything probing nearby, matched or not,
+  ranked so the most camera-shaped behaviour is at the top. The survey was
+  already being collected and written to `survey.csv`; it was never shown on
+  screen, so the only way to use it was to pull the card and read the file.
+
+  This is the missing half of issue #25. A modern Flock camera randomises its
+  MAC, so it has no vendor prefix, matches no OUI table, scores nothing, and gets
+  dropped before it reaches the detection list. Standing next to one looked
+  exactly like standing on an empty street. Rows are ranked on the same evidence
+  a person would use reading the CSV: how persistently the device probes measured
+  against everything else in the capture, how close it is, and whether one
+  fingerprint is turning up on several addresses. `~` marks a randomised address,
+  `g` a commodity scan pattern.
+
+  It is not a detection list and nothing in it enters the hit table. A high rank
+  means the transmitter behaves the way a fixed installation behaves, which a
+  busy access point also does.
+
+- **"I saw it" works on a survey row.** Learning a fingerprint was added in v0.91
+  but hung off the detection list, which a randomised camera never reaches -- so
+  it could not be pointed at the devices it was built for. Park in front of a
+  camera, open Air Survey, pick the row, press it. Still capped at "Class?",
+  never Confirmed.
+
+### Fixed
+
+- **You could teach the app a fingerprint that matches half the phones on the
+  street.** "Confirm: I saw it" wrote whatever fingerprint the selected row
+  carried, with no check on what it was. Confirm the wrong row once -- easy, a
+  camera and a passing phone look alike in a list -- and a commodity scan
+  skeleton went into `learned.txt` and started flagging ordinary devices as ALPR
+  candidates, quietly and permanently.
+
+  Three such skeletons are now refused, each with documented provenance:
+  `96fcd1b2` (a stock ESP32 scan -- this project's own bench emitter produces
+  it), `173d7a70` (a common phone stack, seen on four addresses across three
+  channels on a clean bench), and `7c923b53` (the one that smeared across
+  unrelated vendors in a false-positive report). The check also runs at match
+  time, not just when learning, so a card already carrying one goes inert on
+  upgrade rather than needing the file deleted by hand.
+
 ## v0.92
 
 Documentation and labelling caught up with what the app can actually detect. Two

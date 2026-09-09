@@ -40,12 +40,27 @@
     "hold no MAC block at all, so\n"  \
     "this is the only way to see\n"   \
     "them.\n \n"                      \
-    "SURVEY\n"                        \
-    "Logs every transmitter the\n"    \
-    "board hears, matched or not,\n"  \
-    "to survey.csv. Tells an\n"       \
-    "empty street apart from a\n"     \
-    "camera we do not know.\n \n"     \
+    "AIR SURVEY\n"                    \
+    "Everything probing nearby,\n"    \
+    "matched or not, ranked so\n"     \
+    "the most camera-shaped\n"        \
+    "behaviour is on top. A\n"        \
+    "modern camera randomises\n"      \
+    "its MAC and matches no\n"        \
+    "vendor table, so this is\n"      \
+    "often the only place it\n"       \
+    "shows up. '~' marks a\n"         \
+    "randomised address, 'g' a\n"     \
+    "common scan pattern shared\n"    \
+    "with phones.\n"                  \
+    "Not detections. Open a row,\n"   \
+    "then 'I saw it' AFTER you\n"     \
+    "have looked with your own\n"     \
+    "eyes, to teach the app that\n"   \
+    "fingerprint - it survives\n"     \
+    "the MAC changing. Capped at\n"   \
+    "'Class?', never Confirmed.\n"    \
+    "Also written to survey.csv.\n \n"\
     "LOCATOR (Companion)\n"           \
     "Hunt a marked device by\n"       \
     "signal: a hot/cold meter\n"      \

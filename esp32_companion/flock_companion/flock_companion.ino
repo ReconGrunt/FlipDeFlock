@@ -1443,7 +1443,7 @@ static void start_promisc() {
  * precisely what this exists to expose. tools/check_oui_parity.py fails CI if
  * they drift.
  */
-#define FLOCK_COMPANION_VERSION "0.92"
+#define FLOCK_COMPANION_VERSION "0.93"
 
 static void banner() {
     // Third field is the BUILD version. Appending is wire-safe: an older app

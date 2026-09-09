@@ -22,6 +22,8 @@ typedef enum {
     ReconSceneHitMenu,
     ReconSceneHitRename,
     ReconSceneSavedHits,
+    ReconSceneSurvey,
+    ReconSceneSurveyDetail,
     ReconSceneNum,
 } ReconScene;
 
@@ -93,3 +95,11 @@ void recon_scene_hit_rename_on_exit(void* context);
 void recon_scene_saved_hits_on_enter(void* context);
 bool recon_scene_saved_hits_on_event(void* context, SceneManagerEvent event);
 void recon_scene_saved_hits_on_exit(void* context);
+
+void recon_scene_survey_on_enter(void* context);
+bool recon_scene_survey_on_event(void* context, SceneManagerEvent event);
+void recon_scene_survey_on_exit(void* context);
+
+void recon_scene_survey_detail_on_enter(void* context);
+bool recon_scene_survey_detail_on_event(void* context, SceneManagerEvent event);
+void recon_scene_survey_detail_on_exit(void* context);

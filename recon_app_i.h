@@ -396,6 +396,12 @@ typedef struct {
     int hit_menu_idx;
     char rename_buf[FLOCK_STORE_LABEL_LEN];
 
+    /* Air-survey screen. Index into app->survey[] of the row its detail screen
+     * acts on, captured when that screen opens for the same reason as
+     * hit_menu_idx: the survey re-ranks every poll, and a row arriving mid-read
+     * must not slide a different transmitter under the operator's decision. */
+    int survey_menu_idx;
+
     bool hits_dirty;
     uint32_t hits_last_save; /**< furi tick of the last successful flush */
 
