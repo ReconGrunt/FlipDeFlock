@@ -386,6 +386,11 @@ bool sig_db_learn_fp(Storage* storage, uint32_t fp) {
     // beacon-only detection has none, and confirming one of those must not write
     // a wildcard entry that then matches every device with no fingerprint.
     if(!storage || fp == 0) return false;
+    // A commodity scan skeleton is not a signature. The operator saw a camera --
+    // that part is true -- but the row they had selected was a phone, and this
+    // hash would go on to flag phones everywhere. Refuse the write rather than
+    // store something the matcher is only going to ignore.
+    if(flock_ie_fp_is_generic(fp)) return false;
 
     uint32_t have[SIG_MAX_IE_FPS];
     size_t n = sig_learned_read(storage, have, SIG_MAX_IE_FPS);

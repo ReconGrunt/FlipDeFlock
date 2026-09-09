@@ -870,8 +870,57 @@ static const uint32_t flock_ie_fps_candidate[] = {
 #define FLOCK_IE_FP_CANDIDATE_COUNT \
     (sizeof(flock_ie_fps_candidate) / sizeof(flock_ie_fps_candidate[0]))
 
+/**
+ * KNOWN-GENERIC probe skeletons. Never a signature, at any tier. See
+ * flock_ie_fp_is_generic() in the header for the rationale.
+ *
+ * ENTRY REQUIREMENT: documented in-repo provenance, and evidence the hash
+ * appears on hardware that is NOT surveillance gear. "It looked noisy" is not
+ * enough -- the whole point is that these are hashes which look COMPELLING in a
+ * field report and are still worthless.
+ *
+ * 0x96FCD1B2 -- a plain ESP32 running a stock wildcard scan. This project's own
+ *   bench emitter (tools/flock_emitter) produces it, so its identity is not in
+ *   doubt: we built the transmitter. It also surfaced on FOUR different
+ *   randomised MACs around wiilover22's first camera in issue #25, which is
+ *   exactly the "one device rotating its address" pattern that makes a
+ *   fingerprint look like a find. It is an ordinary scan, and shipping it would
+ *   match phones and ESP32 IoT devices on every street.
+ *
+ * 0x173D7A70 -- almost certainly a common phone WiFi stack. Seen on FOUR
+ *   locally administered MACs across THREE channels in a single short capture on
+ *   this project's own bench (CANDIDATES.md, 2026-09-08) with no camera anywhere
+ *   near it. Same seductive shape as the above, same answer.
+ *
+ * 0x7C923B53 -- the generic skeleton that SMEARED ACROSS UNRELATED VENDORS in
+ *   @h00die's 2026-09-02 false-positive report, which is what disqualified it
+ *   there while 0x42D75CD1 from the same capture survived as a candidate. It was
+ *   already named in the flock_ie_fps_candidate[] comment above as the
+ *   counter-example; this makes that judgement enforceable instead of advisory.
+ */
+static const uint32_t flock_ie_fps_generic[] = {
+    0x96FCD1B2u,
+    0x173D7A70u,
+    0x7C923B53u,
+};
+
+#define FLOCK_IE_FP_GENERIC_COUNT (sizeof(flock_ie_fps_generic) / sizeof(flock_ie_fps_generic[0]))
+
+bool flock_ie_fp_is_generic(uint32_t fp) {
+    if(fp == 0) return false; // 0 is "no fingerprint", not a generic one
+    for(size_t i = 0; i < FLOCK_IE_FP_GENERIC_COUNT; i++) {
+        if(flock_ie_fps_generic[i] == fp) return true;
+    }
+    return false;
+}
+
 FlockIeFp flock_ie_fp_match(uint32_t fp) {
     if(fp == 0) return FlockIeFpNone; // 0 = "no fingerprint", never a match
+    // BEFORE any tier, including the user's own file. An operator who confirmed
+    // the wrong row once must not carry a street-matching hash forever, and that
+    // mistake is already on cards in the field -- so the guard lives here rather
+    // than only at the point of learning.
+    if(flock_ie_fp_is_generic(fp)) return FlockIeFpNone;
     // Strongest-first. Built-ins are maintainer-VERIFIED (>=2 corroborations) and
     // are the only tier that can auto-Confirm; it currently ships empty.
     for(size_t i = 0; i < FLOCK_IE_FP_COUNT; i++) {

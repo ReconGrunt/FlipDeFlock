@@ -232,10 +232,44 @@ typedef enum {
  * impossible. Every shipped fp is a candidate. A match is a device-CLASS /
  * firmware-stack signature, never a unique device ID.
  *
+ * GENERIC-SKELETON GUARD: a hash on the flock_ie_fp_is_generic() denylist can
+ * never match at ANY tier, including the user tier. See that function for why a
+ * denylist has to outrank a user's own file.
+ *
  * @param fp  IE-skeleton hash; 0 means "no fingerprint" and never matches.
  * @return    FlockIeFpBuiltin / FlockIeFpCandidate / FlockIeFpUser / FlockIeFpNone.
  */
 FlockIeFp flock_ie_fp_match(uint32_t fp);
+
+/**
+ * True when `fp` is a KNOWN-GENERIC probe skeleton: a hash produced by a
+ * commodity WiFi stack doing an ordinary scan, carried by phones and IoT gear
+ * everywhere, and therefore worthless as a surveillance signature.
+ *
+ * WHY THIS EXISTS. An IE skeleton hashes the SHAPE of a probe request -- which
+ * tags, in what order, at what lengths -- and nothing else. That is what makes it
+ * survive MAC randomisation, and it is also what makes it NON-UNIQUE: every
+ * device running the same driver with the same scan config hashes identically.
+ * Some skeletons are so common that matching one is indistinguishable from
+ * matching "a device with WiFi".
+ *
+ * IT OUTRANKS THE USER TIER, which is the unusual part. "Confirm: I saw it"
+ * writes the fingerprint of whatever row the operator had selected into
+ * learned.txt, and a camera and a passing phone look identical in a list. Pick
+ * the wrong row next to a real camera -- easy, and the likeliest mistake this
+ * feature invites -- and the app learns a hash that then flags a large fraction
+ * of the phones on any street as ALPR candidates. Checking the denylist only at
+ * learn time would not help the operators who already did it, so the match path
+ * enforces it too and a poisoned learned.txt goes inert on upgrade.
+ *
+ * This costs recall in exactly one case: a Flock camera whose WiFi stack emits a
+ * skeleton byte-identical to a stock scan. Precision over recall makes that
+ * trade deliberately -- such a hash could not have identified it anyway.
+ *
+ * Every entry needs documented in-repo provenance before it is added; see the
+ * table in flock_db.c.
+ */
+bool flock_ie_fp_is_generic(uint32_t fp);
 
 /** Number of known Flock-associated OUI prefixes. */
 size_t flock_oui_count(void);

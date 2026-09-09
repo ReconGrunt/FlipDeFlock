@@ -306,6 +306,46 @@ void suite_flock_db(void) {
     flock_db_set_extras(NULL);
     CHECK_INT_EQ(flock_ie_fp_match(0xdeadbeef), FlockIeFpNone);
 
+    // --- known-generic skeleton denylist ------------------------------------
+    // These are commodity WiFi-stack scan skeletons, each with in-repo
+    // provenance (see flock_ie_fps_generic[]). A match on one says "this device
+    // has WiFi", not "this device is a camera".
+    CHECK(flock_ie_fp_is_generic(0x96FCD1B2u)); // stock ESP32 scan (our own emitter)
+    CHECK(flock_ie_fp_is_generic(0x173D7A70u)); // common phone stack, clean bench
+    CHECK(flock_ie_fp_is_generic(0x7C923B53u)); // smeared across unrelated vendors
+    CHECK(!flock_ie_fp_is_generic(0)); // 0 is "no fingerprint", not "generic"
+    CHECK(!flock_ie_fp_is_generic(0x42D75CD1u)); // the shipped candidate is NOT generic
+    CHECK(!flock_ie_fp_is_generic(0xdeadbeef));
+
+    // A generic hash never matches on its own.
+    CHECK_INT_EQ(flock_ie_fp_match(0x96FCD1B2u), FlockIeFpNone);
+
+    // THE REGRESSION THAT MATTERS. "Confirm: I saw it" on the wrong row writes
+    // the selected device's fingerprint to learned.txt, which is merged into the
+    // user tier -- so an operator who confirmed a phone once would otherwise
+    // carry a hash that flags phones on every street, forever. The denylist has
+    // to beat the user tier, not just the learn-time write, because the poisoned
+    // files already exist on cards in the field.
+    static const uint32_t poisoned[] = {0x96FCD1B2u, 0x173D7A70u, 0x7C923B53u};
+    FlockDbExtras ex_generic = {.ie_fps = poisoned, .ie_fp_count = 3};
+    flock_db_set_extras(&ex_generic);
+    CHECK_INT_EQ(flock_ie_fp_match(0x96FCD1B2u), FlockIeFpNone);
+    CHECK_INT_EQ(flock_ie_fp_match(0x173D7A70u), FlockIeFpNone);
+    CHECK_INT_EQ(flock_ie_fp_match(0x7C923B53u), FlockIeFpNone);
+    // ...and the guard is narrow: a legitimate user fp alongside them still works.
+    static const uint32_t mixed[] = {0x96FCD1B2u, 0xabcdef01u};
+    FlockDbExtras ex_mixed = {.ie_fps = mixed, .ie_fp_count = 2};
+    flock_db_set_extras(&ex_mixed);
+    CHECK_INT_EQ(flock_ie_fp_match(0x96FCD1B2u), FlockIeFpNone);
+    CHECK_INT_EQ(flock_ie_fp_match(0xabcdef01u), FlockIeFpUser);
+    flock_db_set_extras(NULL);
+
+    // The shipped candidate still matches -- the guard did not blunt detection.
+    CHECK_INT_EQ(flock_ie_fp_match(0x42D75CD1u), FlockIeFpCandidate);
+    // and a generic hash must not reach the IE-fp method either.
+    CHECK_INT_EQ(flock_method_of(NULL, NULL, 'D', 0x96FCD1B2u), FlockMethodUnknown);
+    CHECK_INT_EQ(flock_method_of(NULL, NULL, 'D', 0x42D75CD1u), FlockMethodIeFp);
+
     // NOTE: the combined-ladder assertions that used to sit here tested
     // flock_score(), which had no production caller. They now live in
     // test_esp_parser.c against esp_parse_companion_line(), the boundary the

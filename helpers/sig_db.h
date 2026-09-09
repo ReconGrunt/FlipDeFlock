@@ -93,8 +93,11 @@ void sig_db_free(SigDb* db);
  * randomises its MAC.
  *
  * Called when the operator confirms they SAW a device. Skips fp == 0 (no
- * fingerprint captured) and duplicates. Failure is silent and harmless: the
- * detection is unaffected, the operator just does not gain the signature.
+ * fingerprint captured), duplicates, and hashes on the known-generic denylist
+ * (flock_ie_fp_is_generic) -- a commodity scan skeleton would flag phones
+ * everywhere, and it is the likeliest thing to capture by picking the wrong row
+ * out of a list. Failure is silent and harmless: the detection is unaffected,
+ * the operator just does not gain the signature.
  *
  * Does NOT take effect until the next app start, because the loaded arrays are
  * registered with flock_db for the session. Saying so is better than rebuilding
