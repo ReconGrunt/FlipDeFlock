@@ -626,7 +626,8 @@ void suite_esp_parser(void) {
     {
         char big[600];
         int o = snprintf(big, sizeof(big), "RID,c0fd00000007,-42,");
-        for(int i = 0; i < 200 && o + 2 < (int)sizeof(big); i++) o += snprintf(big + o, 3, "0d");
+        for(int i = 0; i < 200 && o + 2 < (int)sizeof(big); i++)
+            o += snprintf(big + o, 3, "0d");
         CHECK_INT_EQ(P(big), EspMsgRemoteId);
         CHECK_INT_EQ((int)m.u.rid.payload_len, 64); // sizeof(payload), not 200
     }

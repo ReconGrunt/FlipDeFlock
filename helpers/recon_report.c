@@ -215,8 +215,8 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len, uint
         // export, and for the same reason: this file is meant to be shareable.
         char ssid_raw[80];
         char ssid_md[sizeof(ssid_raw) + 2];
-        bool name_is_evidence =
-            e->ssid[0] && flock_ssid_confidence(e->ssid) != FlockConfidenceNone;
+        bool name_is_evidence = e->ssid[0] &&
+                                flock_ssid_confidence(e->ssid) != FlockConfidenceNone;
         if(!redact || name_is_evidence) {
             // Distinguish "no name recorded" from "the AP beacons and withholds
             // it" -- the second is an observation about the device, the first is
@@ -353,10 +353,7 @@ bool recon_report_save_flock(void* _app, char* out_path_md, size_t out_len, uint
                 // field out, and OSM consumers treat manufacturer as a fact.
                 if(gv != FlockVendorUnknown) {
                     rfile_printf(
-                        &geo,
-                        line,
-                        "        \"manufacturer\": \"%s\",\n",
-                        flock_vendor_str(gv));
+                        &geo, line, "        \"manufacturer\": \"%s\",\n", flock_vendor_str(gv));
                 }
             }
 

@@ -150,7 +150,14 @@ bool flock_ble_name_is_flock(const char* name) {
  * and a test asserts none of these collide with a Flock-shaped name.
  */
 static const char* const k_generic_names[] = {
-    "ESP32", "ESP_", "ESP-", "ARDUINO", "NRF", "BLUETOOTH", "UNKNOWN", "NONAME",
+    "ESP32",
+    "ESP_",
+    "ESP-",
+    "ARDUINO",
+    "NRF",
+    "BLUETOOTH",
+    "UNKNOWN",
+    "NONAME",
 };
 
 int flock_ble_name_specificity(const char* name) {
@@ -198,8 +205,8 @@ FlockBleTell
     // inferring it from absence -- which matters, because "matched a shared
     // silicon-vendor prefix" and "matched something newer than this build
     // understands" are different statements and only one of them is weak.
-    if(addr && (flock_oui_match(addr) || soundthinking_oui_match(addr) ||
-                axon_oui_match(addr) || vendor_exclusive_oui_match(addr))) {
+    if(addr && (flock_oui_match(addr) || soundthinking_oui_match(addr) || axon_oui_match(addr) ||
+                vendor_exclusive_oui_match(addr))) {
         return FlockBleTellOuiOnly;
     }
     return FlockBleTellNone;

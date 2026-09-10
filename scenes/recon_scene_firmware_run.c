@@ -45,7 +45,8 @@ static int32_t fw_worker(void* context) {
         app->fw_running = false;
         return 0;
     }
-    EspFlasher* fl = api->alloc((FuriHalSerialId)app->settings.esp_uart, fw_log_cb, fw_progress_cb, app);
+    EspFlasher* fl =
+        api->alloc((FuriHalSerialId)app->settings.esp_uart, fw_log_cb, fw_progress_cb, app);
     bool ok = false;
     if(!fl) {
         fw_log_cb(app, "UART busy.");
@@ -105,17 +106,22 @@ static void fw_render(ReconApp* app) {
         int filled = (pct * 12) / 100;
         int o = 0;
         bar[o++] = '[';
-        for(int i = 0; i < 12; i++) bar[o++] = (i < filled) ? '#' : '-';
+        for(int i = 0; i < 12; i++)
+            bar[o++] = (i < filled) ? '#' : '-';
         bar[o++] = ']';
         snprintf(bar + o, sizeof(bar) - (size_t)o, " %d%%", pct);
 
         widget_add_string_element(
-            app->widget, 0, 2, AlignLeft, AlignTop, FontPrimary,
+            app->widget,
+            0,
+            2,
+            AlignLeft,
+            AlignTop,
+            FontPrimary,
             app->fw_op == 0 ? "Backing up..." : "Flashing...");
         widget_add_string_element(
             app->widget, 0, 22, AlignLeft, AlignTop, FontSecondary, app->fw_status);
-        widget_add_string_element(
-            app->widget, 64, 44, AlignCenter, AlignTop, FontPrimary, bar);
+        widget_add_string_element(app->widget, 64, 44, AlignCenter, AlignTop, FontPrimary, bar);
         furi_mutex_release(app->mutex);
         return;
     }

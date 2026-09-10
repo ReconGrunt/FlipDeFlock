@@ -64,12 +64,10 @@ void suite_flock_ble(void) {
     const uint8_t addr_flock[6] = {0xb4, 0x1e, 0x52, 0x00, 0x00, 0x02}; // Flock's own OUI
     const uint8_t addr_other[6] = {0xde, 0xad, 0xbe, 0xef, 0x00, 0x01}; // in no table
 
-    CHECK_INT_EQ(
-        flock_ble_tell(FLOCK_BLE_COMPANY_ID, NULL, false, NULL), FlockBleTellMfgId);
+    CHECK_INT_EQ(flock_ble_tell(FLOCK_BLE_COMPANY_ID, NULL, false, NULL), FlockBleTellMfgId);
     CHECK_INT_EQ(flock_ble_tell(AXON_BLE_COMPANY_ID, NULL, false, NULL), FlockBleTellMfgId);
     CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, NULL, true, NULL), FlockBleTellRavenGatt);
-    CHECK_INT_EQ(
-        flock_ble_tell(BLE_COMPANY_NONE, "Penguin-42", false, NULL), FlockBleTellNaming);
+    CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, "Penguin-42", false, NULL), FlockBleTellNaming);
     CHECK_INT_EQ(
         flock_ble_tell(BLE_COMPANY_NONE, "FS Ext Battery", false, NULL), FlockBleTellNaming);
 
@@ -79,17 +77,14 @@ void suite_flock_ble(void) {
     // "a newer companion matched on something this build predates".
     CHECK_INT_EQ(
         flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, addr_flock), FlockBleTellOuiOnly);
-    CHECK_INT_EQ(
-        flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, addr_other), FlockBleTellNone);
+    CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, addr_other), FlockBleTellNone);
     CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, "ESP32", false, NULL), FlockBleTellNone);
 
     // Precedence: a stronger tell wins even when a weaker one is also present.
     CHECK_INT_EQ(
-        flock_ble_tell(FLOCK_BLE_COMPANY_ID, "Penguin-1", true, addr_flock),
-        FlockBleTellMfgId);
+        flock_ble_tell(FLOCK_BLE_COMPANY_ID, "Penguin-1", true, addr_flock), FlockBleTellMfgId);
     CHECK_INT_EQ(
-        flock_ble_tell(BLE_COMPANY_NONE, "Penguin-1", true, addr_flock),
-        FlockBleTellRavenGatt);
+        flock_ble_tell(BLE_COMPANY_NONE, "Penguin-1", true, addr_flock), FlockBleTellRavenGatt);
 
     // THE SAFETY PROPERTY. The tell is evidence reporting, NOT scoring: for every
     // input, the rung flock_ble_confidence() returns must be exactly what it was
@@ -101,14 +96,11 @@ void suite_flock_ble(void) {
         flock_ble_confidence(FLOCK_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
     CHECK_INT_EQ(
         flock_ble_confidence(FLOCK_BLE_COMPANY_ID, "ESP32", false), FlockConfidenceConfirmed);
-    CHECK_INT_EQ(
-        flock_ble_confidence(AXON_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
-    CHECK_INT_EQ(
-        flock_ble_confidence(BLE_COMPANY_NONE, NULL, true), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(flock_ble_confidence(AXON_BLE_COMPANY_ID, NULL, false), FlockConfidenceConfirmed);
+    CHECK_INT_EQ(flock_ble_confidence(BLE_COMPANY_NONE, NULL, true), FlockConfidenceConfirmed);
     CHECK_INT_EQ(
         flock_ble_confidence(BLE_COMPANY_NONE, "Penguin-42", false), FlockConfidenceConfirmed);
-    CHECK_INT_EQ(
-        flock_ble_confidence(BLE_COMPANY_NONE, "ESP32", false), FlockConfidencePossible);
+    CHECK_INT_EQ(flock_ble_confidence(BLE_COMPANY_NONE, "ESP32", false), FlockConfidencePossible);
 
     // EXHAUSTIVE EQUIVALENCE SWEEP. The spot checks above are examples; this is
     // the proof. Walk the whole input space and assert that adding the tell moved
@@ -212,8 +204,7 @@ void suite_flock_ble(void) {
         flock_ble_confidence(BLE_COMPANY_NONE, "FS-1A2B3C", false), FlockConfidenceConfirmed);
     CHECK_INT_EQ(
         flock_ble_confidence(BLE_COMPANY_NONE, "Flock-Guest", false), FlockConfidencePossible);
-    CHECK_INT_EQ(
-        flock_ble_tell(BLE_COMPANY_NONE, "Pigvision", false, NULL), FlockBleTellNaming);
+    CHECK_INT_EQ(flock_ble_tell(BLE_COMPANY_NONE, "Pigvision", false, NULL), FlockBleTellNaming);
 
     // --- the name specificity ladder ---------------------------------------
     CHECK_INT_EQ(flock_ble_name_specificity(NULL), 0);

@@ -351,15 +351,15 @@ void suite_open_drone_id(void) {
     // two kilometres out. Only running the real decoder over the real bytes does.
     //
     // If the emitter's coordinates change, change them here in the same commit.
-    static const uint8_t bench_basic[25] = {
-        0x02, 0x12, 'B', 'E', 'N', 'C', 'H', '-', 'D', 'R', 'O', 'N', 'E',
-        '-',  '0',  '1', 0,   0,   0,   0,   0,   0,   0,   0,   0};
-    static const uint8_t bench_loc[25] = {
-        0x12, 0x00, 90,   40,   0xC0, 0x47, 0x44, 0x18, 0xA0, 0x94, 0xE3, 0xD3, 0x00,
-        0x00, 0x60, 0x09, 0x98, 0x08, 0,    0,    0,    0,    0,    0,    0};
-    static const uint8_t bench_sys[25] = {
-        0x42, 0x01, 0x00, 0x61, 0x45, 0x18, 0x60, 0xF8, 0xE2, 0xD3, 0, 0, 0,
-        0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, 0};
+    static const uint8_t bench_basic[25] = {0x02, 0x12, 'B', 'E', 'N', 'C', 'H', '-', 'D',
+                                            'R',  'O',  'N', 'E', '-', '0', '1', 0,   0,
+                                            0,    0,    0,   0,   0,   0,   0};
+    static const uint8_t bench_loc[25] = {0x12, 0x00, 90,   40,   0xC0, 0x47, 0x44, 0x18, 0xA0,
+                                          0x94, 0xE3, 0xD3, 0x00, 0x00, 0x60, 0x09, 0x98, 0x08,
+                                          0,    0,    0,    0,    0,    0,    0};
+    static const uint8_t bench_sys[25] = {0x42, 0x01, 0x00, 0x61, 0x45, 0x18, 0x60, 0xF8, 0xE2,
+                                          0xD3, 0,    0,    0,    0,    0,    0,    0,    0,
+                                          0,    0,    0,    0,    0,    0,    0};
 
     odid_report_init(&r);
     CHECK(odid_parse_messages(bench_basic, sizeof(bench_basic), &r));

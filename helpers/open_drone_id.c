@@ -67,7 +67,8 @@ static void copy_text(const uint8_t* src, size_t n, char* dst, size_t dst_len) {
         if(c == '\0') break;
         if(c >= 0x20 && c <= 0x7e) dst[o++] = c;
     }
-    while(o > 0 && dst[o - 1] == ' ') o--;
+    while(o > 0 && dst[o - 1] == ' ')
+        o--;
     dst[o] = '\0';
 }
 
@@ -126,9 +127,8 @@ static bool parse_one(const uint8_t* m, OdidReport* out) {
         if(ew_direction) dir += 180.0f;
         out->direction_deg = (m[2] <= 179) ? dir : NAN;
 
-        out->speed_mps = speed_mult ?
-                             ((float)m[3] * ODID_SPEED_HI + (255.0f * ODID_SPEED_LO)) :
-                             ((float)m[3] * ODID_SPEED_LO);
+        out->speed_mps = speed_mult ? ((float)m[3] * ODID_SPEED_HI + (255.0f * ODID_SPEED_LO)) :
+                                      ((float)m[3] * ODID_SPEED_LO);
 
         uint16_t alt_geo = rd_u16(&m[14]);
         uint16_t height = rd_u16(&m[16]);

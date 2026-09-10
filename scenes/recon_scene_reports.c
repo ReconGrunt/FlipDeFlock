@@ -116,8 +116,8 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
             // same folder and only the filename tells them apart, so the last
             // thing on screen after a save should be WHICH kind was written --
             // not a generic "Report Saved" that reads identically for all three.
-            const char* fail_text =
-                (event.event == ReportItemSave) ? "Mark detections first" : "No detections yet";
+            const char* fail_text = (event.event == ReportItemSave) ? "Mark detections first" :
+                                                                      "No detections yet";
             recon_scene_reports_show_popup(
                 app,
                 ok ? ((flags & ReconExportRedact) ? "Redacted Report" : "RAW Report") :
