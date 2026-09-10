@@ -678,7 +678,74 @@ void recon_survey_save(ReconApp* app) {
     }
     storage_file_close(file);
     storage_file_free(file);
+
+    recon_survey_log_append(app, storage);
     furi_record_close(RECORD_STORAGE);
+}
+
+void recon_survey_log_append(ReconApp* app, void* storage_rec) {
+    Storage* storage = storage_rec;
+    // Nothing to add. An empty session is still recorded, in diag.csv, which is
+    // the file that answers "did it run"; a session column with no rows under it
+    // would only repeat that.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    size_t count = app->survey_count;
+    uint32_t session = app->survey_session_epoch;
+    furi_mutex_release(app->mutex);
+    if(!count) return;
+
+    // Rotate BEFORE appending, so the write that crosses the cap still lands in
+    // the fresh file rather than being the last thing squeezed into a full one.
+    // One generation only: the bound matters more than deep history, and the
+    // recent drives are the ones anybody goes back to.
+    File* probe = storage_file_alloc(storage);
+    bool rotate = false;
+    if(storage_file_open(probe, RECON_SURVEY_LOG_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
+        rotate = storage_file_size(probe) >= RECON_SURVEY_LOG_MAX;
+    }
+    storage_file_close(probe);
+    storage_file_free(probe);
+    if(rotate) {
+        storage_simply_remove(storage, RECON_SURVEY_LOG_OLD_PATH);
+        storage_common_rename(storage, RECON_SURVEY_LOG_PATH, RECON_SURVEY_LOG_OLD_PATH);
+    }
+
+    File* file = storage_file_alloc(storage);
+    if(storage_file_open(file, RECON_SURVEY_LOG_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
+        FuriString* out = furi_string_alloc();
+        if(storage_file_size(file) == 0) {
+            furi_string_cat_str(
+                out,
+                "# FlipDeFlock survey log -- every session appended, newest last\n"
+                "# session = scan start, as a unix time. Counts are PER SESSION, never\n"
+                "# since the board booted, so they stay comparable within one row group.\n"
+                "# No SSID and no position, same as survey.csv.\n"
+                "session,mac,rssi,channel,ie_fp,count\n");
+        }
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        for(size_t i = 0; i < app->survey_count; i++) {
+            SurveyEntry* e = &app->survey[i];
+            furi_string_cat_printf(
+                out,
+                "%lu,%02X:%02X:%02X:%02X:%02X:%02X,%d,%u,%08lx,%u\n",
+                (unsigned long)session,
+                e->mac[0],
+                e->mac[1],
+                e->mac[2],
+                e->mac[3],
+                e->mac[4],
+                e->mac[5],
+                e->rssi,
+                e->channel,
+                (unsigned long)e->fp,
+                (unsigned)e->count);
+        }
+        furi_mutex_release(app->mutex);
+        storage_file_write(file, furi_string_get_cstr(out), furi_string_size(out));
+        furi_string_free(out);
+    }
+    storage_file_close(file);
+    storage_file_free(file);
 }
 
 void recon_app_set_esp_dropped(ReconApp* app, uint32_t dropped) {

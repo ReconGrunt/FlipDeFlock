@@ -253,7 +253,13 @@ firmware; in Marauder mode they explain what's missing.
 
   It is not a detection list and nothing in it enters the hit table. A high rank
   means the device behaves the way a fixed installation behaves, which a busy
-  access point also does. Still written to `survey.csv` as well.
+  access point also does.
+
+  Written to the card two ways. `survey.csv` is the last session only, rewritten
+  each scan, which is what you want while working one camera. `survey_log.csv`
+  appends every session beside it with the scan's start time as the first column,
+  so a drive with several stops survives as one file with the stops still
+  separable. It rotates to `survey_log.old.csv` past 128 KB.
 
 - **Learning** — `Confirm: I saw it` on a device you physically looked at saves
   its probe fingerprint to `learned.txt`, so the same unit is caught again
@@ -386,6 +392,12 @@ camera on a randomised or unlisted address never crossed the wire and your
 other way. Fingerprints are now matched against the survey feed too, which is not
 gated, so a camera you confirmed once is picked up again on the next drive. Still
 capped at `Class?`, and no new companion firmware needed.
+
+Also stops a survey being destroyed by the next scan. `survey.csv` still holds
+the last session only, which is what you want while hunting one camera, but
+`survey_log.csv` now appends every session next to it with the scan time as the
+first column, so a drive with several stops is one file and the stops stay
+separable.
 
 **v0.93** - **Air Survey**, on the device. Everything probing nearby, matched or
 not, ranked so the most camera-shaped behaviour is at the top. A modern Flock

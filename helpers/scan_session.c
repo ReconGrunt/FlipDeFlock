@@ -31,6 +31,9 @@ bool scan_session_start(void* _app) {
     esp_link_send(app->esp, "surveyclear");
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->survey_count = 0;
+    // Stamped now, not at save time: this labels the session in survey_log.csv,
+    // and the useful label is when the operator was standing there.
+    app->survey_session_epoch = furi_hal_rtc_get_timestamp();
     // Start the clock now rather than at 0. A poll fired the instant a scan opens
     // asks the companion for a table it has not filled yet, wasting the one
     // request a short session would ever make.

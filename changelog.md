@@ -25,6 +25,18 @@
   existing board keeps working. The confidence rule now lives in one place
   (`flock_ie_fp_confidence`) rather than being spelled out twice.
 
+- **A survey was destroyed by the next scan.** `survey.csv` is rewritten every
+  session, so a drive with several stops kept only the last one. A field report
+  covering two locations survived only because the operator thought to copy the
+  file to their phone in between.
+
+  `survey.csv` is unchanged, because a fresh per-session snapshot is the right
+  thing for hunting one camera and counts have to stay per session for a big
+  count to mean anything. Alongside it, **`survey_log.csv` now appends every
+  session** with the scan's start time as the first column, so stops stay
+  separable and a whole drive is still one file to send. It rotates to
+  `survey_log.old.csv` past 128 KB, which is dozens of drives.
+
 ## v0.93
 
 The app could not show you a camera that randomises its MAC, and it could not be
