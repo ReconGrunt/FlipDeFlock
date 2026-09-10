@@ -607,6 +607,33 @@ void recon_app_survey_add(
         if(rssi > e->rssi || e->rssi == 0) e->rssi = rssi;
     }
     furi_mutex_release(app->mutex);
+
+    // THE SURVEY IS THE ONLY PLACE A LEARNED FINGERPRINT CAN EVER FIRE.
+    //
+    // The companion scores on OUI and SSID alone and returns early on conf == 0
+    // (flock_companion.ino), and it computes the IE fingerprint AFTER that gate.
+    // So a camera on a randomised or unlisted address is dropped on the ESP and
+    // never reaches this side at all -- which meant a fingerprint from
+    // signatures.json or learned.txt could only ever match a device we had
+    // already recognised some other way. It could not fire on the one class of
+    // device it exists for, and no amount of teaching would change that.
+    //
+    // The survey is not gated: the companion records every wildcard-probe
+    // emitter, matched or not, and ships it on request. So the fingerprint the
+    // operator taught us gets its comparison here, against the only feed that
+    // carries the devices in question.
+    //
+    // Done AFTER the unlock: recon_app_report_flock takes the same mutex and it
+    // is not recursive.
+    FlockConfidence fp_conf = flock_ie_fp_confidence(fp, mac);
+    if(fp_conf != FlockConfidenceNone) {
+        // 'F' is the "probe-fp" source label, matching what the companion-line
+        // parser stamps on a fingerprint match. No SSID, because a survey row has
+        // none, and no class beyond the ALPR default, because a fingerprint says
+        // "this stack" and never "this kind of device".
+        recon_app_report_flock(
+            app, mac, "", rssi, channel, 'F', fp_conf, fp, FlockClassAlpr, false);
+    }
 }
 
 void recon_survey_save(ReconApp* app) {

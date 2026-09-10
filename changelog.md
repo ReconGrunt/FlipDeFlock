@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.94
+
+### Fixed
+
+- **A learned fingerprint could never actually fire.** Teaching the app a
+  fingerprint worked, and matching one worked, but the two could never meet on
+  the device the feature exists for.
+
+  The companion scores on OUI and SSID alone, returns early when nothing
+  matches, and computes the IE fingerprint *after* that point. So a camera on a
+  randomised or unlisted address was dropped on the ESP and never crossed the
+  wire, and a fingerprint from `signatures.json` or `learned.txt` only ever got
+  compared against devices we had already recognised some other way. Exactly the
+  devices it could not help with.
+
+  Fingerprints are now matched against the **survey** feed as well, which is not
+  gated: the companion records every wildcard-probe emitter, matched or not. A
+  survey row whose fingerprint you taught the app now becomes a detection at
+  `Class?`, the same cap those fingerprints have always carried. A camera you
+  confirmed once is found again on the next drive.
+
+  No wire-protocol change and no new companion firmware behaviour, so an
+  existing board keeps working. The confidence rule now lives in one place
+  (`flock_ie_fp_confidence`) rather than being spelled out twice.
+
 ## v0.93
 
 The app could not show you a camera that randomises its MAC, and it could not be

@@ -378,6 +378,15 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.94** - Fingerprints you teach the app now actually fire. Learning worked and
+matching worked, but they could never meet: the companion scores on OUI and SSID
+alone and drops everything else before it even computes the fingerprint, so a
+camera on a randomised or unlisted address never crossed the wire and your
+`learned.txt` was only ever compared against devices already recognised some
+other way. Fingerprints are now matched against the survey feed too, which is not
+gated, so a camera you confirmed once is picked up again on the next drive. Still
+capped at `Class?`, and no new companion firmware needed.
+
 **v0.93** - **Air Survey**, on the device. Everything probing nearby, matched or
 not, ranked so the most camera-shaped behaviour is at the top. A modern Flock
 camera randomises its MAC, so it matches no vendor table, scores nothing and is

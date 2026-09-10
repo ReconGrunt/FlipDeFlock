@@ -346,6 +346,45 @@ void suite_flock_db(void) {
     CHECK_INT_EQ(flock_method_of(NULL, NULL, 'D', 0x96FCD1B2u), FlockMethodUnknown);
     CHECK_INT_EQ(flock_method_of(NULL, NULL, 'D', 0x42D75CD1u), FlockMethodIeFp);
 
+    // --- flock_ie_fp_confidence: what a fingerprint match alone justifies ----
+    // Used by the survey promotion path, which is the ONLY place a learned
+    // fingerprint can fire: the companion drops anything it does not itself
+    // score before it even computes the fingerprint, so a randomised-MAC camera
+    // never reaches the parser at all.
+    static const uint8_t flock_mac[] = {0x24, 0xb2, 0xb9, 0x11, 0x22, 0x33};
+    static const uint8_t rand_mac[] = {0x06, 0xfc, 0xcb, 0x3a, 0xf8, 0x9e};
+    CHECK(flock_oui_match(flock_mac)); // fixture guard: this really is a Flock OUI
+    CHECK(!flock_oui_match(rand_mac));
+
+    // Nothing matched -> None, on any address. The common case.
+    CHECK_INT_EQ(flock_ie_fp_confidence(0, flock_mac), FlockConfidenceNone);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0xdeadbeef, flock_mac), FlockConfidenceNone);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0xdeadbeef, NULL), FlockConfidenceNone);
+
+    // A generic skeleton stays None even on a Flock OUI. This is the exact
+    // combination seen in the field (7c923b53 on 24:B2:B9): if the denylist did
+    // not outrank everything, a promoted generic hash on a shared-silicon Flock
+    // prefix would auto-Confirm a single weak frame.
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x7C923B53u, flock_mac), FlockConfidenceNone);
+
+    // The shipped single-source candidate is capped at Class?, Flock OUI or not.
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x42D75CD1u, flock_mac), FlockConfidenceProbeFp);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x42D75CD1u, rand_mac), FlockConfidenceProbeFp);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x42D75CD1u, NULL), FlockConfidenceProbeFp);
+
+    // A user / learned fingerprint is also capped at Class?, never Confirmed.
+    // This is the path that makes a taught camera detectable again: it scores
+    // above None, so it reaches the hit table instead of being discarded.
+    static const uint32_t learned[] = {0x89c3debfu};
+    FlockDbExtras ex_learned = {.ie_fps = learned, .ie_fp_count = 1};
+    flock_db_set_extras(&ex_learned);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, rand_mac), FlockConfidenceProbeFp);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, flock_mac), FlockConfidenceProbeFp);
+    CHECK(flock_ie_fp_confidence(0x89c3debfu, rand_mac) > FlockConfidenceNone);
+    flock_db_set_extras(NULL);
+    // ...and once forgotten it stops scoring, so the table is genuinely the source.
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, rand_mac), FlockConfidenceNone);
+
     // NOTE: the combined-ladder assertions that used to sit here tested
     // flock_score(), which had no production caller. They now live in
     // test_esp_parser.c against esp_parse_companion_line(), the boundary the

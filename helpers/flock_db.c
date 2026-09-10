@@ -941,6 +941,26 @@ FlockIeFp flock_ie_fp_match(uint32_t fp) {
     return FlockIeFpNone;
 }
 
+FlockConfidence flock_ie_fp_confidence(uint32_t fp, const uint8_t* mac) {
+    switch(flock_ie_fp_match(fp)) {
+    case FlockIeFpBuiltin:
+        // Verified compiled-in class fingerprint. On a Flock OUI that is two
+        // independent tells agreeing, which is the one path a fingerprint may
+        // confirm on. The table ships empty, so this is currently unreachable.
+        return (mac && flock_oui_match(mac)) ? FlockConfidenceConfirmed : FlockConfidenceProbeFp;
+    case FlockIeFpCandidate:
+    case FlockIeFpUser:
+        // Single-source built-in, signatures.json, or something the operator
+        // taught us. Capped at "Class?" even on a Flock OUI: the operator's eyes
+        // are evidence about a camera and no evidence about which row in a list
+        // emitted which packet.
+        return FlockConfidenceProbeFp;
+    case FlockIeFpNone:
+    default:
+        return FlockConfidenceNone;
+    }
+}
+
 /*
  * flock_score() USED TO LIVE HERE and was deleted in v0.48.
  *

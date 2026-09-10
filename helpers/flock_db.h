@@ -271,6 +271,25 @@ FlockIeFp flock_ie_fp_match(uint32_t fp);
  */
 bool flock_ie_fp_is_generic(uint32_t fp);
 
+/**
+ * The confidence an IE-fingerprint match ALONE justifies for `mac`.
+ *
+ * FlockConfidenceNone when nothing matches, which is the normal answer and not a
+ * failure. Otherwise it follows the same rule the companion-line parser applies:
+ * a VERIFIED built-in on a Flock OUI may reach Confirmed, and every other tier
+ * (single-source candidate, signatures.json, learned.txt) is capped at
+ * FlockConfidenceProbeFp -- "Class?" -- no matter what the MAC says.
+ *
+ * WHY IT IS A FUNCTION. The survey path needs this same judgement, and the one
+ * lesson this codebase keeps re-learning is that a rule copied into a second
+ * place drifts from the first. Callers combine it with whatever they already
+ * know by taking the higher of the two; it never lowers an existing score.
+ *
+ * @param fp   IE-skeleton fingerprint; 0 or a generic hash yields None.
+ * @param mac  6 bytes, or NULL when no address is known.
+ */
+FlockConfidence flock_ie_fp_confidence(uint32_t fp, const uint8_t* mac);
+
 /** Number of known Flock-associated OUI prefixes. */
 size_t flock_oui_count(void);
 
