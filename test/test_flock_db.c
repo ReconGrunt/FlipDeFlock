@@ -62,7 +62,8 @@ void suite_flock_db(void) {
     CHECK(!flock_oui_match(axon)); // not an ALPR
     CHECK(!soundthinking_oui_match(axon)); // not an acoustic sensor
     CHECK_INT_EQ(flock_class_from_mac(axon), FlockClassBodycam);
-    CHECK_STR_EQ(flock_class_str(FlockClassBodycam), "Body cam"); // covers Axon, Utility, Digital Ally
+    CHECK_STR_EQ(
+        flock_class_str(FlockClassBodycam), "Body cam"); // covers Axon, Utility, Digital Ally
     // The long label must not contain the word "camera" -- see flock_class_long_str.
     CHECK(strstr(flock_class_long_str(FlockClassBodycam), "camera") == NULL);
     // An Axon OUI is still an OUI match for method-labelling purposes.
@@ -384,6 +385,37 @@ void suite_flock_db(void) {
     flock_db_set_extras(NULL);
     // ...and once forgotten it stops scoring, so the table is genuinely the source.
     CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, rand_mac), FlockConfidenceNone);
+
+    // --- pinned WHOLE addresses (FlockDbExtras.macs) -------------------------
+    // For the camera whose randomised MAC turns out to be STABLE: invented, so
+    // no OUI table can match it, but unchanged between visits, so the address
+    // identifies the unit. An `ouis` entry cannot express that.
+    static const uint8_t pinned[][6] = {
+        {0x06, 0xfc, 0xcb, 0x3a, 0xf8, 0x9e},
+    };
+    const uint8_t same_oui_diff_dev[6] = {0x06, 0xfc, 0xcb, 0x11, 0x22, 0x33};
+
+    CHECK(!flock_user_mac_match(rand_mac)); // nothing registered yet
+    CHECK_INT_EQ(flock_mac_pin_confidence(rand_mac), FlockConfidenceNone);
+
+    FlockDbExtras ex_pin = {.macs = pinned, .mac_count = 1};
+    flock_db_set_extras(&ex_pin);
+    CHECK(flock_user_mac_match(rand_mac));
+    CHECK_INT_EQ(flock_mac_pin_confidence(rand_mac), FlockConfidenceProbeFp);
+    // WHOLE address, not a prefix. Another device that randomised into the same
+    // first three bytes must NOT match -- that is the entire reason `ouis` was
+    // the wrong tool for this.
+    CHECK(!flock_user_mac_match(same_oui_diff_dev));
+    CHECK_INT_EQ(flock_mac_pin_confidence(same_oui_diff_dev), FlockConfidenceNone);
+    CHECK(!flock_user_mac_match(NULL));
+    // Capped at Class?, never Confirmed, even on a Flock OUI.
+    CHECK(flock_mac_pin_confidence(rand_mac) < FlockConfidenceConfirmed);
+    // It names the method, so the detail screen does not claim a fingerprint.
+    CHECK_INT_EQ(flock_method_of(rand_mac, NULL, 'P', 0), FlockMethodPin);
+    CHECK_STR_EQ(flock_method_str(FlockMethodPin), "pinned addr");
+    flock_db_set_extras(NULL);
+    CHECK(!flock_user_mac_match(rand_mac)); // unregisters cleanly
+    CHECK_INT_EQ(flock_method_of(rand_mac, NULL, 'P', 0), FlockMethodUnknown);
 
     // NOTE: the combined-ladder assertions that used to sit here tested
     // flock_score(), which had no production caller. They now live in

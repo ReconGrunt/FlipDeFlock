@@ -2,6 +2,9 @@
   "ouis": [
     "aa:bb:cc"
   ],
+  "macs": [
+    "aa:bb:cc:dd:ee:ff"
+  ],
   "ssid_confirmed": [
     "example-confirmed-ssid"
   ],

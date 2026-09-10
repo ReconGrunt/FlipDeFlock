@@ -147,6 +147,26 @@ void suite_flock_store(void) {
     r.ftype = 0; // unknown source
     check_roundtrip(&r);
 
+    // --- a discredited fingerprint is dropped on the way in ------------------
+    // The denylist landed after cards were already in the field carrying these,
+    // and a stored hit is never rescored. Without this the hash kept displaying
+    // as the reason for a detection forever, so the guard only ever protected
+    // NEW sightings. The ROW survives -- it is the operator's record of a real
+    // sighting -- but the discredited evidence does not.
+    {
+        FlockStoreRec out;
+        // 96fcd1b2 is the stock ESP32 scan skeleton (see flock_ie_fps_generic[]).
+        CHECK(flock_store_parse_line(
+            "06:FC:CB:3A:F8:9E,,-26,6,F,3,96fcd1b2,,,,10,0,1788980501,0,0,", &out));
+        CHECK_INT_EQ((int)out.ie_fp, 0); // zeroed, so nothing claims "IE fp"
+        CHECK_INT_EQ((int)out.conf, 3); // the recorded rung is left alone
+
+        // A legitimate fingerprint on the same row shape is untouched.
+        CHECK(flock_store_parse_line(
+            "06:FC:CB:3A:F8:9E,,-26,6,F,3,89c3debf,,,,10,0,1788980501,0,0,", &out));
+        CHECK_INT_EQ((int)out.ie_fp, (int)0x89c3debfu);
+    }
+
     // --- malformed input is rejected, and *out is left untouched -------------
     {
         FlockStoreRec guard;

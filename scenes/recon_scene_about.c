@@ -60,7 +60,14 @@
     "fingerprint - it survives\n"     \
     "the MAC changing. Capped at\n"   \
     "'Class?', never Confirmed.\n"    \
-    "Also written to survey.csv.\n \n"\
+    "'Pin addr' instead saves the\n"  \
+    "whole address, for a camera\n"   \
+    "whose random MAC never\n"        \
+    "changes.\n"                      \
+    "Written to survey.csv, and\n"    \
+    "survey_log.csv keeps every\n"    \
+    "scan so a whole drive is\n"      \
+    "one file.\n \n"                  \
     "LOCATOR (Companion)\n"           \
     "Hunt a marked device by\n"       \
     "signal: a hot/cold meter\n"      \
@@ -99,7 +106,8 @@
     "SIGNATURES\n"                    \
     "Drop apps_data/flipdeflock/\n"   \
     "signatures.json to add OUIs,\n"  \
-    "SSID & IE-fp signatures.\n"      \
+    "whole MACs, SSID & IE-fp\n"      \
+    "signatures.\n"                   \
     "Offline and fail-safe. Your\n"   \
     "file is never modified.\n \n"    \
     "LEARNING\n"                      \

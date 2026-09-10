@@ -60,6 +60,7 @@ All keys are optional; unknown keys are ignored. Every value is an array of stri
 ```json
 {
   "ouis":           ["aa:bb:cc"],
+  "macs":           ["aa:bb:cc:dd:ee:ff"],
   "ssid_confirmed": ["example-confirmed-ssid"],
   "ssid_likely":    ["example-likely-ssid"],
   "ie_fps":         ["deadbeef"]
@@ -69,9 +70,30 @@ All keys are optional; unknown keys are ignored. Every value is an array of stri
 | Key | Meaning | Scores at most | Cap |
 |-----|---------|----------------|-----|
 | `ouis` | MAC OUI prefix `aa:bb:cc` (case-insensitive) | **Possible** (OUI-only is weak) | 64 |
+| `macs` | A **whole** address `aa:bb:cc:dd:ee:ff` you pinned | **"Class?"** | 32 |
 | `ssid_confirmed` | SSID substring that all but names a Flock unit | **Confirmed** | 32 |
 | `ssid_likely` | Weaker SSID substring | **Likely** | 32 |
 | `ie_fps` | 8-hex probe **IE fingerprint** (see below) | **"Class?"** | 32 |
+
+### `macs`: for a randomised address that does not rotate
+
+**Randomised is not the same as rotating**, and conflating the two cost a lot of
+time. A locally administered MAC is invented by the device, so no manufacturer
+stands behind it and no OUI table can ever match it. But it does not follow that
+it changes: the first camera anyone checked twice kept the *identical* invented
+address across visits days apart.
+
+For that unit the address itself is the identifier, and `ouis` is the wrong tool
+— three bytes of a random address is a prefix shared with whatever else happens
+to randomise into it. `macs` compares all six.
+
+Capped at `Class?` like every other user signature. You can also pin one from the
+device without editing this file: open **Air Survey**, select the row, press
+**Pin addr**. That writes to `learned.txt` (12 hex digits, no colons) and needs
+no restart of your editing workflow, only of the app.
+
+If the camera *does* rotate its address, this will not help and a fingerprint is
+what you want instead. Pin the address when you have seen the same one twice.
 
 > ### ⚠ `ssid_confirmed` needles are unanchored substrings
 >
@@ -490,6 +512,29 @@ From then on, a probe with the same IE fingerprint — even from a *different,
 randomized* MAC — is flagged **"Class?"** (a candidate device-class match). Only add
 a fingerprint you've corroborated against a real deployment; it's a device-*class*
 signature, not a unique device ID.
+
+### Some real cameras can never be caught by a fingerprint
+
+A fingerprint hashes the *shape* of a probe request, and nothing more. Two
+consequences, and the second one is a permanent limit rather than a bug:
+
+1. Any device running the same WiFi driver with the same scan configuration
+   produces a byte-identical hash. Several such patterns are refused outright —
+   see `flock_ie_fps_generic[]` in `helpers/flock_db.c` — because matching one
+   would flag a large share of the phones on any street.
+2. **Some genuine Flock hardware emits one of those commodity patterns.** This
+   is field-confirmed, not theoretical: a unit on `24:B2:B9`, which is in the
+   built-in Flock OUI table, was captured emitting `7c923b53` — the same skeleton
+   that had already smeared across unrelated vendors in a separate report.
+
+For those units the OUI is the only handle, and that is fine because they *have*
+a usable OUI. The gap that actually matters is a camera that is **both** on an
+unlisted or randomised address **and** emitting a commodity pattern. Nothing in
+this file can catch that one; pin its address with `macs` if it is stable, and
+otherwise it is Air Survey and your own eyes.
+
+Precision over recall makes this trade deliberately. A hash shared with every
+phone could not have identified the camera anyway.
 
 > The placeholder values in `signatures.example.json` (`aa:bb:cc`, `deadbeef`, …)
 > are illustrative and won't match anything real — replace them with your own

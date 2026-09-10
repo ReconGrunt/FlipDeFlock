@@ -63,16 +63,23 @@ typedef enum {
     BleCatAxon = 7, /**< Axon body-worn / in-car police kit (SIG company id 0x034D) */
 } BleCat;
 
-#define RECON_APP_FOLDER          EXT_PATH("apps_data/flipdeflock")
-#define RECON_REPORT_FOLDER       RECON_APP_FOLDER "/reports"
-#define RECON_SETTINGS_PATH       RECON_APP_FOLDER "/settings.txt"
-#define RECON_HITS_PATH           RECON_APP_FOLDER "/hits.csv"
+#define RECON_APP_FOLDER    EXT_PATH("apps_data/flipdeflock")
+#define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
+#define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
+#define RECON_HITS_PATH     RECON_APP_FOLDER "/hits.csv"
 // One appended row per scan session. Exists because a drive that finds nothing
 // is INDISTINGUISHABLE from a companion that never scanned, an app that rejected
 // everything, and a road with no cameras on it -- all four render as an empty
 // list, and every counter that could tell them apart was live-only and died with
 // the session. v0.79-v0.83 shipped without this and cost two operators a drive.
-#define RECON_DIAG_PATH           RECON_APP_FOLDER "/diag.csv"
+#define RECON_DIAG_PATH     RECON_APP_FOLDER "/diag.csv"
+// Bump this string whenever the diag COLUMNS change. It is compared against the
+// first line of an existing diag.csv, and a mismatch rotates the old file to
+// diag.old.csv rather than appending rows of a new shape under an old header --
+// which is what produced a file nobody could parse correctly. See recon_diag_save().
+#define RECON_DIAG_HEADER_LINE \
+    "# FlipDeFlock session diagnostics v2 -- counts only, no MAC/SSID/position\n"
+#define RECON_DIAG_OLD_PATH       RECON_APP_FOLDER "/diag.old.csv"
 // Every wildcard-probe transmitter seen during a session, MATCHED OR NOT.
 // Exists because "83,916 frames, zero candidates" is the one result the detector
 // cannot explain: a camera on an OUI we do not carry, or one using a randomised

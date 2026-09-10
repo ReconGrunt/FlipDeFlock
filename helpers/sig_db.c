@@ -29,6 +29,7 @@
 #define SIG_MAX_OUIS     64u /**< owned OUI table cap (overflow silently ignored) */
 #define SIG_MAX_PATTERNS 32u /**< per-list SSID-pattern cap (overflow ignored) */
 #define SIG_MAX_IE_FPS   32u /**< IE-fingerprint table cap (overflow ignored) */
+#define SIG_MAX_MACS     32u /**< pinned whole-address cap (overflow ignored) */
 #define SIG_MAX_FILE     8192u /**< largest signatures.json we will read */
 #define SIG_MAX_TOKENS   512u /**< jsmn token budget (bounds parse RAM) */
 #define SIG_MAX_NEEDLE   48u /**< longest SSID substring we keep (lowercased) */
@@ -43,6 +44,8 @@ struct SigDb {
     size_t likely_count;
     uint32_t* ie_fps; /**< owned IE-fingerprint table, NULL if none */
     size_t ie_fp_count;
+    uint8_t (*macs)[6]; /**< owned pinned-address table, NULL if none */
+    size_t mac_count;
     FlockDbExtras extras; /**< caller-owned view registered with flock_db (points at the above) */
 };
 
@@ -72,6 +75,20 @@ static bool sig_parse_oui(const char* s, size_t len, uint8_t out[3]) {
     for(int b = 0; b < 3; b++) {
         int hi = sig_hex_nibble(s[pos[b]]);
         int lo = sig_hex_nibble(s[pos[b] + 1]);
+        if(hi < 0 || lo < 0) return false;
+        out[b] = (uint8_t)((hi << 4) | lo);
+    }
+    return true;
+}
+
+/** "aa:bb:cc:dd:ee:ff" -> 6 bytes. Colons required, exact length, no shorthand. */
+static bool sig_parse_mac(const char* s, size_t len, uint8_t out[6]) {
+    if(len != 17) return false;
+    for(int b = 0; b < 6; b++) {
+        int p = b * 3;
+        if(b < 5 && s[p + 2] != ':') return false;
+        int hi = sig_hex_nibble(s[p]);
+        int lo = sig_hex_nibble(s[p + 1]);
         if(hi < 0 || lo < 0) return false;
         out[b] = (uint8_t)((hi << 4) | lo);
     }
@@ -152,6 +169,45 @@ static uint8_t (*sig_parse_ouis(
                 table[kept][0] = oui[0];
                 table[kept][1] = oui[1];
                 table[kept][2] = oui[2];
+                kept++;
+            }
+        }
+        idx += sig_token_span(tokens, count, idx);
+    }
+
+    if(kept == 0) {
+        free(table);
+        return NULL;
+    }
+    *out_count = kept;
+    return table;
+}
+
+/**
+ * Parse a string array of whole MAC addresses into a freshly malloc'd
+ * uint8_t[][6], capped at SIG_MAX_MACS. Same fail-open posture as the OUI
+ * parser: malformed entries are dropped, not fatal.
+ */
+static uint8_t (*sig_parse_macs(
+    const char* js,
+    const jsmntok_t* tokens,
+    int count,
+    int arr_idx,
+    size_t* out_count))[6] {
+    const jsmntok_t* arr = &tokens[arr_idx];
+    if(arr->type != JSMN_ARRAY || arr->size <= 0) return NULL;
+
+    uint8_t(*table)[6] = malloc(sizeof(uint8_t[6]) * SIG_MAX_MACS);
+    if(!table) return NULL;
+
+    size_t kept = 0;
+    int idx = arr_idx + 1;
+    for(int e = 0; e < arr->size && idx < count; e++) {
+        const jsmntok_t* el = &tokens[idx];
+        if(el->type == JSMN_STRING && kept < SIG_MAX_MACS) {
+            uint8_t mac[6];
+            if(sig_parse_mac(js + el->start, (size_t)(el->end - el->start), mac)) {
+                memcpy(table[kept], mac, 6);
                 kept++;
             }
         }
@@ -272,6 +328,7 @@ static void sig_db_destroy(SigDb* db) {
     if(!db) return;
     free(db->ouis);
     free(db->ie_fps);
+    free(db->macs);
     if(db->confirmed) {
         for(size_t i = 0; i < db->confirmed_count; i++)
             free(db->confirmed[i]);
@@ -298,87 +355,138 @@ static void sig_db_destroy(SigDb* db) {
  * instead of poisoning the parse.
  */
 #define SIG_LEARNED_PATH RECON_APP_FOLDER "/learned.txt"
-#define SIG_LEARNED_HEADER                                                       \
-    "# FlipDeFlock learned fingerprints v1\n"                                    \
-    "# One 8-hex probe IE fingerprint per line, written when you use\n"          \
-    "# \"Confirm: I saw it\" on a detection you looked at with your own eyes.\n" \
-    "# These score \"Class?\" only -- never Confirmed. Delete this file to\n"    \
+#define SIG_LEARNED_HEADER                                                         \
+    "# FlipDeFlock learned signatures v2\n"                                        \
+    "# One value per line, written when you confirm a device you looked at with\n" \
+    "# your own eyes:\n"                                                           \
+    "#   8 hex digits  = probe IE fingerprint (survives the MAC changing)\n"       \
+    "#   12 hex digits = a whole MAC address you pinned\n"                         \
+    "# Both score \"Class?\" only -- never Confirmed. Delete this file to\n"       \
     "# forget them all.\n"
 
-/** Parse one line as an 8-hex fingerprint. Returns 0 for blank/comment/bad. */
-static uint32_t sig_learned_parse_line(const char* line, size_t len) {
+/**
+ * Parse one line as 8 hex digits (a fingerprint) or 12 (a whole MAC).
+ *
+ * Returns the digit count so the caller can tell which it got, or 0 for a blank,
+ * a comment, or anything malformed. ONE FILE AND ONE PARSER for both, rather
+ * than a second learned_macs.txt: the width is unambiguous, older 8-digit files
+ * keep working untouched, and a duplicated reader is how two formats drift.
+ */
+static int sig_learned_parse_line(const char* line, size_t len, uint64_t* out) {
     size_t i = 0;
-    while(i < len && (line[i] == ' ' || line[i] == '\t')) i++;
+    while(i < len && (line[i] == ' ' || line[i] == '\t'))
+        i++;
     if(i >= len || line[i] == '#') return 0;
-    uint32_t v = 0;
-    size_t digits = 0;
+    uint64_t v = 0;
+    int digits = 0;
     for(; i < len; i++) {
         char c = line[i];
         if(c == '\r' || c == '\n') break;
-        int d;
-        if(c >= '0' && c <= '9')
-            d = c - '0';
-        else if(c >= 'a' && c <= 'f')
-            d = c - 'a' + 10;
-        else if(c >= 'A' && c <= 'F')
-            d = c - 'A' + 10;
-        else
-            return 0; // any junk -> skip the whole line rather than guess
-        if(++digits > 8) return 0;
-        v = (v << 4) | (uint32_t)d;
+        int d = sig_hex_nibble(c);
+        if(d < 0) return 0; // any junk -> skip the whole line rather than guess
+        if(++digits > 12) return 0;
+        v = (v << 4) | (uint64_t)d;
     }
-    // Exactly 8 hex digits, and 0 is the "no fingerprint" sentinel everywhere
-    // else in the codebase, so it can never be a learned value.
-    return (digits == 8) ? v : 0;
+    // 0 is the "no fingerprint" sentinel everywhere else in this codebase, so it
+    // can never be a learned value, and an all-zero MAC is not a real address.
+    if(v == 0) return 0;
+    if(out) *out = v;
+    return (digits == 8 || digits == 12) ? digits : 0;
 }
 
 /**
- * Read learned.txt into a caller-supplied array. Returns how many were stored.
- * Absent file, unreadable file and garbage lines all yield 0 extra entries --
- * the same fail-safe posture as the JSON path.
+ * Read learned.txt into caller-supplied arrays, either of which may be NULL.
+ * Kept counts go to the out params. Absent file, unreadable file and garbage
+ * lines all yield 0 -- the same fail-safe posture as the JSON path.
  */
-static size_t sig_learned_read(Storage* storage, uint32_t* out, size_t max) {
-    if(!storage || !out || !max) return 0;
-    File* file = storage_file_alloc(storage);
-    size_t n = 0;
-    if(storage_file_open(file, SIG_LEARNED_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
-        uint64_t size = storage_file_size(file);
-        if(size > 0 && size <= SIG_MAX_FILE) {
-            char* buf = malloc((size_t)size + 1);
-            if(buf) {
-                size_t got = storage_file_read(file, buf, (uint16_t)size);
-                if(got == (size_t)size) {
-                    buf[got] = '\0';
-                    size_t start = 0;
-                    for(size_t i = 0; i <= got && n < max; i++) {
-                        if(i == got || buf[i] == '\n') {
-                            uint32_t fp = sig_learned_parse_line(buf + start, i - start);
-                            if(fp) {
+static void sig_learned_read(
+    Storage* storage,
+    uint32_t* fps,
+    size_t fp_max,
+    uint8_t (*macs)[6],
+    size_t mac_max,
+    size_t* out_fps,
+    size_t* out_macs) {
+    size_t nf = 0, nm = 0;
+    if(storage) {
+        File* file = storage_file_alloc(storage);
+        if(storage_file_open(file, SIG_LEARNED_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
+            uint64_t size = storage_file_size(file);
+            if(size > 0 && size <= SIG_MAX_FILE) {
+                char* buf = malloc((size_t)size + 1);
+                if(buf) {
+                    size_t got = storage_file_read(file, buf, (uint16_t)size);
+                    if(got == (size_t)size) {
+                        buf[got] = '\0';
+                        size_t start = 0;
+                        for(size_t i = 0; i <= got; i++) {
+                            if(i != got && buf[i] != '\n') continue;
+                            uint64_t v = 0;
+                            int digits = sig_learned_parse_line(buf + start, i - start, &v);
+                            start = i + 1;
+                            if(digits == 8 && fps && nf < fp_max) {
+                                uint32_t fp = (uint32_t)v;
                                 bool dup = false;
-                                for(size_t k = 0; k < n; k++) {
-                                    if(out[k] == fp) {
+                                for(size_t k = 0; k < nf; k++) {
+                                    if(fps[k] == fp) {
                                         dup = true;
                                         break;
                                     }
                                 }
-                                if(!dup) out[n++] = fp;
+                                if(!dup) fps[nf++] = fp;
+                            } else if(digits == 12 && macs && nm < mac_max) {
+                                uint8_t m[6];
+                                for(int b = 0; b < 6; b++) {
+                                    m[b] = (uint8_t)((v >> ((5 - b) * 8)) & 0xFF);
+                                }
+                                bool dup = false;
+                                for(size_t k = 0; k < nm; k++) {
+                                    if(memcmp(macs[k], m, 6) == 0) {
+                                        dup = true;
+                                        break;
+                                    }
+                                }
+                                if(!dup) memcpy(macs[nm++], m, 6);
                             }
-                            start = i + 1;
                         }
                     }
+                    free(buf);
                 }
-                free(buf);
             }
         }
+        storage_file_close(file);
+        storage_file_free(file);
     }
-    storage_file_close(file);
-    storage_file_free(file);
-    return n;
+    if(out_fps) *out_fps = nf;
+    if(out_macs) *out_macs = nm;
 }
 
 size_t sig_db_learned_count(Storage* storage) {
-    uint32_t tmp[SIG_MAX_IE_FPS];
-    return sig_learned_read(storage, tmp, SIG_MAX_IE_FPS);
+    uint32_t fps[SIG_MAX_IE_FPS];
+    uint8_t macs[SIG_MAX_MACS][6];
+    size_t nf = 0, nm = 0;
+    sig_learned_read(storage, fps, SIG_MAX_IE_FPS, macs, SIG_MAX_MACS, &nf, &nm);
+    // Counted together: Reports offers one "forget" action over one file, so a
+    // split count would describe something the operator cannot act on separately.
+    return nf + nm;
+}
+
+/** Append one already-validated line to learned.txt, writing the header if new. */
+static bool sig_learned_append(Storage* storage, const char* line) {
+    storage_common_mkdir(storage, RECON_APP_FOLDER);
+    File* file = storage_file_alloc(storage);
+    bool ok = false;
+    if(storage_file_open(file, SIG_LEARNED_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
+        if(storage_file_size(file) == 0) {
+            const char* h = SIG_LEARNED_HEADER;
+            storage_file_write(file, h, strlen(h));
+        }
+        uint16_t n = (uint16_t)strlen(line);
+        ok = storage_file_write(file, line, n) == n;
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    return ok;
 }
 
 bool sig_db_learn_fp(Storage* storage, uint32_t fp) {
@@ -393,29 +501,51 @@ bool sig_db_learn_fp(Storage* storage, uint32_t fp) {
     if(flock_ie_fp_is_generic(fp)) return false;
 
     uint32_t have[SIG_MAX_IE_FPS];
-    size_t n = sig_learned_read(storage, have, SIG_MAX_IE_FPS);
+    size_t n = 0;
+    sig_learned_read(storage, have, SIG_MAX_IE_FPS, NULL, 0, &n, NULL);
     for(size_t i = 0; i < n; i++) {
         if(have[i] == fp) return false; // already known
     }
     if(n >= SIG_MAX_IE_FPS) return false; // bounded, same cap as the JSON path
 
-    storage_common_mkdir(storage, RECON_APP_FOLDER);
-    File* file = storage_file_alloc(storage);
-    bool ok = false;
-    if(storage_file_open(file, SIG_LEARNED_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
-        if(storage_file_size(file) == 0) {
-            const char* h = SIG_LEARNED_HEADER;
-            storage_file_write(file, h, strlen(h));
-        }
-        char line[12];
-        int len = snprintf(line, sizeof(line), "%08lx\n", (unsigned long)fp);
-        ok = len > 0 && storage_file_write(file, line, (uint16_t)len) == (uint16_t)len;
-    }
-    storage_file_close(file);
-    storage_file_free(file);
-    return ok;
+    char line[16];
+    if(snprintf(line, sizeof(line), "%08lx\n", (unsigned long)fp) <= 0) return false;
+    return sig_learned_append(storage, line);
 }
 
+bool sig_db_learn_mac(Storage* storage, const uint8_t* mac) {
+    if(!storage || !mac) return false;
+    // All-zero and broadcast are not devices worth pinning, and both turn up in
+    // malformed frames.
+    bool all_zero = true, all_ff = true;
+    for(int i = 0; i < 6; i++) {
+        if(mac[i] != 0x00) all_zero = false;
+        if(mac[i] != 0xFF) all_ff = false;
+    }
+    if(all_zero || all_ff) return false;
+
+    uint8_t have[SIG_MAX_MACS][6];
+    size_t n = 0;
+    sig_learned_read(storage, NULL, 0, have, SIG_MAX_MACS, NULL, &n);
+    for(size_t i = 0; i < n; i++) {
+        if(memcmp(have[i], mac, 6) == 0) return false; // already pinned
+    }
+    if(n >= SIG_MAX_MACS) return false;
+
+    char line[16];
+    if(snprintf(
+           line,
+           sizeof(line),
+           "%02x%02x%02x%02x%02x%02x\n",
+           mac[0],
+           mac[1],
+           mac[2],
+           mac[3],
+           mac[4],
+           mac[5]) <= 0)
+        return false;
+    return sig_learned_append(storage, line);
+}
 bool sig_db_forget_learned(Storage* storage) {
     if(!storage) return false;
     return storage_simply_remove(storage, SIG_LEARNED_PATH);
@@ -457,29 +587,60 @@ static char* sig_read_file(Storage* storage, size_t* out_len) {
  */
 static void sig_merge_learned(SigDb* db, Storage* storage) {
     uint32_t learned[SIG_MAX_IE_FPS];
-    size_t ln = sig_learned_read(storage, learned, SIG_MAX_IE_FPS);
-    if(!ln) return;
+    uint8_t learned_macs[SIG_MAX_MACS][6];
+    size_t ln = 0, lm = 0;
+    sig_learned_read(storage, learned, SIG_MAX_IE_FPS, learned_macs, SIG_MAX_MACS, &ln, &lm);
 
-    size_t have = db->ie_fps ? db->ie_fp_count : 0;
-    if(have >= SIG_MAX_IE_FPS) return;
-
-    uint32_t* merged = malloc(sizeof(uint32_t) * SIG_MAX_IE_FPS);
-    if(!merged) return; // fail-safe: keep whatever the JSON gave us
-    size_t n = 0;
-    for(size_t i = 0; i < have && n < SIG_MAX_IE_FPS; i++) merged[n++] = db->ie_fps[i];
-    for(size_t i = 0; i < ln && n < SIG_MAX_IE_FPS; i++) {
-        bool dup = false;
-        for(size_t k = 0; k < n; k++) {
-            if(merged[k] == learned[i]) {
-                dup = true;
-                break;
+    if(ln) {
+        size_t have = db->ie_fps ? db->ie_fp_count : 0;
+        if(have < SIG_MAX_IE_FPS) {
+            uint32_t* merged = malloc(sizeof(uint32_t) * SIG_MAX_IE_FPS);
+            if(merged) { // fail-safe: on alloc failure keep whatever the JSON gave us
+                size_t n = 0;
+                for(size_t i = 0; i < have && n < SIG_MAX_IE_FPS; i++)
+                    merged[n++] = db->ie_fps[i];
+                for(size_t i = 0; i < ln && n < SIG_MAX_IE_FPS; i++) {
+                    bool dup = false;
+                    for(size_t k = 0; k < n; k++) {
+                        if(merged[k] == learned[i]) {
+                            dup = true;
+                            break;
+                        }
+                    }
+                    if(!dup) merged[n++] = learned[i];
+                }
+                free(db->ie_fps);
+                db->ie_fps = merged;
+                db->ie_fp_count = n;
             }
         }
-        if(!dup) merged[n++] = learned[i];
     }
-    free(db->ie_fps);
-    db->ie_fps = merged;
-    db->ie_fp_count = n;
+
+    if(lm) {
+        size_t have = db->macs ? db->mac_count : 0;
+        if(have < SIG_MAX_MACS) {
+            uint8_t(*merged)[6] = malloc(sizeof(uint8_t[6]) * SIG_MAX_MACS);
+            if(merged) {
+                size_t n = 0;
+                for(size_t i = 0; i < have && n < SIG_MAX_MACS; i++) {
+                    memcpy(merged[n++], db->macs[i], 6);
+                }
+                for(size_t i = 0; i < lm && n < SIG_MAX_MACS; i++) {
+                    bool dup = false;
+                    for(size_t k = 0; k < n; k++) {
+                        if(memcmp(merged[k], learned_macs[i], 6) == 0) {
+                            dup = true;
+                            break;
+                        }
+                    }
+                    if(!dup) memcpy(merged[n++], learned_macs[i], 6);
+                }
+                free(db->macs);
+                db->macs = merged;
+                db->mac_count = n;
+            }
+        }
+    }
 }
 
 SigDb* sig_db_load(Storage* storage) {
@@ -496,13 +657,15 @@ SigDb* sig_db_load(Storage* storage) {
         SigDb* only_learned = calloc(1, sizeof(SigDb));
         if(!only_learned) return NULL;
         sig_merge_learned(only_learned, storage);
-        if(!only_learned->ie_fps) {
+        if(!only_learned->ie_fps && !only_learned->macs) {
             free(only_learned);
             return NULL; // nothing at all -> built-ins only, exactly as before
         }
         only_learned->extras = (FlockDbExtras){
             .ie_fps = only_learned->ie_fps,
-            .ie_fp_count = only_learned->ie_fp_count,
+            .ie_fp_count = only_learned->ie_fps ? only_learned->ie_fp_count : 0,
+            .macs = (const uint8_t(*)[6])only_learned->macs,
+            .mac_count = only_learned->macs ? only_learned->mac_count : 0,
         };
         flock_db_set_extras(&only_learned->extras);
         return only_learned;
@@ -556,6 +719,8 @@ SigDb* sig_db_load(Storage* storage) {
         } else if(sig_tok_eq(js, key, "ie_fps")) {
             if(!db->ie_fps)
                 db->ie_fps = sig_parse_ie_fps(js, tokens, count, val_idx, &db->ie_fp_count);
+        } else if(sig_tok_eq(js, key, "macs")) {
+            if(!db->macs) db->macs = sig_parse_macs(js, tokens, count, val_idx, &db->mac_count);
         }
 
         // Advance past key + its (possibly nested/unknown) value.
@@ -568,7 +733,7 @@ SigDb* sig_db_load(Storage* storage) {
     sig_merge_learned(db, storage);
 
     // Nothing usable parsed -> behave exactly like an absent file.
-    if(!db->ouis && !db->confirmed && !db->likely && !db->ie_fps) {
+    if(!db->ouis && !db->confirmed && !db->likely && !db->ie_fps && !db->macs) {
         sig_db_destroy(db);
         return NULL;
     }
@@ -584,6 +749,8 @@ SigDb* sig_db_load(Storage* storage) {
         .ssid_likely_count = db->likely ? db->likely_count : 0,
         .ie_fps = db->ie_fps,
         .ie_fp_count = db->ie_fps ? db->ie_fp_count : 0,
+        .macs = (const uint8_t(*)[6])db->macs,
+        .mac_count = db->macs ? db->mac_count : 0,
     };
     flock_db_set_extras(&db->extras);
 

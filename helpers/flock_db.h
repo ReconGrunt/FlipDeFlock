@@ -290,6 +290,22 @@ bool flock_ie_fp_is_generic(uint32_t fp);
  */
 FlockConfidence flock_ie_fp_confidence(uint32_t fp, const uint8_t* mac);
 
+/** True when the operator pinned this exact 6-byte address (see FlockDbExtras.macs). */
+bool flock_user_mac_match(const uint8_t* mac);
+
+/**
+ * The confidence a pinned-address match alone justifies.
+ *
+ * FlockConfidenceProbeFp -- "Class?" -- when pinned, None otherwise. Capped at
+ * the same rung as a learned fingerprint and for the same reason: the operator's
+ * eyes are good evidence that a camera is there, and no evidence at all about
+ * which row in a list was emitting. A wrong pin costs a weak lead.
+ *
+ * Callers take the higher of this and whatever they already had; it never lowers
+ * an existing score.
+ */
+FlockConfidence flock_mac_pin_confidence(const uint8_t* mac);
+
 /** Number of known Flock-associated OUI prefixes. */
 size_t flock_oui_count(void);
 
@@ -322,6 +338,19 @@ typedef struct {
     size_t ssid_likely_count;
     const uint32_t* ie_fps; /**< extra IE-fingerprint hashes -> FlockIeFpUser */
     size_t ie_fp_count;
+    /**
+     * WHOLE addresses the operator pinned, not OUI prefixes.
+     *
+     * A randomised MAC is not necessarily a ROTATING one. The first camera
+     * anyone checked twice kept the identical locally administered address
+     * across visits days apart: invented, so no vendor prefix exists for any
+     * OUI table to match, but stable, so the address itself identifies it.
+     * Nothing in the app could express that -- `ouis` compares three bytes, and
+     * three bytes of a random address is a prefix shared with whatever else
+     * happens to randomise into it.
+     */
+    const uint8_t (*macs)[6];
+    size_t mac_count;
 } FlockDbExtras;
 
 /**
@@ -362,6 +391,7 @@ typedef enum {
     FlockMethodUnknown = 0, /**< nothing WE can re-derive matched (see below). */
     FlockMethodSsid, /**< SSID matched a known Flock naming pattern. */
     FlockMethodIeFp, /**< probe IE-skeleton fingerprint matched. */
+    FlockMethodPin, /**< the operator pinned this exact address (FlockDbExtras.macs). */
     FlockMethodOui, /**< MAC is in a Flock/SoundThinking-associated OUI table. */
     FlockMethodBle, /**< BLE sighting: the companion classified it by mfg id / GATT. */
 } FlockMethod;

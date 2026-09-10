@@ -1,5 +1,57 @@
 # Changelog
 
+## v0.95
+
+Closing out everything the second field report exposed, rather than shipping a
+fix and finding the next thing afterwards.
+
+### Added
+
+- **Pin a whole address.** `signatures.json` gains a `macs` key taking full
+  `aa:bb:cc:dd:ee:ff` addresses, and **Air Survey → Pin addr** does the same from
+  the device with no file editing.
+
+  **Randomised is not the same as rotating**, and treating them as one thing cost
+  a lot of time. A locally administered MAC is invented, so no vendor stands
+  behind it and no OUI table can ever match it. It does not follow that it
+  changes: the first camera anyone checked twice kept the identical invented
+  address across visits days apart. For that unit the address IS the identifier,
+  and `ouis` could not express it, because three bytes of a random address is a
+  prefix shared with whatever else randomises into it.
+
+  Capped at `Class?` like every other user signature, and the detail screen now
+  reports `Method: pinned addr` so it never claims a fingerprint it did not have.
+
+### Fixed
+
+- **A discredited fingerprint kept being shown as evidence.** The generic-pattern
+  denylist only ever protected NEW sightings; a hit already stored in `hits.csv`
+  from before it kept displaying its commodity hash as the reason for the
+  detection forever. Such a fingerprint is now dropped when the row loads. The
+  row survives, because it is the operator's record of a real sighting, but the
+  method re-derives honestly instead of claiming `IE fp`.
+
+- **`diag.csv` could not be parsed correctly.** The header is only written when
+  the file is empty, so a file created under an older schema kept that header
+  while the rows below it changed shape. This project's own card ended up with a
+  v1 header over a mix of 19- and 20-column rows, and anyone reading it by the
+  header mis-assigns every column after the version. That is not hypothetical: it
+  happened while reading a field report. A stale header now rotates the file to
+  `diag.old.csv` and starts a fresh one, so every file is internally consistent.
+
+### Changed
+
+- `ufbt lint` is clean across the tree. Sixteen files carried pre-existing
+  formatting violations, which meant the check could not be used as a gate.
+
+- Documented that **some real Flock hardware can never be caught by a
+  fingerprint**. A unit on `24:B2:B9`, in the built-in Flock OUI table, was
+  captured emitting `7c923b53`, the same commodity skeleton that smeared across
+  unrelated vendors in an earlier report. Those units are caught by their OUI;
+  the combination that defeats everything is an unlisted address AND a commodity
+  pattern, and `docs/signatures.md` now says so plainly rather than implying
+  fingerprints cover the gap.
+
 ## v0.94
 
 ### Fixed

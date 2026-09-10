@@ -386,7 +386,8 @@ static const uint8_t avigilon_ouis[][3] = {
  * independently of the MAC and which therefore survives address randomisation.
  */
 static const uint8_t utility_ouis[][3] = {
-    {0x00, 0x09, 0xbc}, {0x00, 0x16, 0xed},
+    {0x00, 0x09, 0xbc},
+    {0x00, 0x16, 0xed},
 };
 
 #define UTILITY_OUI_COUNT (sizeof(utility_ouis) / sizeof(utility_ouis[0]))
@@ -413,7 +414,6 @@ static const uint8_t digitalally_ouis[][3] = {
 };
 
 #define DIGITALALLY_OUI_COUNT (sizeof(digitalally_ouis) / sizeof(digitalally_ouis[0]))
-
 
 /**
  * Drone manufacturers (24), as a FALLBACK to Remote ID -- never the main event.
@@ -458,15 +458,27 @@ static const uint8_t digitalally_ouis[][3] = {
  */
 static const uint8_t drone_ouis[][3] = {
     // SZ DJI Technology
-    {0x60, 0x60, 0x1f}, {0x34, 0xd2, 0x62}, {0x48, 0x1c, 0xb9}, {0xe4, 0x7a, 0x2c},
-    {0x58, 0xb8, 0x58}, {0x04, 0xa8, 0x5a}, {0x8c, 0x58, 0x23}, {0x0c, 0x9a, 0xe6},
-    {0x88, 0x29, 0x85}, {0x4c, 0x43, 0xf6},
+    {0x60, 0x60, 0x1f},
+    {0x34, 0xd2, 0x62},
+    {0x48, 0x1c, 0xb9},
+    {0xe4, 0x7a, 0x2c},
+    {0x58, 0xb8, 0x58},
+    {0x04, 0xa8, 0x5a},
+    {0x8c, 0x58, 0x23},
+    {0x0c, 0x9a, 0xe6},
+    {0x88, 0x29, 0x85},
+    {0x4c, 0x43, 0xf6},
     // DJI Baiwang Technology
-    {0x9c, 0x5a, 0x8a}, {0xec, 0x72, 0xf7}, {0x34, 0x91, 0xf0},
+    {0x9c, 0x5a, 0x8a},
+    {0xec, 0x72, 0xf7},
+    {0x34, 0x91, 0xf0},
     // Skydio -- the ONLY one of the five US police-drone vendors with a block
     {0x38, 0x1d, 0x14},
     // Parrot SA
-    {0x00, 0x12, 0x1c}, {0x00, 0x26, 0x7e}, {0x90, 0x03, 0xb7}, {0x90, 0x3a, 0xe6},
+    {0x00, 0x12, 0x1c},
+    {0x00, 0x26, 0x7e},
+    {0x90, 0x03, 0xb7},
+    {0x90, 0x3a, 0xe6},
     {0xa0, 0x14, 0x3d},
     // US defence / public-safety airframes
     {0xb0, 0x30, 0xc8}, // Teal Drones
@@ -477,7 +489,6 @@ static const uint8_t drone_ouis[][3] = {
 };
 
 #define DRONE_OUI_COUNT (sizeof(drone_ouis) / sizeof(drone_ouis[0]))
-
 
 /**
  * The one place a MAC becomes a (vendor, class) pair.
@@ -941,6 +952,18 @@ FlockIeFp flock_ie_fp_match(uint32_t fp) {
     return FlockIeFpNone;
 }
 
+bool flock_user_mac_match(const uint8_t* mac) {
+    if(!mac || !g_extras || !g_extras->macs) return false;
+    for(size_t i = 0; i < g_extras->mac_count; i++) {
+        if(memcmp(g_extras->macs[i], mac, 6) == 0) return true;
+    }
+    return false;
+}
+
+FlockConfidence flock_mac_pin_confidence(const uint8_t* mac) {
+    return flock_user_mac_match(mac) ? FlockConfidenceProbeFp : FlockConfidenceNone;
+}
+
 FlockConfidence flock_ie_fp_confidence(uint32_t fp, const uint8_t* mac) {
     switch(flock_ie_fp_match(fp)) {
     case FlockIeFpBuiltin:
@@ -1002,6 +1025,10 @@ FlockMethod flock_method_of(const uint8_t* mac, const char* ssid, char ftype, ui
     // so the label never claims more than the confidence rung does.
     if(flock_ssid_confidence(ssid) != FlockConfidenceNone) return FlockMethodSsid;
     if(flock_ie_fp_match(ie_fp) != FlockIeFpNone) return FlockMethodIeFp;
+    // The operator pinned this exact address after looking at it. More specific
+    // than any prefix, and the only thing that can name a camera whose invented
+    // address is stable but belongs to no vendor.
+    if(flock_user_mac_match(mac)) return FlockMethodPin;
     // ANY vendor table, not just Flock's: a SoundThinking, Axon, Ubicquia,
     // Motorola, Verkada, Genetec or Avigilon prefix is an OUI match too, just for
     // another vendor or device class. Reporting one as "unclassified" would hide
@@ -1028,6 +1055,8 @@ const char* flock_method_str(FlockMethod method) {
         return "SSID";
     case FlockMethodIeFp:
         return "IE fp";
+    case FlockMethodPin:
+        return "pinned addr";
     case FlockMethodOui:
         return "OUI";
     case FlockMethodBle:

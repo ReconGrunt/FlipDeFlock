@@ -107,6 +107,23 @@ void sig_db_free(SigDb* db);
  */
 bool sig_db_learn_fp(Storage* storage, uint32_t fp);
 
+/**
+ * Pin a WHOLE address the operator physically looked at, to the same file.
+ *
+ * For the camera whose randomised MAC turns out to be STABLE. Such an address is
+ * invented, so no OUI table can ever match it, but it does not change between
+ * visits, so the address itself identifies the unit. An `ouis` entry cannot
+ * express that: three bytes of a random address is a prefix shared with whatever
+ * else randomises into it.
+ *
+ * Stored in learned.txt as 12 hex digits beside the 8-digit fingerprints, read
+ * by the same parser. Rejects all-zero and broadcast. Capped at "Class?" like
+ * every other user signature.
+ *
+ * @return true if a new address was written.
+ */
+bool sig_db_learn_mac(Storage* storage, const uint8_t* mac);
+
 /** Delete learned.txt. Returns true if it existed and is gone. */
 bool sig_db_forget_learned(Storage* storage);
 

@@ -625,7 +625,12 @@ void recon_app_survey_add(
     //
     // Done AFTER the unlock: recon_app_report_flock takes the same mutex and it
     // is not recursive.
+    // A PINNED ADDRESS lands here for the same reason a fingerprint does: the
+    // camera it exists for has no vendor prefix, so the companion never forwards
+    // it and the survey is the only feed carrying it.
     FlockConfidence fp_conf = flock_ie_fp_confidence(fp, mac);
+    FlockConfidence pin_conf = flock_mac_pin_confidence(mac);
+    if(pin_conf > fp_conf) fp_conf = pin_conf;
     if(fp_conf != FlockConfidenceNone) {
         // 'F' is the "probe-fp" source label, matching what the companion-line
         // parser stamps on a fingerprint match. No SSID, because a survey row has
@@ -924,8 +929,7 @@ void recon_app_ble_add(
         // does exactly this), so whichever advert happens to land first must not
         // get to name the device permanently.
         if(name && name[0]) {
-            bool upgrade =
-                e->name[0] != '\0' && flock_ble_name_should_replace(e->name, name);
+            bool upgrade = e->name[0] != '\0' && flock_ble_name_should_replace(e->name, name);
             if(e->name[0] == '\0' || upgrade) {
                 strncpy(e->name, name, RECON_SSID_LEN - 1);
                 e->name[RECON_SSID_LEN - 1] = '\0';
@@ -1309,8 +1313,7 @@ void recon_hits_save(ReconApp* app) {
 void recon_survey_tick(ReconApp* app) {
     if(!app->esp) return; // no link, nothing to ask
     uint32_t now = furi_get_tick();
-    if(app->survey_last_poll != 0 &&
-       (now - app->survey_last_poll) < RECON_SURVEY_POLL_MS) {
+    if(app->survey_last_poll != 0 && (now - app->survey_last_poll) < RECON_SURVEY_POLL_MS) {
         return;
     }
     app->survey_last_poll = now;
@@ -1361,6 +1364,29 @@ void recon_diag_begin(ReconApp* app) {
     furi_mutex_release(app->mutex);
 }
 
+/**
+ * True when diag.csv's first line is the CURRENT schema header, or the file does
+ * not exist yet. False means it was written under an older column set and must
+ * be rotated aside before anything new is appended.
+ */
+static bool recon_diag_header_current(Storage* storage) {
+    const char* want = RECON_DIAG_HEADER_LINE;
+    size_t want_len = strlen(want);
+    File* file = storage_file_alloc(storage);
+    bool current = true; // absent file -> nothing to rotate
+    if(storage_file_open(file, RECON_DIAG_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
+        if(storage_file_size(file) > 0) {
+            char buf[96];
+            size_t n = want_len < sizeof(buf) ? want_len : sizeof(buf);
+            size_t got = storage_file_read(file, buf, (uint16_t)n);
+            current = (got == n) && (memcmp(buf, want, n) == 0);
+        }
+    }
+    storage_file_close(file);
+    storage_file_free(file);
+    return current;
+}
+
 void recon_diag_save(ReconApp* app) {
     // Never write a row for a session that never started (the Main Menu calls
     // scan_session_stop() on entry, including the one at launch).
@@ -1398,12 +1424,29 @@ void recon_diag_save(ReconApp* app) {
     Storage* storage = furi_record_open(RECORD_STORAGE);
     storage_common_mkdir(storage, RECON_APP_FOLDER);
     File* file = storage_file_alloc(storage);
+    // ROTATE A STALE SCHEMA ASIDE FIRST.
+    //
+    // The header is only written when the file is empty, so a diag.csv created
+    // under an older schema kept that header forever while the ROWS below it
+    // changed shape. This project's own card ended up with a v1 header over a
+    // mix of 19- and 20-column rows, and anyone parsing it by the header -- which
+    // is the only thing a reader has -- mis-assigns every column after the
+    // version. That is not hypothetical: it happened while reading a field
+    // report, and the wrong reading survived several rounds of analysis.
+    //
+    // If the existing header is not the current one, move the whole file to
+    // diag.old.csv and start fresh. Nothing is destroyed, one generation back is
+    // kept, and every file that exists afterwards is internally consistent.
+    if(!recon_diag_header_current(storage)) {
+        storage_simply_remove(storage, RECON_DIAG_OLD_PATH);
+        storage_common_rename(storage, RECON_DIAG_PATH, RECON_DIAG_OLD_PATH);
+    }
     if(storage_file_open(file, RECON_DIAG_PATH, FSAM_WRITE, FSOM_OPEN_APPEND)) {
         FuriString* s = furi_string_alloc();
         if(storage_file_size(file) == 0) {
             furi_string_cat_str(
                 s,
-                "# FlipDeFlock session diagnostics v2 -- counts only, no MAC/SSID/position\n"
+                RECON_DIAG_HEADER_LINE
                 "start,end,dur_s,ver,esp_ver,backend,band_req,band_act,band_ch,proto,"
                 "esp_lines,esp_dropped,esp_reboots,esp_frames,esp_hits,"
                 "reports,accepted,rej_conf,rej_full,table\n");

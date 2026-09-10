@@ -27,6 +27,7 @@
 
 typedef enum {
     SurveyDetailLearn = 0,
+    SurveyDetailPin,
 } SurveyDetailEvent;
 
 // What happened on the last button press, so the redraw can report it. A screen
@@ -37,14 +38,19 @@ typedef enum {
     SurveyLearnGeneric, // refused: commodity skeleton, would flag phones
     SurveyLearnNoFp, // nothing to learn: no fingerprint was captured
     SurveyLearnFailed, // already known, list full, or the card refused it
+    SurveyPinOk,
+    SurveyPinFailed, // already pinned, list full, or the card refused it
 } SurveyLearnState;
 
 static SurveyLearnState g_state;
 
 static void recon_scene_survey_detail_button_cb(GuiButtonType type, InputType input, void* ctx) {
     ReconApp* app = ctx;
-    if(type == GuiButtonTypeCenter && input == InputTypeShort) {
+    if(input != InputTypeShort) return;
+    if(type == GuiButtonTypeCenter) {
         view_dispatcher_send_custom_event(app->view_dispatcher, SurveyDetailLearn);
+    } else if(type == GuiButtonTypeLeft) {
+        view_dispatcher_send_custom_event(app->view_dispatcher, SurveyDetailPin);
     }
 }
 
@@ -112,6 +118,12 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
     case SurveyLearnFailed:
         furi_string_cat_str(s, "\nNot learned: already\nknown, or list full.");
         break;
+    case SurveyPinOk:
+        furi_string_cat_str(s, "\nAddress pinned. Restart\nthe app to use it.");
+        break;
+    case SurveyPinFailed:
+        furi_string_cat_str(s, "\nNot pinned: already\npinned, or list full.");
+        break;
     case SurveyLearnIdle:
     default:
         break;
@@ -126,6 +138,18 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
         widget_add_button_element(
             widget, GuiButtonTypeCenter, "I saw it", recon_scene_survey_detail_button_cb, app);
     }
+    // PIN THE ADDRESS, offered whatever the fingerprint says.
+    //
+    // A randomised MAC is not necessarily a rotating one: the first camera
+    // anyone checked twice kept the identical invented address across visits
+    // days apart. Nothing else in the app can name that unit, because there is
+    // no vendor behind the address for an OUI table to match and three bytes of
+    // it is a prefix shared with whatever else randomises into it.
+    //
+    // Offered even when the fingerprint is a commodity one, since the address is
+    // then the ONLY handle left.
+    widget_add_button_element(
+        widget, GuiButtonTypeLeft, "Pin addr", recon_scene_survey_detail_button_cb, app);
 }
 
 void recon_scene_survey_detail_on_enter(void* context) {
@@ -138,9 +162,19 @@ void recon_scene_survey_detail_on_enter(void* context) {
 bool recon_scene_survey_detail_on_event(void* context, SceneManagerEvent event) {
     ReconApp* app = context;
     if(event.type != SceneManagerEventTypeCustom) return false;
-    if(event.event != SurveyDetailLearn) return false;
+    if(event.event != SurveyDetailLearn && event.event != SurveyDetailPin) return false;
 
     SurveyEntry e;
+    if(event.event == SurveyDetailPin) {
+        if(!survey_detail_row(app, &e)) {
+            g_state = SurveyPinFailed;
+        } else {
+            g_state = sig_db_learn_mac(app->storage, e.mac) ? SurveyPinOk : SurveyPinFailed;
+        }
+        recon_scene_survey_detail_draw(app);
+        return true;
+    }
+
     if(!survey_detail_row(app, &e)) {
         g_state = SurveyLearnFailed;
     } else if(!e.fp) {

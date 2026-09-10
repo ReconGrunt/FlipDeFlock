@@ -384,6 +384,20 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.95** - **Pin a whole address.** Randomised is not the same as rotating: the
+first camera anyone checked twice kept the identical invented address across
+visits days apart. No vendor stands behind it so no OUI table can match it, but
+it does not change, so the address itself identifies the unit. `signatures.json`
+takes a `macs` key now, and **Air Survey → Pin addr** does it from the device.
+Capped at `Class?` like every other user signature.
+
+Also fixes two things that made evidence read wrong. A fingerprint since
+discredited as a commodity scan pattern is dropped when an old hit loads, instead
+of being shown as the reason for that detection forever. And `diag.csv` rotates
+when its schema changes, because the header was only ever written to an empty
+file, so old files ended up with a stale header over rows of a different shape
+that nobody could parse correctly.
+
 **v0.94** - Fingerprints you teach the app now actually fire. Learning worked and
 matching worked, but they could never meet: the companion scores on OUI and SSID
 alone and drops everything else before it even computes the fingerprint, so a

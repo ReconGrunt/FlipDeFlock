@@ -3,6 +3,7 @@
 #include "flock_store.h"
 #include "report_escape.h" // csv_field_escape (the write direction)
 #include "report_fmt.h" // fmt_mac / fmt_coord
+#include "flock_db.h" // flock_ie_fp_is_generic
 
 #include <math.h>
 #include <stdio.h>
@@ -239,8 +240,8 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     if(*p != '\0') return false; // more columns than the schema allows
     // Exactly a v2 line, or exactly a v1 line (v2 minus the trailing class).
     // Any other count is a malformed record, not a version we tolerate.
-    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V3 &&
-       ncols != FLOCK_STORE_COLS_V2 && ncols != FLOCK_STORE_COLS_V1)
+    if(ncols != FLOCK_STORE_COLS && ncols != FLOCK_STORE_COLS_V3 && ncols != FLOCK_STORE_COLS_V2 &&
+       ncols != FLOCK_STORE_COLS_V1)
         return false;
 
     if(!fs_parse_mac(f[0], r.mac)) return false;
@@ -274,6 +275,14 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
         unsigned long h = strtoul(f[6], &end, 16);
         if(!end || *end != '\0') return false;
         r.ie_fp = (uint32_t)h;
+        // A fingerprint since discredited as a commodity scan pattern is dropped
+        // on the way in. The ROW stays -- it is the operator's record of a real
+        // sighting and deleting their history is not ours to do -- but the hash
+        // stops being shown as the reason for it, and flock_method_of() then
+        // re-derives an honest method instead of claiming "IE fp". Without this
+        // the denylist only ever protected NEW sightings, and any card carrying
+        // one from before kept displaying it as evidence forever.
+        if(flock_ie_fp_is_generic(r.ie_fp)) r.ie_fp = 0;
     }
 
     if(!fs_parse_coord(f[7], &r.lat)) return false;
@@ -294,8 +303,7 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     // v2 only. A v1 line stops at 13 columns and keeps the memset defaults of 0
     // -- FlockClassAlpr and hidden-never-observed, which is what every v1
     // detection actually was.
-    if(ncols == FLOCK_STORE_COLS || ncols == FLOCK_STORE_COLS_V3 ||
-       ncols == FLOCK_STORE_COLS_V2) {
+    if(ncols == FLOCK_STORE_COLS || ncols == FLOCK_STORE_COLS_V3 || ncols == FLOCK_STORE_COLS_V2) {
         if(!fs_parse_u32(f[13], &u) || u > FLOCK_STORE_MAX_DEV_CLASS) return false;
         r.dev_class = (uint8_t)u;
         if(!fs_parse_u32(f[14], &u) || u > 1) return false;
