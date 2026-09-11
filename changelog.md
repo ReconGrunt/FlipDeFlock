@@ -1,5 +1,81 @@
 # Changelog
 
+## v0.97
+
+### Fixed
+
+- **A vendor prefix that sells two different things now tells them apart.**
+  Motorola Solutions sells ALPR poles and hand-portable radios on one OUI, so
+  the vendor alone cannot say which is in front of you. Until now a beacon and
+  continuous wildcard probing both came out `Possible`, indistinguishable, and
+  that is a real loss of information rather than appropriate caution.
+
+  They are not the same observation. A battery handheld cannot emit wildcard
+  probes every ~125 ms for hours, and a radio that does use Wi-Fi is looking for
+  a *known* network, which is a directed probe rather than a wildcard one. A
+  mains or PoE powered pole phoning home does exactly this, forever.
+
+  A vendor-exclusive OUI sending sustained wildcard probes now scores `Likely`.
+  **The class stays `Gear`**: this separates fixed infrastructure from a
+  handheld, not an ALPR from other fixed gear, and saying otherwise would assert
+  what was only inferred. Transmit side only — on a receive-side match the
+  cadence belongs to whoever sent the frame.
+
+- **The probe rate was measured, sent, parsed, and then thrown away.** The
+  companion has counted wildcard probes per ~8 s window since v0.88 and put it on
+  the wire as `pr=`. The app parsed it into a struct that nothing ever read: not
+  stored, not shown, not logged, not scored. It is the single measurement that
+  answers the question above, and no operator has ever been able to see it.
+
+  It now reaches the detection table and shows as **`Probes/8s`** on the detail
+  screen, kept from the same sighting as the channel because a pair taken from
+  two different moments describes neither. Only rendered when there is one: a BLE
+  advert has no probe rate, and `Probes/8s: 0` would read as a measurement rather
+  than the absence of one.
+
+- **A detection could be named after somebody else's network.** On a
+  receive-side match we report `addr1`, the silent device the frame was addressed
+  *to* — that is deliberate, and it is how a dormant camera gets caught. But the
+  SSID comes from the frame body, put there by whoever **sent** it. The two were
+  being paired, so one device was labelled with another device's network name.
+  Found on the bench, where a Motorola-OUI station receiving probe responses was
+  stored as `00:04:7D:00:00:0C,WiFi` — the address is the Motorola device, the
+  name is a neighbour's access point.
+
+  The label was the visible half; the scoring was the dangerous one. An SSID
+  matching a Flock naming pattern sets the rung to CONFIRMED outright, so an
+  access point named like a Flock unit, answering a probe from any device with a
+  tracked OUI, would have confirmed *that device* on a name belonging to
+  something else. On a receive-side match the SSID is now dropped from both the
+  wire and the score. Nothing is lost: there we genuinely know the address and
+  not the name.
+
+### Signatures
+
+- **`ba9fafa0` is now corroborated by something other than our own reasoning.**
+  The reporter published coordinates with his capture, so rather than waiting for
+  another drive we cross-referenced them against the public OpenStreetMap
+  surveillance layer — the data the community camera maps are built from.
+
+  A mapped Flock Safety ALPR sits **44 m** from the `ba9fafa0` device heard at
+  -31 dBm with 62 probes. Of all eighteen geotagged detections in that capture,
+  that is the **only one within 100 m** of a mapped camera; a second is at 218 m.
+  The nearest retracted-`89c3debf` device is 239 m out and was heard at -96 dBm,
+  so it was nowhere near the pole. His area is genuinely mapped (11 Flock ALPR
+  within 8 km), which is what makes the comparison mean anything.
+
+  **Still a candidate.** Two of the four devices are 1.7 km and 2.7 km from
+  anything mapped, and patchy coverage explains that without corroborating it. A
+  map record is also not a second radio capture, which is what the promotion bar
+  asks for.
+
+### Notes
+
+- The bench emitter gains a Motorola Solutions identity that probes rather than
+  beacons, so the new rung is exercised rather than assumed. It sits beside the
+  existing beaconing identity on the same OUI: the pair is the test, and neither
+  half alone proves anything.
+
 ## v0.96
 
 Everything below was driven on the hardware, not inferred.

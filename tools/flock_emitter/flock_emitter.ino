@@ -40,6 +40,7 @@
  *   8 Ubicquia OUI 94:7b:be, beacon      p Possible, vendor "Ubicquia"
  *   9 Motorola Sol. 00:04:7d, beacon     p Possible, vendor "Motorola"
  *  10 Motorola MOBILITY 50:16:f4         NOTHING -- must never appear
+ *  11 Motorola Solutions, wildcard probe L Likely, class Gear (v0.97 rung)
  *
  * Identities 8-10 cover the v0.77 vendor work, and 8 is the one that proves the
  * companion was reflashed: a bare named beacon from a vendor-exclusive OUI
@@ -247,6 +248,20 @@ static const WifiIdentity WIFI_IDS[] = {
      SsidNamed,
      EmitBeacon,
      "NOTHING -- Motorola MOBILITY, must never be listed"},
+    // MOTOROLA SOLUTIONS, PROBING LIKE A POLE. The one identity that exercises
+    // the vendor + sustained-wildcard-probe rung added in v0.97.
+    //
+    // Motorola Solutions sells ALPR poles and hand-portable radios on this one
+    // prefix, so the vendor alone cannot say which is in front of you, and until
+    // v0.97 a beacon and continuous wildcard probing both scored "possible".
+    // This identity is the probing case: it must come out LIKELY, class Gear,
+    // vendor Motorola. Identity 9 is the same OUI BEACONING and must stay
+    // "possible" -- the pair is the test, neither half alone proves anything.
+    {{0x00, 0x04, 0x7d, 0x00, 0x00, 0x0c},
+     NULL,
+     SsidZeroLen,
+     EmitProbe,
+     "L Likely, class Gear (vendor + sustained probe)"},
 };
 #define WIFI_ID_COUNT (sizeof(WIFI_IDS) / sizeof(WIFI_IDS[0]))
 

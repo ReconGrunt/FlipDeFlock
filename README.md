@@ -397,6 +397,26 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.97** - **Telling a camera pole from a two-way radio.** Motorola Solutions
+sells ALPR poles and hand-portable radios on the same OUI, so the vendor prefix
+alone genuinely cannot say which one is in front of you, and both used to come out
+`Possible`. Behaviour can tell them apart: a mains-powered pole phones home with
+wildcard probes every ~125 ms forever, and a battery handheld simply cannot. A
+vendor-exclusive OUI probing like fixed infrastructure now scores `Likely`. The
+class stays `Gear` deliberately, because this separates a pole from a handheld,
+not an ALPR from other fixed gear.
+
+That number is also on screen now as **`Probes/8s`**. The companion had been
+measuring it since v0.88 and sending it over the wire, and the app parsed it and
+threw it away — never stored, never shown. It is the one measurement that settles
+the question above, so now you can see it on the row where you are deciding
+whether to go and look.
+
+Also: the `ba9fafa0` camera signature is now corroborated against the public
+surveillance map rather than only our own reasoning. A mapped Flock ALPR sits 44 m
+from one of those devices, and it is the only one of eighteen geotagged detections
+within 100 m of a mapped camera. It stays a candidate.
+
 **v0.96** - **A camera on a randomised MAC can now be detected at all.** That gap
 was structural, not a matter of tuning: every rung of the companion's ladder
 needed an OUI match or a Flock SSID, so a randomised address scored zero and was

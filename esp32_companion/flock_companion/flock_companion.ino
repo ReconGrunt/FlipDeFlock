@@ -1498,6 +1498,37 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     bool is_probe = (ftype == 'P');
     bool wildcard = is_probe && (ssid_len == 0); // broadcast/wildcard probe
 
+    // THE SSID BELONGS TO THE TRANSMITTER. THE MAC WE REPORT MAY NOT.
+    //
+    // On a receive-side match we deliberately report addr1, the silent device
+    // the frame was addressed TO -- that is the whole point of the rx rungs and
+    // it is how a dormant camera gets caught. But the SSID in the body was put
+    // there by whoever SENT the frame. Pairing them names one device with
+    // another device's network.
+    //
+    // Seen on the bench: a Motorola-OUI station receiving probe responses was
+    // stored as `00:04:7D:00:00:0C,WiFi` -- the address is the Motorola device,
+    // the name is a neighbour's access point. Two devices in one row.
+    //
+    // s_score IS ZEROED TOO, and that is the half that matters. The name also
+    // SCORES: s_score == 3 sets conf = 3 outright, which the Flipper maps to
+    // CONFIRMED. So an access point named like a Flock unit, answering a probe
+    // from any device with a tracked OUI, would have confirmed that device on a
+    // name belonging to something else. Dropping the SSID from the wire alone
+    // would have made it worse, not better -- the Flipper only re-derives a
+    // claimed CONFIRMED when it HAS an SSID to re-derive it from, so an empty
+    // one would have sailed straight through.
+    //
+    // Nothing is lost: on the rx side we genuinely know the address and not the
+    // name, and saying so is the honest answer.
+    bool rx_side = !(oui_tx || ven_tx) && (oui_rx || ven_rx);
+    if(rx_side) {
+        ssid = NULL;
+        ssid_len = 0;
+        s_score = 0;
+    }
+
+
     // Count this probe against its transmitter BEFORE the coalescer downstream
     // suppresses repeats. Only the transmitter is rate-tracked: on an oui_rx hit
     // the frame was sent TO the Flock-OUI device by someone else, so the cadence
@@ -1748,7 +1779,7 @@ static void start_promisc() {
  * precisely what this exists to expose. tools/check_oui_parity.py fails CI if
  * they drift.
  */
-#define FLOCK_COMPANION_VERSION "0.96"
+#define FLOCK_COMPANION_VERSION "0.97"
 
 static void banner() {
     // Third field is the BUILD version. Appending is wire-safe: an older app
