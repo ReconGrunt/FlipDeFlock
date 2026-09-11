@@ -36,7 +36,8 @@ void recon_app_report_flock(
     FlockConfidence confidence,
     uint32_t ie_fp,
     FlockDevClass dev_class,
-    bool hidden) {
+    bool hidden,
+    uint8_t probe_rate) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     // Counted BEFORE the confidence gate, so the diagnostic can separate "the
     // companion reported nothing" from "it reported plenty and we binned it".
@@ -123,6 +124,10 @@ void recon_app_report_flock(
         if(channel != 0 && (rssi == 0 || rssi >= entry->chan_rssi)) {
             entry->channel = channel;
             if(rssi != 0) entry->chan_rssi = rssi;
+            // Kept with the channel, from the SAME sighting, for the same
+            // reason: both describe the moment the device was closest, and a
+            // pair taken from two different moments describes neither.
+            entry->probe_rate = probe_rate;
         }
         if(ftype) entry->ftype = ftype;
         if(confidence > entry->confidence) entry->confidence = confidence;
@@ -668,7 +673,7 @@ void recon_app_survey_add(
         // none, and no class beyond the ALPR default, because a fingerprint says
         // "this stack" and never "this kind of device".
         recon_app_report_flock(
-            app, mac, "", rssi, channel, 'F', fp_conf, fp, FlockClassAlpr, false);
+            app, mac, "", rssi, channel, 'F', fp_conf, fp, FlockClassAlpr, false, 0);
     }
 }
 
@@ -1028,7 +1033,8 @@ void recon_app_ble_add(
             flock_ble_confidence(company, name, raven_gatt),
             0,
             (cat == BleCatAxon) ? FlockClassBodycam : FlockClassAlpr,
-            false);
+            false,
+            0); // BLE advert, not a probe request -- no probe rate exists
         // Record WHAT matched, alongside how sure we are. Two Confirmed rows can
         // rest on very different evidence -- 0x09C8 is the battery VENDOR's id,
         // the Raven GATT is Flock's own -- and the operator should be able to see

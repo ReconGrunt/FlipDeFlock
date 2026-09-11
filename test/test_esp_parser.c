@@ -762,6 +762,21 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,70c94e112233,-26,6,P,2,,fp2=1a2b3c4d"), EspMsgFlock);
     CHECK_INT_EQ((int)m.u.flock.fp, 0);
 
+    // --- probe rate survives the parse instead of being dropped --------------
+    //
+    // pr= rode the wire from v0.88 and was parsed into the message struct and
+    // then never read by anything: not stored, not shown, not scored. It is the
+    // one measurement that separates a mains-powered pole phoning home from a
+    // battery handheld, on a vendor prefix that sells both.
+    CHECK_INT_EQ(P("D,00047d112233,-40,6,P,1,,pr=9"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.probe_rate, 9);
+    // Absent pr= is 0, i.e. "not measured", not "measured as zero".
+    CHECK_INT_EQ(P("D,00047d112233,-40,6,P,1,"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.probe_rate, 0);
+    // Clamped rather than wrapped: this is radio-adjacent input over a UART.
+    CHECK_INT_EQ(P("D,00047d112233,-40,6,P,1,,pr=9999"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.probe_rate, 255);
+
     CHECK_INT_EQ(P("GARBAGE"), EspMsgIgnore);
     CHECK_INT_EQ(P(""), EspMsgIgnore);
 

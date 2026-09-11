@@ -849,9 +849,28 @@ static void buf_appendf(char* buf, size_t bufsz, size_t* pos, const char* fmt, .
 // hardware. The observed count rides the wire as `pr=<n>` so it can be measured
 // rather than reasoned about a third time.
 #define PROBE_WINDOW_MS 8000 // ~2 full channel sweeps, so persistence accumulates
-// No PROBE_BURST_MIN any more: nothing thresholds this count. It is reported
-// as `pr=<n>` and weighed by a human, which is the only honest use for it
-// until someone measures a real camera against a real phone.
+// No PROBE_BURST_MIN any more: nothing GATES on this count. It is reported as
+// `pr=<n>` and weighed by a human, which is the only honest use for it until
+// someone measures a real camera against a real phone.
+//
+// VENDOR_PROBE_SUSTAINED is NOT that gate coming back, and the difference is
+// the direction it fails in. The old one REJECTED: set too high, it threw away
+// real cameras, which is how it came to be removed. This one PROMOTES a
+// vendor-exclusive hit from "possible" to "likely" and nothing else. Set too
+// high it simply never fires and the behaviour is exactly what it is today;
+// nothing is lost, only not gained.
+//
+// It also only has to fire ONCE per device. Confidence is max-held per entry on
+// the Flipper, so a camera that crosses the line on any single frame stays
+// promoted, and the many frames where it lands low in the window do not undo it.
+// That is what makes a conservative value safe rather than useless.
+//
+// 4 comes from the arithmetic above (a camera accumulates ~4 across two sweeps,
+// a phone burst is 1-2) and matches what this bench shows: the sustained prober
+// here reaches 6, 7 and 12 while a randomised-MAC phone sat at 1. STILL NOT
+// VALIDATED AGAINST A FIELDED CAMERA -- pr= remains on the wire precisely so the
+// number can be corrected from a real capture instead of reasoned about again.
+#define VENDOR_PROBE_SUSTAINED 4
 
 struct ProbeTrack {
     uint8_t mac[6];
@@ -1531,6 +1550,30 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
                   // not transmitting at all. Narrower and rarer than the tx paths.
     else if(s_score == 2)
         conf = 2;
+    else if(ven_tx && wildcard && probe_rate >= VENDOR_PROBE_SUSTAINED)
+        conf = 2; // VENDOR-EXCLUSIVE OUI + SUSTAINED WILDCARD PROBING -> "likely".
+                  //
+                  // WHAT THIS RUNG SEPARATES, and it is not what it looks like.
+                  // It does NOT distinguish an ALPR from other fixed gear; the
+                  // class stays Gear and the vendor is still all we know. What
+                  // it distinguishes is FIXED INFRASTRUCTURE from a HANDHELD, on
+                  // a prefix that covers both.
+                  //
+                  // Motorola Solutions is the case that prompted it: they sell
+                  // ALPR poles and hand-portable radios on one OUI, so the
+                  // vendor alone genuinely cannot say which is in front of you,
+                  // and until now a beacon and 8 Hz wildcard probing both came
+                  // out "possible". They are not the same observation. A battery
+                  // handheld cannot emit wildcard probes every ~125 ms for hours
+                  // -- and a radio provisioning over WiFi is looking for a KNOWN
+                  // network, which is a directed probe, not a wildcard one. A
+                  // mains or PoE powered pole phoning home does exactly this,
+                  // forever. Same reasoning the Flock rungs above already use.
+                  //
+                  // ven_tx ONLY, never ven_rx: on a receive-side match the frame
+                  // was sent TO the vendor device by somebody else, so the
+                  // cadence belongs to that somebody else and says nothing about
+                  // the device we are scoring.
     else if(ven_tx || ven_rx)
         conf = 1; // VENDOR-EXCLUSIVE OUI, any frame type -> "possible".
                   //

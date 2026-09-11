@@ -322,6 +322,24 @@ typedef struct {
                          *   sensor. What it is, as opposed to how sure we are. */
     bool hidden; /**< beacons but withholds its SSID. An OBSERVATION shown to the
                    *   operator, never a confidence input -- see esp_parser.c. */
+    uint8_t probe_rate; /**< wildcard probes this transmitter sent inside the
+                          *  companion's ~8 s window, at the strongest sighting.
+                          *
+                          *  THE ONE MEASUREMENT THAT SEPARATES A POLE FROM A
+                          *  HANDHELD. A mains-powered camera phones home every
+                          *  ~125 ms forever; a battery radio cannot, and when it
+                          *  does use WiFi it looks for a KNOWN network, which is
+                          *  a directed probe rather than a wildcard one. That
+                          *  matters most on a prefix covering both, which is
+                          *  exactly what Motorola Solutions is.
+                          *
+                          *  It rode the wire as `pr=` from v0.88 and was parsed
+                          *  into the message struct and then DROPPED -- never
+                          *  stored, never shown, never scored. Kept here so the
+                          *  detail screen can show it, and it is what the
+                          *  companion's own VENDOR_PROBE_SUSTAINED rung acts on.
+                          *  Max-held with the RSSI, same rule as `channel`: the
+                          *  closest sighting is the one worth keeping. */
     uint8_t ble_tell; /**< FlockBleTell: WHICH BLE signal classified this (mfg id
                         *   vs Raven GATT vs naming vs a shared OUI). Display only
                         *   -- never a confidence input. LIVE-SESSION ONLY: it is
@@ -737,7 +755,8 @@ void recon_app_report_flock(
     FlockConfidence confidence,
     uint32_t ie_fp,
     FlockDevClass dev_class,
-    bool hidden);
+    bool hidden,
+    uint8_t probe_rate);
 
 /**
  * Record/merge an ASTM F3411 Remote ID broadcast from an unmanned aircraft.

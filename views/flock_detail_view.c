@@ -55,6 +55,7 @@ typedef enum {
     FdClass,
     FdMethod,
     FdSeen,
+    FdProbeRate,
     FdMac,
     FdSsid,
     FdRssi, /**< the one row that also draws graphical bars */
@@ -149,6 +150,20 @@ static bool fd_format(char* buf, size_t len, FdLineKind kind, const FlockEntry* 
     }
     case FdSeen:
         snprintf(buf, len, "Seen: %lu", (unsigned long)e->count);
+        return false;
+    case FdProbeRate:
+        // WILDCARD PROBES IN THE COMPANION'S ~8 s WINDOW, at the closest
+        // sighting. This is the number that separates a pole from a handheld on
+        // a vendor prefix that sells both: mains-powered gear phones home every
+        // ~125 ms forever, a battery radio cannot, and a radio using WiFi at all
+        // is looking for a KNOWN network, which is a directed probe rather than
+        // a wildcard one.
+        //
+        // The companion measured this and put it on the wire from v0.88, and it
+        // was parsed and then thrown away -- never stored, never shown, never
+        // scored. Showing it is the whole point: it is evidence the operator can
+        // weigh, on the row where they are deciding whether to go and look.
+        snprintf(buf, len, "Probes/8s: %u", (unsigned)e->probe_rate);
         return false;
     case FdMac: {
         char mac[18];
@@ -282,6 +297,10 @@ static void flock_detail_view_draw_callback(Canvas* canvas, void* _model) {
     kinds[n++] = FdClass;
     kinds[n++] = FdMethod;
     kinds[n++] = FdSeen;
+    // Only when there is one. A BLE advert and a Marauder-scraped row have no
+    // probe rate at all, and a row of "Probes/8s: 0" would read as a measurement
+    // rather than as the absence of one.
+    if(e.probe_rate > 0) kinds[n++] = FdProbeRate;
     kinds[n++] = FdMac;
     kinds[n++] = FdSsid;
     kinds[n++] = FdRssi;

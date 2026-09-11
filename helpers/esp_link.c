@@ -128,7 +128,8 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             m->u.flock.conf,
             m->u.flock.fp,
             m->u.flock.dev_class,
-            m->u.flock.hidden);
+            m->u.flock.hidden,
+            m->u.flock.probe_rate);
         break;
     case EspMsgDeauthTarget:
     case EspMsgAttack:
@@ -244,7 +245,8 @@ static void esp_parse_generic(EspLink* esp, char* line) {
             h->conf,
             0,
             h->dev_class,
-            false); // Marauder's scraped text carries no hidden-SSID signal
+            false, // Marauder's scraped text carries no hidden-SSID signal
+            0); // ...nor a probe rate: it is scraped text, not frames
     }
 
     // A line naming more MACs than one scan can carry is pathological; surface it
