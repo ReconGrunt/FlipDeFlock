@@ -4,7 +4,7 @@
 #include <string.h>
 
 /**
- * 31 OUI prefixes observed in fielded Flock Safety deployments.
+ * 32 OUI prefixes observed in fielded Flock Safety deployments.
  * Mostly @NitekryDPaul research; 82:6b:f2 from DeFlockJoplin field testing;
  * the last entry b4:1e:52 is Flock Safety's own IEEE-registered OUI (GainSec).
  * These are generic vendor prefixes (Liteon, Espressif, etc.), hence OUI-only
@@ -19,6 +19,19 @@
  *             FIELD-OBSERVED BLE NAME rather than by a list: "RWLS-38:5B:44:B3:
  *             0F:5A", a Flock unit that appends its own MAC to its GAP name. We
  *             already carry three SiLabs prefixes (58:8e:81, ec:1b:bd, 90:35:ea).
+ *
+ * ADDED 2026-09-10, from a diff against colonelpanichacks/flock-you's target
+ * list (32 prefixes, their 2026-07-16 sync of @NitekryDPaul's table):
+ *   14:b5:cd  LITEON TECHNOLOGY CORPORATION, resolved against the IEEE MA-L
+ *             registry before acceptance. Liteon is the vendor behind 21 of the
+ *             entries already here, so this is the same module line Flock buys,
+ *             not a new claim.
+ * Their list carries two others we do not, and BOTH were already rejected here
+ * in v0.73 for the reasons in the paragraph above: 48:27:ea is SAMSUNG and
+ * a4:cf:12 is ESPRESSIF. They stay rejected, and TOO_GENERIC in
+ * tools/check_oui_parity.py is what keeps a future list-sync from re-importing
+ * them. Going the other way, they do not carry b4:1e:52 -- Flock Safety's own
+ * registration -- so the diff is not one-directional.
  *
  * REJECTED in the same sweep, and now ENFORCED by TOO_GENERIC in
  * tools/check_oui_parity.py so they cannot be quietly re-imported: 48:27:ea is
@@ -103,7 +116,7 @@ static const uint8_t flock_ouis[][3] = {
     {0xe8, 0xd0, 0xfc}, {0xe0, 0x4f, 0x43}, {0xb8, 0x1e, 0xa4}, {0x70, 0x08, 0x94},
     {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x3c, 0x71, 0xbf}, {0x58, 0x00, 0xe3},
     {0x90, 0x35, 0xea}, {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69}, {0x82, 0x6b, 0xf2},
-    {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6}, {0x38, 0x5b, 0x44},
+    {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6}, {0x38, 0x5b, 0x44}, {0x14, 0xb5, 0xcd},
 };
 
 #define FLOCK_OUI_COUNT (sizeof(flock_ouis) / sizeof(flock_ouis[0]))

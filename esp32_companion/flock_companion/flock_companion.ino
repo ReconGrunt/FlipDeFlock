@@ -216,7 +216,7 @@ static inline const uint8_t* fble_addr_bytes(BLEAddress& a) {
 #endif
 #endif
 
-// ---- Flock-associated OUI prefixes (31) ----------------------------------
+// ---- Flock-associated OUI prefixes (32) ----------------------------------
 // MUST stay byte-identical to flock_ouis[] in helpers/flock_db.c. There is no
 // shared header (an Arduino sketch cannot include the app's), so editing one
 // side alone would silently desync ESP-side `conf` scoring from the Flipper's.
@@ -248,7 +248,7 @@ static const uint8_t FLOCK_OUIS[][3] = {
     {0xe8, 0xd0, 0xfc}, {0xe0, 0x4f, 0x43}, {0xb8, 0x1e, 0xa4}, {0x70, 0x08, 0x94},
     {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x3c, 0x71, 0xbf}, {0x58, 0x00, 0xe3},
     {0x90, 0x35, 0xea}, {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69}, {0x82, 0x6b, 0xf2},
-    {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6}, {0x38, 0x5b, 0x44},
+    {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6}, {0x38, 0x5b, 0x44}, {0x14, 0xb5, 0xcd},
 };
 static const size_t FLOCK_OUI_COUNT = sizeof(FLOCK_OUIS) / sizeof(FLOCK_OUIS[0]);
 
@@ -603,7 +603,7 @@ static uint32_t g_phase_start = 0;
  * First-byte rejection bitmap for the OUI tables.
  *
  * promisc_cb() tests TWO addresses on EVERY management frame, and each test used
- * to walk all 31 Flock prefixes plus the SoundThinking one -- up to 64 three-byte
+ * to walk all 32 Flock prefixes plus the SoundThinking one -- up to 64 three-byte
  * comparisons per frame, inside the WiFi driver callback, before any filtering.
  * The overwhelming majority of frames match nothing.
  *

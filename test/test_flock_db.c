@@ -194,7 +194,7 @@ void suite_flock_db(void) {
     // here as well as in the CI parity gate. If you intentionally change the
     // table, update this number AND both files' count comments in the same
     // commit -- that is the drift 93beede left behind for five releases.
-    CHECK_INT_EQ((int)flock_oui_count(), 31);
+    CHECK_INT_EQ((int)flock_oui_count(), 32); // +14:b5:cd (Liteon), 2026-09-10
 
     // The 2026-09-07 community-table sweep, pinned both ways. Every prefix here
     // was resolved against the IEEE MA-L registry before the verdict; the
