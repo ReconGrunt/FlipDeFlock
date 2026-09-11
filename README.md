@@ -480,7 +480,7 @@ loader and guarantees it never connects.
 first camera anyone checked twice kept the identical invented address across
 visits days apart. No vendor stands behind it so no OUI table can match it, but
 it does not change, so the address itself identifies the unit. `signatures.json`
-takes a `macs` key now, and **Air Survey → Pin addr** does it from the device.
+takes a `macs` key now, and **Air Survey → Flag MAC** does it from the device.
 Capped at `Class?` like every other user signature.
 
 Also fixes two things that made evidence read wrong. A fingerprint since

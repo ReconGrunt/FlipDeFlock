@@ -626,7 +626,7 @@ void recon_app_survey_add(
         // Channel moves WITH the RSSI, never on its own. The companion now pairs
         // the two (see survey_note), and taking its channel while keeping a
         // different sighting's RSSI would pull the pair apart again on this
-        // side. Air Survey feeds the Locator through Pin addr, so a fringe
+        // side. Air Survey feeds the Locator through Flag MAC, so a fringe
         // off-channel value here costs a hunt -- same failure as the detection
         // table's chan_rssi.
         if(rssi > e->rssi || e->rssi == 0) {

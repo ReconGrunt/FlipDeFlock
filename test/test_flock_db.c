@@ -446,7 +446,7 @@ void suite_flock_db(void) {
     CHECK(flock_mac_pin_confidence(rand_mac) < FlockConfidenceConfirmed);
     // It names the method, so the detail screen does not claim a fingerprint.
     CHECK_INT_EQ(flock_method_of(rand_mac, NULL, 'P', 0), FlockMethodPin);
-    CHECK_STR_EQ(flock_method_str(FlockMethodPin), "pinned addr");
+    CHECK_STR_EQ(flock_method_str(FlockMethodPin), "flagged MAC");
     flock_db_set_extras(NULL);
     CHECK(!flock_user_mac_match(rand_mac)); // unregisters cleanly
     CHECK_INT_EQ(flock_method_of(rand_mac, NULL, 'P', 0), FlockMethodUnknown);

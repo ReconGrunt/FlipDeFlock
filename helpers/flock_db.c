@@ -1144,7 +1144,7 @@ const char* flock_method_str(FlockMethod method) {
     case FlockMethodIeFp:
         return "IE fp";
     case FlockMethodPin:
-        return "pinned addr";
+        return "flagged MAC";
     case FlockMethodOui:
         return "OUI";
     case FlockMethodBle:

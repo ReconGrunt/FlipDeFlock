@@ -89,7 +89,7 @@ to randomise into it. `macs` compares all six.
 
 Capped at `Class?` like every other user signature. You can also pin one from the
 device without editing this file: open **Air Survey**, select the row, press
-**Pin addr**. That writes to `learned.txt` (12 hex digits, no colons) and needs
+**Flag MAC**. That writes to `learned.txt` (12 hex digits, no colons) and needs
 no restart of your editing workflow, only of the app.
 
 If the camera *does* rotate its address, this will not help and a fingerprint is

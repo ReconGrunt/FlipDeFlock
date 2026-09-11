@@ -101,10 +101,13 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
         furi_string_cat_str(s, "Not learned: already\nknown, or list full.\n \n");
         break;
     case SurveyPinOk:
-        furi_string_cat_str(s, "Address pinned. Restart\nthe app to use it.\n \n");
+        // Says what will HAPPEN, not what was filed. "Address pinned" described
+        // the bookkeeping; an operator needs to know this row will show up as a
+        // hit from now on, which is the only reason to press the button.
+        furi_string_cat_str(s, "Flagged. This MAC counts\nas a hit now. Restart the\napp to use it.\n \n");
         break;
     case SurveyPinFailed:
-        furi_string_cat_str(s, "Not pinned: already\npinned, or list full.\n \n");
+        furi_string_cat_str(s, "Not flagged: already\nflagged, or list full.\n \n");
         break;
     case SurveyLearnIdle:
     default:
@@ -150,7 +153,14 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
         widget_add_button_element(
             widget, GuiButtonTypeCenter, "I saw it", recon_scene_survey_detail_button_cb, app);
     }
-    // PIN THE ADDRESS, offered whatever the fingerprint says.
+    // FLAG THE EXACT ADDRESS, offered whatever the fingerprint says.
+    //
+    // Called "Flag MAC" rather than "Pin addr". The old label said where the
+    // value went, not what pressing it does, and the two buttons on this screen
+    // are easy to confuse: the other one learns the probe SHAPE, which still
+    // matches after the device changes address, while this one matches that one
+    // address and nothing else. "Flag" states the outcome -- this row becomes a
+    // hit -- and "MAC" says which of the two handles is being used.
     //
     // A randomised MAC is not necessarily a rotating one: the first camera
     // anyone checked twice kept the identical invented address across visits
@@ -161,7 +171,7 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
     // Offered even when the fingerprint is a commodity one, since the address is
     // then the ONLY handle left.
     widget_add_button_element(
-        widget, GuiButtonTypeLeft, "Pin addr", recon_scene_survey_detail_button_cb, app);
+        widget, GuiButtonTypeLeft, "Flag MAC", recon_scene_survey_detail_button_cb, app);
 }
 
 void recon_scene_survey_detail_on_enter(void* context) {
