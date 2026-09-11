@@ -384,7 +384,21 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
-**v0.96** - **Share to DeFlock sent you to the wrong page.** The QR pointed at
+**v0.96** - **Two new candidate fingerprints, and one retracted.** From a field
+drive by @wiilover22, `ba9fafa0` ships as a candidate: four devices carry it, all
+on randomised addresses no OUI table can match, and they sit 1.1 km to 6.1 km
+apart — so they are four fixed installations, not one device rotating its MAC.
+That is the randomised-camera case this project has been chasing since issue #25.
+`d0bbec4c` joins it with a vendor anchor: three devices, all on OUIs already in
+the built-in Flock table.
+
+**`89c3debf` is retracted and denylisted, and it was our own advice.** We told him
+to add it to `signatures.json` as "the camera". His next drive found it on ten
+devices spread over 7.9 km, and ten of the nineteen rows in the hit table he sent
+back were phones. The denylist outranks your own file, so a card carrying it goes
+inert on update with nothing for you to edit.
+
+**Share to DeFlock sent you to the wrong page.** The QR pointed at
 `deflock.org`, which is the landing page: it has no map on it and silently drops
 the coordinates, so every QR this screen produced landed on "Welcome to DeFlock"
 with the location thrown away. It points at `maps.deflock.org` now and carries a

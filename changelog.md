@@ -4,6 +4,51 @@
 
 Everything below was driven on the hardware, not inferred.
 
+### Signatures
+
+From @wiilover22's 2026-09-11 drive (discussion #27): three CSVs covering six
+sessions, a road he reports as carrying 4-6 cameras, driven out and back.
+
+- **Two new candidate fingerprints.** Both lift a detection to `Class?` and
+  neither can ever auto-Confirm, because both come from one operator on one road.
+
+  `ba9fafa0` is the randomised-MAC signature this has been chasing since issue
+  #25. Four devices carry it, every one on a locally administered address that no
+  OUI table can touch — which is exactly why his cameras were invisible. What
+  makes it more than a guess is the geography: the four are **1.1 km to 6.1 km
+  apart**, so they are neither one device rotating its address nor anything
+  riding in his car. Each is close and busy (-21 to -43 dBm, 28-133 probes in a
+  session), it recurs across four of his six sessions, and it has never appeared
+  on this project's bench.
+
+  `d0bbec4c` is the first hash with a **vendor anchor**. Three devices, all three
+  on OUIs already in the built-in Flock table, spanning two different Flock
+  prefixes. No randomised and no other-vendor address carries it. Two of the
+  three sit 14 m apart — two poles at one intersection.
+
+- **`89c3debf` is retracted and denylisted, and it was our advice.** This project
+  told him to put it in `signatures.json` as "the device I think is the camera".
+  His drive found it on **ten devices spread over 7.9 km, -17 to -96 dBm, counts
+  1 to 149**. Ten of the nineteen rows in the hits file he sent back were phones
+  matched on it.
+
+  The denylist is consulted before every tier including the user's own file, so
+  his card goes inert on upgrade with no edit from him. Verified on hardware, not
+  argued: a `signatures.json` listing a denylisted hash alongside a legitimate
+  one, with devices carrying **both** confirmed on air during the scan — the
+  denylisted hash produced no hits, the legitimate one produced its detection at
+  `Class?`.
+
+- **`c59c341f` denylisted.** 24 distinct randomised MACs across two sessions, one
+  probe each, best signal -78 dBm. Twenty-four addresses seen once apiece is a
+  street randomising, not a device.
+
+- **A test fixture was asserting the retracted answer.** The survey ranker's
+  headline case was built from his first capture with `89c3debf` pinned as "the
+  camera", and asserted it ranked first. It now asserts the opposite: that row is
+  the closest and busiest in the file and must sink to zero because the skeleton
+  is denylisted. The test that hurts is the one worth having.
+
 ### Fixed
 
 - **Share to DeFlock sent you to the wrong page.** The QR encoded a

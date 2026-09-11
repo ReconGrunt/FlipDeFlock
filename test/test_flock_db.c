@@ -314,8 +314,16 @@ void suite_flock_db(void) {
     CHECK(flock_ie_fp_is_generic(0x96FCD1B2u)); // stock ESP32 scan (our own emitter)
     CHECK(flock_ie_fp_is_generic(0x173D7A70u)); // common phone stack, clean bench
     CHECK(flock_ie_fp_is_generic(0x7C923B53u)); // smeared across unrelated vendors
+    // RETRACTED, and it was our own advice. This project told wiilover22 to put
+    // 0x89C3DEBF in his signatures.json; his next drive found it on TEN devices
+    // spread over 7.9 km at -17 to -96 dBm. Ten of the nineteen rows in the
+    // hits.csv he sent back were phones matched on it.
+    CHECK(flock_ie_fp_is_generic(0x89C3DEBFu));
+    CHECK(flock_ie_fp_is_generic(0xC59C341Fu)); // 24 randomised MACs, one probe each
     CHECK(!flock_ie_fp_is_generic(0)); // 0 is "no fingerprint", not "generic"
-    CHECK(!flock_ie_fp_is_generic(0x42D75CD1u)); // the shipped candidate is NOT generic
+    CHECK(!flock_ie_fp_is_generic(0x42D75CD1u)); // the shipped candidates are NOT generic
+    CHECK(!flock_ie_fp_is_generic(0xBA9FAFA0u));
+    CHECK(!flock_ie_fp_is_generic(0xD0BBEC4Cu));
     CHECK(!flock_ie_fp_is_generic(0xdeadbeef));
 
     // A generic hash never matches on its own.
@@ -341,8 +349,32 @@ void suite_flock_db(void) {
     CHECK_INT_EQ(flock_ie_fp_match(0xabcdef01u), FlockIeFpUser);
     flock_db_set_extras(NULL);
 
-    // The shipped candidate still matches -- the guard did not blunt detection.
+    // THE RETRACTION HAS TO BEAT A CARD ALREADY IN THE FIELD. wiilover22's
+    // signatures.json still lists 0x89C3DEBF because we told him to add it, and
+    // he will not edit it. Denylisting only works if it outranks his file.
+    static const uint32_t wiilover_card[] = {0x89C3DEBFu, 0xBA9FAFA0u};
+    FlockDbExtras ex_field = {.ie_fps = wiilover_card, .ie_fp_count = 2};
+    flock_db_set_extras(&ex_field);
+    CHECK_INT_EQ(flock_ie_fp_match(0x89C3DEBFu), FlockIeFpNone); // goes inert, no edit needed
+    // ...while the good hash on the same card still works, as a candidate.
+    CHECK_INT_EQ(flock_ie_fp_match(0xBA9FAFA0u), FlockIeFpCandidate);
+    flock_db_set_extras(NULL);
+
+    // The shipped candidates still match -- the guard did not blunt detection.
     CHECK_INT_EQ(flock_ie_fp_match(0x42D75CD1u), FlockIeFpCandidate);
+    CHECK_INT_EQ(flock_ie_fp_match(0xBA9FAFA0u), FlockIeFpCandidate);
+    CHECK_INT_EQ(flock_ie_fp_match(0xD0BBEC4Cu), FlockIeFpCandidate);
+    // A CANDIDATE NEVER AUTO-CONFIRMS, not even riding a Flock OUI. 0xD0BBEC4C
+    // was captured on 24:B2:B9 and 70:08:94, both in flock_ouis[], so if it were
+    // ever promoted to flock_ie_fps[] it would Confirm on sight -- which is
+    // exactly why one reporter on one road is not enough to promote it.
+    // The OUI is the load-bearing part; the last three bytes are invented
+    // rather than the real unit's, which does not need publishing.
+    static const uint8_t flock_oui_mac[6] = {0x24, 0xB2, 0xB9, 0x00, 0x00, 0x01};
+    CHECK_INT_EQ(flock_ie_fp_confidence(0xD0BBEC4Cu, flock_oui_mac), FlockConfidenceProbeFp);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0xBA9FAFA0u, NULL), FlockConfidenceProbeFp);
+    // And the retracted one justifies nothing at all, OUI or no OUI.
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x89C3DEBFu, flock_oui_mac), FlockConfidenceNone);
     // and a generic hash must not reach the IE-fp method either.
     CHECK_INT_EQ(flock_method_of(NULL, NULL, 'D', 0x96FCD1B2u), FlockMethodUnknown);
     CHECK_INT_EQ(flock_method_of(NULL, NULL, 'D', 0x42D75CD1u), FlockMethodIeFp);
@@ -376,15 +408,17 @@ void suite_flock_db(void) {
     // A user / learned fingerprint is also capped at Class?, never Confirmed.
     // This is the path that makes a taught camera detectable again: it scores
     // above None, so it reaches the hit table instead of being discarded.
-    static const uint32_t learned[] = {0x89c3debfu};
+    // NOT 0x89C3DEBF, which this used to use: that hash is now on the generic
+    // denylist (we retracted it), so it would prove the opposite of the point.
+    static const uint32_t learned[] = {0x5eed1234u};
     FlockDbExtras ex_learned = {.ie_fps = learned, .ie_fp_count = 1};
     flock_db_set_extras(&ex_learned);
-    CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, rand_mac), FlockConfidenceProbeFp);
-    CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, flock_mac), FlockConfidenceProbeFp);
-    CHECK(flock_ie_fp_confidence(0x89c3debfu, rand_mac) > FlockConfidenceNone);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x5eed1234u, rand_mac), FlockConfidenceProbeFp);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x5eed1234u, flock_mac), FlockConfidenceProbeFp);
+    CHECK(flock_ie_fp_confidence(0x5eed1234u, rand_mac) > FlockConfidenceNone);
     flock_db_set_extras(NULL);
     // ...and once forgotten it stops scoring, so the table is genuinely the source.
-    CHECK_INT_EQ(flock_ie_fp_confidence(0x89c3debfu, rand_mac), FlockConfidenceNone);
+    CHECK_INT_EQ(flock_ie_fp_confidence(0x5eed1234u, rand_mac), FlockConfidenceNone);
 
     // --- pinned WHOLE addresses (FlockDbExtras.macs) -------------------------
     // For the camera whose randomised MAC turns out to be STABLE: invented, so

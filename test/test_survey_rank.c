@@ -63,52 +63,65 @@ void suite_survey_rank(void) {
     CHECK_INT_EQ((int)survey_rank(&one, 1, NULL, 16), 0);
     CHECK_INT_EQ((int)survey_rank(&one, 1, out, 0), 0);
 
-    // --- ISSUE #25, the real capture ----------------------------------------
-    // Read straight from wiilover22's survey.csv. The camera he had physically
-    // parked next to, ~50ft away, is 06:FC:CB:3A:F8:9E: -26 dBm and 10 probes
-    // while nothing else in the file managed more than 2. Four of the 7E:68:F0
-    // rows are one device rotating its address, all carrying 96fcd1b2 -- the
-    // stock ESP32 scan skeleton, which is on the generic denylist and must sink
-    // despite being the most "interesting looking" cluster in the file.
+    // --- ISSUE #25, the real capture, WITH THE CORRECTION ---------------------
+    // Read straight from wiilover22's survey.csv, and this fixture used to assert
+    // the wrong answer. 06:FC:CB:3A:F8:9E is the row he parked next to and the
+    // row this project told him was his camera: -26 dBm, 10 probes, nothing else
+    // in the file above 2. It looks like the find, and the ranker put it first.
+    //
+    // His 2026-09-11 drive retracted it. 0x89C3DEBF turned up on TEN devices
+    // spread over 7.9 km at -17 to -96 dBm, so it is a commodity skeleton and is
+    // now on the generic denylist -- which means THIS row, the closest and
+    // busiest in the capture, must now sink to zero. That is the whole point of
+    // the denylist and it is worth a test that hurts: the most compelling row by
+    // eye is the one being thrown away.
+    //
+    // 7A:B2:1B (0xBA9FAFA0) is what actually survived. It was the throwaway
+    // "2nd camera?" guess here; the later drive found that hash on four devices
+    // 1.1-6.1 km apart, each close and busy. It ranks first now.
     SurveyRankRow field[7] = {
-        mk(0x06, 0xFC, 0xCB, 0x3A, 0xF8, 0x9E, -26, 6, 0x89c3debfu, 10), // the camera
+        mk(0x06, 0xFC, 0xCB, 0x3A, 0xF8, 0x9E, -26, 6, 0x89c3debfu, 10), // RETRACTED
         mk(0x7E, 0x68, 0xF0, 0x04, 0xF6, 0x6B, -50, 1, 0x96fcd1b2u, 2), // generic
         mk(0x7E, 0x68, 0xF0, 0x8E, 0x5A, 0x48, -55, 6, 0x96fcd1b2u, 1), // generic
         mk(0x7E, 0x68, 0xF0, 0xB0, 0xCE, 0xFB, -60, 11, 0x96fcd1b2u, 1), // generic
         mk(0x7E, 0x68, 0xF0, 0x80, 0x2E, 0x5C, -62, 6, 0x96fcd1b2u, 1), // generic
-        mk(0x7A, 0xB2, 0x1B, 0x2C, 0xF2, 0xAD, -37, 8, 0xba9fafa0u, 2), // 2nd camera?
+        mk(0x7A, 0xB2, 0x1B, 0x2C, 0xF2, 0xAD, -37, 8, 0xba9fafa0u, 2), // the real one
         mk(0xF8, 0xD2, 0xAC, 0xC5, 0x97, 0xAC, -87, 6, 0xc4e51f77u, 1), // Vantiva, far
     };
     size_t n = survey_rank(field, 7, out, 16);
     CHECK_INT_EQ((int)n, 7);
 
-    // The camera ranks first. This is the whole feature.
-    CHECK_INT_EQ((int)out[0].index, 0);
+    // 7A:B2:1B ranks first. This is the whole feature.
+    CHECK_INT_EQ((int)out[0].index, 5);
     CHECK(out[0].score > out[1].score);
     CHECK(out[0].evidence & SurveyEvidenceLocalAdmin); // randomised, no OUI to match
-    CHECK(out[0].evidence & SurveyEvidencePersistent); // 10 probes, not a burst
-    CHECK(out[0].evidence & SurveyEvidenceClose); // -26 dBm
+    CHECK(out[0].evidence & SurveyEvidenceClose); // -37 dBm
     CHECK(!(out[0].evidence & SurveyEvidenceGeneric));
     // One sighting, one address: it has NOT been seen rotating, and claiming so
     // would invent evidence.
     CHECK(!(out[0].evidence & SurveyEvidenceRotating));
 
-    // The weaker second-camera candidate comes next: close, but a drive-by, so
-    // only 2 probes and no persistence flag.
-    CHECK_INT_EQ((int)out[1].index, 5);
-    CHECK(out[1].evidence & SurveyEvidenceClose);
-    CHECK(!(out[1].evidence & SurveyEvidencePersistent));
+    // THE RETRACTED ROW SINKS, and it is the closest and busiest row in the file.
+    // A denylisted skeleton scores nothing no matter how good the rest of its
+    // evidence looks -- which is the behaviour that stops us handing an operator
+    // a phone to go and look at, for the second time.
+    size_t retracted = 0;
+    for(size_t i = 0; i < n; i++) {
+        if(out[i].index == 0) retracted = i;
+    }
+    CHECK(out[retracted].evidence & SurveyEvidenceGeneric);
+    CHECK_INT_EQ(out[retracted].score, 0);
 
-    // Every generic-skeleton row sinks to the bottom at score 0, including the
-    // four-address rotating cluster that looks the most compelling by eye.
-    for(size_t i = 3; i < 7; i++) {
+    // Every generic-skeleton row sits at the bottom at score 0: the four-address
+    // 96fcd1b2 cluster that looks the most compelling by eye, plus 89c3debf.
+    for(size_t i = 2; i < 7; i++) {
         CHECK(out[i].evidence & SurveyEvidenceGeneric);
         CHECK_INT_EQ(out[i].score, 0);
     }
     // ...and the distant neighbour's set-top box, on a real vendor OUI, still
     // outranks them: it is at least a device we can name.
-    CHECK_INT_EQ((int)out[2].index, 6);
-    CHECK(!(out[2].evidence & SurveyEvidenceLocalAdmin));
+    CHECK_INT_EQ((int)out[1].index, 6);
+    CHECK(!(out[1].evidence & SurveyEvidenceLocalAdmin));
 
     // --- generic rows do not set the persistence scale ------------------------
     // A chatty phone running a stock scan must not flatten the real rows. Here

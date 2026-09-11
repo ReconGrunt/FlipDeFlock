@@ -161,10 +161,12 @@ void suite_flock_store(void) {
         CHECK_INT_EQ((int)out.ie_fp, 0); // zeroed, so nothing claims "IE fp"
         CHECK_INT_EQ((int)out.conf, 3); // the recorded rung is left alone
 
-        // A legitimate fingerprint on the same row shape is untouched.
+        // A legitimate fingerprint on the same row shape is untouched. ba9fafa0
+        // is the real one from the same reporter's later drive -- four devices
+        // 1.1-6.1 km apart, which is why it survived where 89c3debf did not.
         CHECK(flock_store_parse_line(
-            "06:FC:CB:3A:F8:9E,,-26,6,F,3,89c3debf,,,,10,0,1788980501,0,0,", &out));
-        CHECK_INT_EQ((int)out.ie_fp, (int)0x89c3debfu);
+            "7A:B2:1B:2C:F2:AD,,-37,8,F,3,ba9fafa0,,,,10,0,1788980501,0,0,", &out));
+        CHECK_INT_EQ((int)out.ie_fp, (int)0xba9fafa0u);
     }
 
     // --- malformed input is rejected, and *out is left untouched -------------

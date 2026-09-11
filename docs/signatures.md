@@ -536,6 +536,30 @@ otherwise it is Air Survey and your own eyes.
 Precision over recall makes this trade deliberately. A hash shared with every
 phone could not have identified the camera anyway.
 
+### A hash you added can be retracted out from under you, and that is on purpose
+
+The denylist is consulted **before every tier, including your own
+`signatures.json`**. If a hash you added later turns out to be a commodity
+pattern, a version bump makes it inert without you editing anything.
+
+This is not hypothetical, and the first case was this project's own bad advice.
+In September 2026 a maintainer told a reporter that `89c3debf` was "the device I
+think is the camera … matches nothing else", and he added it. His next drive
+found that hash on **ten devices spread over 7.9 km, at -17 to -96 dBm** — ten of
+the nineteen rows in the hit table he sent back were phones. A fixed camera is
+not in ten places at once. It is on the denylist now, so that card stopped
+flagging phones the moment he updated.
+
+Two things follow if you are curating your own file:
+
+- **A strong, close, chatty device next to a camera you can see is not proof.**
+  It is the *shape across a whole drive* that separates a camera from a phone.
+  Check whether the hash turns up far away and weak as well.
+- **Geography is the discriminator you have and the app does not.** The hash that
+  survived that same drive, `ba9fafa0`, did so because its four devices were
+  1.1 km to 6.1 km apart — they could not be one device rotating its address, and
+  could not be something riding in the car. It ships as a candidate now.
+
 > The placeholder values in `signatures.example.json` (`aa:bb:cc`, `deadbeef`, …)
 > are illustrative and won't match anything real — replace them with your own
 > captures, and delete any lines you don't need.

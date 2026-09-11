@@ -873,9 +873,40 @@ static const uint32_t flock_ie_fps[] = {
  * that camera's OUI ONLY and did not smear across unrelated vendors the way the
  * generic 0x7C923B53 skeleton did. Still one operator, one camera, one drive --
  * hence candidate, not verified. Needs a second independent sighting to promote.
+ *
+ * 0xBA9FAFA0 -- the randomised-MAC signature this whole investigation has been
+ * chasing since issue #25, from @wiilover22's 2026-09-11 drive.
+ *
+ * FOUR devices carry it, every one on a locally administered address, so no OUI
+ * table can ever touch them -- which is precisely the case that made his
+ * cameras invisible for three weeks. What promotes it above a guess is the
+ * GEOGRAPHY: the four are 1.1 km to 6.1 km apart, so they cannot be one device
+ * rotating its address, and they cannot be something riding in his car. Four
+ * separate fixed installations along a road he reports as having 4-6 cameras.
+ * Each is close and busy (-21 to -43 dBm, 28 to 133 probes in one session),
+ * which is what a pole-mounted unit looks like and is not what a passing phone
+ * looks like. It also recurs across FOUR of his six sessions and appeared in his
+ * earlier 2026-09-08 capture, and it has never once been seen on this project's
+ * bench.
+ *
+ * 0xD0BBEC4C -- the same drive, and the one hash here with a VENDOR ANCHOR.
+ * Three devices, all three on OUIs already in flock_ouis[] above, spanning TWO
+ * different Flock prefixes (24:B2:B9 and 70:08:94). Zero randomised addresses
+ * and zero other-vendor addresses carry it. Two of the three sit 14 m apart,
+ * which reads as two poles at one intersection. This is the shape the
+ * fingerprint table was designed around: the hash and the OUI agree without
+ * anyone having to judge which row was the camera.
+ *
+ * Both stay CANDIDATES despite the strength, because both come from one
+ * operator on one road. A candidate lifts a detection to Class? and can never
+ * auto-Confirm, which is the honest ceiling for that. Note 0xD0BBEC4C would
+ * Confirm on sight if promoted, since it rides on a Flock OUI -- which is the
+ * exact reason it must not be promoted on a single reporter.
  */
 static const uint32_t flock_ie_fps_candidate[] = {
     0x42D75CD1u,
+    0xBA9FAFA0u,
+    0xD0BBEC4Cu,
 };
 
 #define FLOCK_IE_FP_CANDIDATE_COUNT \
@@ -908,11 +939,32 @@ static const uint32_t flock_ie_fps_candidate[] = {
  *   there while 0x42D75CD1 from the same capture survived as a candidate. It was
  *   already named in the flock_ie_fps_candidate[] comment above as the
  *   counter-example; this makes that judgement enforceable instead of advisory.
+ *
+ * 0x89C3DEBF -- RETRACTED, and it was OURS. This is the hash this project told
+ *   @wiilover22 to put in his signatures.json on 2026-09-08 as "the device I
+ *   think is the camera ... matches nothing else". His 2026-09-11 drive settles
+ *   it: TEN devices carrying it, spread from 0 to 7.9 km apart, at signals from
+ *   -17 to -96 dBm and probe counts from 1 to 149. A fixed camera is not in ten
+ *   places at once across eight kilometres. It had also already appeared on
+ *   EIGHT randomised MACs on this project's own bench with no camera present
+ *   (CANDIDATES.md, 2026-09-09), which is what first put it in doubt.
+ *
+ *   Denylisting is the ONLY thing that undoes the advice, because
+ *   flock_ie_fp_match() consults this list before the user's own file: his card
+ *   goes inert on upgrade without him editing anything. Ten of the nineteen
+ *   rows in the hits.csv he sent were phones matched on this hash.
+ *
+ * 0xC59C341F -- 24 distinct locally administered MACs across two sessions, one
+ *   probe each, best signal -78 dBm (same capture). Twenty-four addresses seen
+ *   once apiece is a street full of phones randomising, not a device. Carried in
+ *   CANDIDATES.md as a watch item since 2026-09-09; the MAC count settles it.
  */
 static const uint32_t flock_ie_fps_generic[] = {
     0x96FCD1B2u,
     0x173D7A70u,
     0x7C923B53u,
+    0x89C3DEBFu,
+    0xC59C341Fu,
 };
 
 #define FLOCK_IE_FP_GENERIC_COUNT (sizeof(flock_ie_fps_generic) / sizeof(flock_ie_fps_generic[0]))
