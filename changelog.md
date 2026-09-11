@@ -24,15 +24,16 @@ Everything below was driven on the hardware, not inferred.
   on the shape of its probe request, and landed as `Class?` — capped there and
   never able to auto-Confirm, because the signature is single-source.
 
-  The one signature shipped is DeFlockJoplin's, via
-  [colonelpanichacks/flock-you](https://github.com/colonelpanichacks/flock-you)
-  (MIT, credited), where it was drive-tested at 11 of 12 cameras with 2 false
-  positives. It is matched as a SUBSTRING, not whole: their published string
-  begins `2,12,127,` which is not observed data at all — their canonicaliser
-  prepends it verbatim to cover leading tags their capture path truncates, and
-  tags 2 and 12 are not elements a modern probe carries. A whole-string compare
-  would never have fired. What is real is everything from the vendor anchor
-  onward, and that is what we match.
+  The one signature shipped is community-contributed and single-source — it
+  matched 11 of 12 cameras with 2 false positives on the drive it came from,
+  which is good evidence and is not proof, hence the `Class?` ceiling.
+
+  It is matched as a SUBSTRING rather than as a whole tag list, because the
+  elements at the FRONT of a probe are the ones a capture path mangles first: a
+  driver that mis-starts its IE walk or trims a frame loses the leading tags and
+  keeps the tail. Anchoring on the vendor run that ends the probe survives that,
+  and costs nothing in precision because the discriminating content is all in
+  that run.
 
 - **The probe fingerprint now folds in IE CONTENT, not just tag and length.**
   The old hash discarded every byte of every element, so supported rates and
@@ -52,8 +53,9 @@ Everything below was driven on the hardware, not inferred.
   cannot be eyeballed, compared against another project's capture, partially
   matched, or published for anyone else to use — which is exactly what was
   needed and missing when a field report arrived as eight hex digits per row.
-  The format is byte-compatible with flock-you's on purpose, so a finding here
-  can be set beside theirs directly.
+  The format is deliberately plain — an ordered IE tag list with vendor elements
+  expanded — so a row can be read off the CSV, compared by eye against another
+  capture, and quoted straight into a report.
 
 - **`sigtest` on the companion**, kept permanently. The signature path cannot be
   reached from the radio on a bench: the ESP-IDF will not inject a probe request

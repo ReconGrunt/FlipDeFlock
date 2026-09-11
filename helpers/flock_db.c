@@ -20,18 +20,15 @@
  *             0F:5A", a Flock unit that appends its own MAC to its GAP name. We
  *             already carry three SiLabs prefixes (58:8e:81, ec:1b:bd, 90:35:ea).
  *
- * ADDED 2026-09-10, from a diff against colonelpanichacks/flock-you's target
- * list (32 prefixes, their 2026-07-16 sync of @NitekryDPaul's table):
+ * ADDED 2026-09-10, during a sweep of community prefix lists:
  *   14:b5:cd  LITEON TECHNOLOGY CORPORATION, resolved against the IEEE MA-L
  *             registry before acceptance. Liteon is the vendor behind 21 of the
  *             entries already here, so this is the same module line Flock buys,
  *             not a new claim.
- * Their list carries two others we do not, and BOTH were already rejected here
- * in v0.73 for the reasons in the paragraph above: 48:27:ea is SAMSUNG and
- * a4:cf:12 is ESPRESSIF. They stay rejected, and TOO_GENERIC in
- * tools/check_oui_parity.py is what keeps a future list-sync from re-importing
- * them. Going the other way, they do not carry b4:1e:52 -- Flock Safety's own
- * registration -- so the diff is not one-directional.
+ * Two other prefixes circulating in those lists were re-checked and stay
+ * REJECTED, for the reasons in the paragraph above: 48:27:ea is SAMSUNG and
+ * a4:cf:12 is ESPRESSIF. TOO_GENERIC in tools/check_oui_parity.py is what keeps
+ * a future sweep from quietly re-importing either one.
  *
  * REJECTED in the same sweep, and now ENFORCED by TOO_GENERIC in
  * tools/check_oui_parity.py so they cannot be quietly re-imported: 48:27:ea is

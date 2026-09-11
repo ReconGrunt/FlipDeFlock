@@ -260,8 +260,8 @@ typedef struct {
     uint8_t channel;
     uint16_t count;
     /**
-     * Printable IE signature, in colonelpanichacks/flock-you's published format
-     * so findings are directly comparable between the two projects.
+     * Printable IE signature: an ordered IE tag list with vendor elements
+     * expanded, readable rather than hashed.
      *
      * A HASH CANNOT BE READ. It cannot be eyeballed against someone else's
      * capture, partially matched, or published in a form another project can

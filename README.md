@@ -12,6 +12,19 @@ Verkada, Genetec, Avigilon), drones, and BLE trackers planted on you. The Flippe
 does the Wi-Fi sniffing its BLE-only radio can't. It's for security assessments,
 anti-surveillance awareness, and CTF/research.
 
+**It detects cameras that have stopped announcing themselves.** Modern ALPR
+hardware randomises its MAC address, which defeats the vendor-prefix matching
+every detector is built on — the camera is right there, transmitting, and a
+prefix list sees an empty street. FlipDeFlock identifies a probe request by its
+*shape*: the order and contents of its information elements, which describe the
+radio rather than the address and survive randomisation intact. That is how it
+finds a unit no OUI table can see.
+
+It also covers more of the field than a camera-only tool: ALPR, acoustic
+gunshot sensors, body-worn and in-car police cameras, five competitor camera
+vendors, drones by their federally-mandated Remote ID, and BLE trackers — each
+reported as what it actually is, never folded into one "surveillance" bucket.
+
 Drones are found by their **Remote ID** broadcast (ASTM F3411), which every
 unmanned aircraft in US airspace is required to transmit. That gives you the
 aircraft's serial, its type, its position, and the position of the person flying
@@ -397,9 +410,8 @@ element's tag and length and threw the contents away, so the fields that describ
 a radio counted for nothing — across 120 devices in a field capture it produced
 49 distinct values with **74% of devices colliding**, one hash covering 24
 separate devices. `survey.csv` now carries a content-aware hash and a *readable*
-signature alongside it, in a format deliberately byte-compatible with
-[flock-you](https://github.com/colonelpanichacks/flock-you)'s, so findings can be
-compared between projects instead of being eight opaque hex digits.
+signature alongside it — an ordered IE tag list you can compare by eye against
+another capture, instead of eight opaque hex digits.
 
 **Two new candidate fingerprints, and one retracted.** From a field
 drive by @wiilover22, `ba9fafa0` ships as a candidate: four devices carry it, all

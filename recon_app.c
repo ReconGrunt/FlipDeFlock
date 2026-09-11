@@ -691,8 +691,8 @@ void recon_survey_save(ReconApp* app) {
             "# FlipDeFlock probe survey -- every wildcard-probe transmitter seen, matched or not\n"
             "# No SSID and no position. A high count next to a camera you can see is that camera.\n"
             "# ie_fp2 folds in the capability IE CONTENTS, not just their tag+length like ie_fp.\n"
-            "# ie_sig is the same probe in colonelpanichacks/flock-you's printable format, so a\n"
-            "# finding here is directly comparable with theirs. It is LAST because it has commas.\n"
+            "# ie_sig is the same probe written out readably: an ordered IE tag list, with vendor\n"
+            "# elements expanded. It is LAST on the row because it contains commas.\n"
             "mac,rssi,channel,ie_fp,count,ie_fp2,ie_sig\n");
         furi_mutex_acquire(app->mutex, FuriWaitForever);
         for(size_t i = 0; i < app->survey_count; i++) {
@@ -761,8 +761,8 @@ void recon_survey_log_append(ReconApp* app, void* storage_rec) {
                 "# session = scan start, as a unix time. Counts are PER SESSION, never\n"
                 "# since the board booted, so they stay comparable within one row group.\n"
                 "# No SSID and no position, same as survey.csv.\n"
-                "# ie_fp2 folds in the capability IE contents; ie_sig is the same probe in\n"
-                "# flock-you's printable format. ie_sig is LAST because it contains commas.\n"
+                "# ie_fp2 folds in the capability IE contents; ie_sig is the same probe written\n"
+                "# out readably. ie_sig is LAST on the row because it contains commas.\n"
                 "session,mac,rssi,channel,ie_fp,count,ie_fp2,ie_sig\n");
         }
         furi_mutex_acquire(app->mutex, FuriWaitForever);

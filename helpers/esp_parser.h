@@ -169,10 +169,11 @@ typedef struct {
             uint8_t channel;
             uint16_t count; /**< a camera probes forever; a phone bursts and stops */
             /**
-             * Printable IE signature, in colonelpanichacks/flock-you's format so
-             * the two projects can compare findings directly. Borrowed pointer
-             * into the caller's line buffer, valid only for this callback --
-             * copy it if you keep it. Empty from older firmware.
+             * Printable IE signature (see the companion's ie_sig_string): an
+             * ordered IE tag list, readable and quotable in a field report
+             * where a bare hash is not. Borrowed pointer into the caller's line
+             * buffer, valid only for this callback -- copy it if you keep it.
+             * Empty from older firmware.
              */
             const char* sig;
         } survey;

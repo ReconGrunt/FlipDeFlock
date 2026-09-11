@@ -1004,14 +1004,12 @@ static uint32_t ie_content_hash(const uint8_t* p, int len) {
     return any ? h : 0;
 }
 
-// PRINTABLE signature, in colonelpanichacks/flock-you's published format.
+// PRINTABLE signature: an ordered IE tag list.
 //
-// Deliberately byte-compatible with theirs so the two projects can compare
-// findings directly: an ordered list of IE tag ids with the SSID skipped, and
-// vendor IEs expanded to `221:<hex of OUI+type+3 payload bytes>`. Their
-// drive-tested Flock signature (11 of 12 cameras, 2 false positives) is
-//   2,12,127,221:506f9a16030103,45,191,221:0050f208000000
-// and FLOCK_SIG_TABLE below matches exactly that string.
+// The SSID is skipped and vendor IEs are expanded to
+// `221:<hex of OUI+type+3 payload bytes>`; everything else is its decimal tag
+// id. The format is deliberately plain so a signature can be read off a CSV,
+// compared by eye against another capture, and quoted in a field report.
 //
 // A hash cannot be read, compared by eye, partially matched, or published in a
 // form anyone else can use. This can, which is why it goes in the survey CSV
@@ -1052,29 +1050,22 @@ static void ie_sig_string(const uint8_t* p, int len, char* out, size_t cap) {
 
 // Known Flock probe signatures, matched as a SUBSTRING -- see why below.
 //
-// ONE ENTRY, and it is not ours: contributed by DeFlockJoplin via
-// colonelpanichacks/flock-you (MIT), where it is the highest-confidence tier and
-// was drive-tested at 11 of 12 cameras with 2 false positives. It is a FACT
-// about what the hardware transmits rather than borrowed code -- the encoder
-// above is written from scratch -- but the finding is theirs and is credited
-// here and in docs/signatures.md.
-//
-// WHY A SUBSTRING AND NOT THE WHOLE STRING. Their published signature reads
-//   2,12,127,221:506f9a16030103,45,191,221:0050f208000000
-// and a whole-string compare against it would NEVER FIRE here. The leading
-// "2,12,127," is not observed data: fyCanonicalizeFlockIeSig() prepends it
-// verbatim to any signature containing the LiteON anchor, to paper over leading
-// tags their capture path truncates ("parse skew", which the same file handles
-// with phantom-IE recovery elsewhere). Tags 2 and 12 are not elements a modern
-// probe request carries at all.
-//
-// What is real is everything from the vendor anchor onward, and that part is
-// strong on its own: a Wi-Fi Alliance vendor IE (50:6f:9a type 0x16, MBO) with
+// WHAT THE ENTRY IS. A Wi-Fi Alliance vendor IE (50:6f:9a type 0x16, MBO) with
 // the exact payload 03 01 03, then HT capabilities, then VHT capabilities, then
-// a second vendor IE (00:50:f2 type 0x08) with payload 00 00 00. Two vendor IEs
-// with fixed payloads bracketing a specific capability pair is a far tighter
-// claim than either anchor alone, and it does not depend on which leading tags
-// a given driver manages to recover.
+// a second vendor IE (00:50:f2 type 0x08) with payload 00 00 00. Two vendor
+// elements with fixed payloads bracketing a specific capability pair is a far
+// tighter claim than any one anchor alone.
+//
+// WHY A SUBSTRING AND NOT THE WHOLE TAG LIST. The elements BEFORE the first
+// vendor IE are the ones a capture path is most likely to mangle -- a driver
+// that mis-starts its IE walk, or trims a frame, loses the leading tags first
+// and the tail last. Anchoring on the run that ends the probe means a signature
+// still matches when the front of the list is damaged, and it costs nothing in
+// precision because the discriminating content is all in that run.
+//
+// SINGLE-SOURCE, so it is capped at Class? on the Flipper and can never
+// auto-Confirm. It came from one contributor's drive, where it matched 11 of 12
+// cameras with 2 false positives. That is good evidence and it is not proof.
 //
 // This is MAC-INDEPENDENT, which is the entire point: it matches a camera whose
 // address is randomised and therefore invisible to every OUI table we ship.
@@ -1198,7 +1189,7 @@ typedef struct {
     uint8_t ch;
     uint16_t count;
     bool used;
-    char sig[SURVEY_SIG_LEN]; /**< printable IE signature, flock-you's format */
+    char sig[SURVEY_SIG_LEN]; /**< printable IE signature; see ie_sig_string() */
 } SurveyRow;
 static SurveyRow g_survey[SURVEY_MAX];
 
