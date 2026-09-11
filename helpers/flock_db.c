@@ -899,6 +899,22 @@ static const uint32_t flock_ie_fps[] = {
  * earlier 2026-09-08 capture, and it has never once been seen on this project's
  * bench.
  *
+ * INDEPENDENTLY CORROBORATED, 2026-09-11, and this is the part that is not our
+ * own reasoning. Cross-referencing the reporter's own coordinates against the
+ * public OpenStreetMap surveillance layer (`man_made=surveillance`, the data
+ * the community maps are built from) puts a mapped Flock Safety ALPR 44 m from
+ * one of these devices, the one at -31 dBm with 62 probes. Of all EIGHTEEN
+ * geotagged detections in that capture, that is the ONLY one within 100 m of a
+ * mapped camera, and a second sits at 218 m. The nearest 0x89C3DEBF device is
+ * 239 m away and was heard at -96 dBm, i.e. nowhere near the pole.
+ *
+ * Held at CANDIDATE anyway, for two honest reasons. Two of the four devices are
+ * 1.7 km and 2.7 km from anything mapped -- explainable by patchy coverage, but
+ * unexplained is not corroborated. And a map record is not a second radio
+ * CAPTURE, which is what the promotion bar above actually asks for. Promotion
+ * would also buy almost nothing in practice: these addresses are randomised, so
+ * there is no OUI underneath for a built-in to auto-Confirm against.
+ *
  * 0xD0BBEC4C -- the same drive, and the one hash here with a VENDOR ANCHOR.
  * Three devices, all three on OUIs already in flock_ouis[] above, spanning TWO
  * different Flock prefixes (24:B2:B9 and 70:08:94). Zero randomised addresses
