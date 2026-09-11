@@ -301,6 +301,23 @@ typedef struct {
                         *   card reads back as FlockBleTellNone and the detail
                         *   screen falls back to the generic "BLE". */
     int8_t geotag_rssi; /**< rssi when the geotag was last set (hysteresis) */
+    int8_t chan_rssi; /**< rssi of the sighting that set `channel`.
+                        *
+                        *  THE CHANNEL HAS TO COME FROM THE CLOSEST APPROACH.
+                        *  2.4 GHz channels are 20 MHz wide on 5 MHz spacing, so
+                        *  a camera transmitting only on 6 is genuinely received
+                        *  on 2 and 10 as well -- measured at 30 cm on the bench,
+                        *  a beacon-only emitter pinned to 6 was heard on
+                        *  2/5/6/7/8/10/12, peaking at -20 on 6 and down at -57
+                        *  on 2 and 10. This field used to not exist and
+                        *  `channel` was last-write-wins, so whichever fringe
+                        *  capture arrived last became the stored channel.
+                        *
+                        *  That is not cosmetic: `locate` parks the companion's
+                        *  radio on this channel, so a fringe value sends the
+                        *  Locator somewhere the camera never transmits. Seen on
+                        *  the bench -- a target stored as channel 12 read -68
+                        *  dBm, the same target on 6 read -24. */
     bool marked; /**< user flagged this for the report */
     bool confirmed; /**< the operator SAW this device with their own eyes. Ground
                       *   truth, and the only thing in the table that is not an

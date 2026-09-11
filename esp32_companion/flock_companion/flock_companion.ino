@@ -1035,8 +1035,24 @@ static void survey_note(const uint8_t* mac, uint32_t fp, int8_t rssi, uint8_t ch
         }
         if(memcmp(g_survey[i].mac, mac, 6) == 0) {
             if(g_survey[i].count < 0xFFFF) g_survey[i].count++;
-            if(rssi > g_survey[i].rssi) g_survey[i].rssi = rssi; // closest approach
-            g_survey[i].ch = ch;
+            // THE CHANNEL BELONGS TO THE CLOSEST APPROACH, NOT THE LAST FRAME.
+            //
+            // rssi already kept the best sighting while ch took the most recent
+            // one, so the row described two different moments -- and the app
+            // hands this channel to the Locator, which then parks the radio on
+            // it. 2.4 GHz channels overlap 20 MHz on 5 MHz spacing, so a camera
+            // on channel 6 is genuinely received on 2 and 10 as well; measured
+            // on the bench at 30 cm, a beacon-only emitter pinned to 6 was heard
+            // on 2/5/6/7/8/10/12, peaking at -20 on 6 and down at -57 on 2 and
+            // 10. Whichever of those arrived last became the stored channel.
+            //
+            // Tying both fields to the same sighting makes the pair coherent and
+            // picks the transmitter's real channel for free: the strongest
+            // capture is the one where the receiver was tuned to it.
+            if(rssi > g_survey[i].rssi) {
+                g_survey[i].rssi = rssi; // closest approach
+                g_survey[i].ch = ch;
+            }
             if(fp) g_survey[i].fp = fp;
             return;
         }

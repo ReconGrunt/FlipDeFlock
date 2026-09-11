@@ -396,9 +396,14 @@ command it gets, and the app polls its probe survey every ten seconds from a tic
 that runs in every screen -- so a hunt was cancelled seconds after it began, or
 instantly when opened from a detection on a link that was already up. A target
 30 cm away produced nothing across three attempts on the bench; it locks on in
-about a second now. The companion was also stamping detections with wherever its
-channel sweep had reached rather than the channel the frame arrived on, which
-then sent the Locator to a channel the camera never uses.
+about a second now. The channel a detection is stored with was wrong twice over,
+which sent the Locator somewhere the camera never transmits: the companion
+stamped frames with wherever its sweep had reached rather than where the frame
+arrived, and the app then kept the last channel it heard rather than the
+strongest. Since 2.4 GHz channels overlap, a camera on channel 6 really is heard
+on 2 and 10 — just far weaker — so the last one heard was often a fringe. On the
+bench a target stored as channel 12 read -68 dBm; the same target, stored
+correctly as 6, reads -22.
 
 Also: Share to DeFlock no longer labels everything a Flock ALPR camera (a
 streetlight, an Axon pole or an unknown MAC was handed over as one, and a passing

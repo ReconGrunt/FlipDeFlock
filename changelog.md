@@ -52,6 +52,24 @@ Everything below was driven on the hardware, not inferred.
   now comes from `rx_ctrl.channel`, which is the channel the packet was actually
   received on and cannot race.
 
+- **The stored channel was the last one heard, not the right one.** 2.4 GHz
+  channels are 20 MHz wide on 5 MHz spacing, so a camera transmitting only on
+  channel 6 is genuinely received on 2 and 10 as well. Measured at 30 cm with a
+  beacon-only emitter pinned to 6: heard on 2/5/6/7/8/10/12, peaking at -20 dBm
+  on 6 and down at -57 on 2 and 10. Every one of those overwrote the stored
+  channel, so whichever fringe capture happened to arrive last is where the
+  Locator went.
+
+  The channel now follows the STRONGEST sighting rather than the most recent, in
+  all three places it is kept: the detection table, the companion's survey rows,
+  and the app's survey merge. That last pair was incoherent in a way worth
+  naming -- the companion already kept the closest-approach RSSI but the
+  most-recent channel, so one row described two different moments.
+
+  End to end on the bench: all four beacon-only emitter identities now store
+  channel 6, where none of them did before. The target that read **-68 dBm, "out
+  of range"** with a stored channel of 12 reads **-22 dBm, steady** with 6.
+
 - **Share to DeFlock called everything a Flock ALPR camera.** The QR screen
   emitted `surveillance:type=ALPR` and `manufacturer=Flock Safety` for whatever
   was marked. The export path had the identical bug and was fixed in v0.79; this

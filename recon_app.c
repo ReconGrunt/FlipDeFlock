@@ -85,6 +85,11 @@ void recon_app_report_flock(
             memset(entry, 0, sizeof(FlockEntry));
             memcpy(entry->mac, mac, 6);
             entry->first_tick = now;
+            // Weaker than any real reading, so the first sighting always wins
+            // the channel. memset leaves this 0, and RSSI is negative dBm, so
+            // 0 would mean "nothing can ever beat it" and the channel would be
+            // frozen at whatever the first frame happened to carry.
+            entry->chan_rssi = INT8_MIN;
             entry->lat = NAN;
             entry->lon = NAN;
             entry->heading = NAN;
@@ -110,7 +115,15 @@ void recon_app_report_flock(
         entry->archived = false;
         entry->seen_epoch = furi_hal_rtc_get_timestamp();
         if(rssi != 0) entry->rssi = rssi;
-        if(channel != 0) entry->channel = channel;
+        // rssi tracks the LATEST sighting (it is a live proximity reading), but
+        // the channel must track the STRONGEST one -- see FlockEntry.chan_rssi
+        // for the measurement. Taking the latest let an off-channel fringe
+        // capture overwrite the real channel, and `locate` then parked the
+        // Locator's radio on it.
+        if(channel != 0 && (rssi == 0 || rssi >= entry->chan_rssi)) {
+            entry->channel = channel;
+            if(rssi != 0) entry->chan_rssi = rssi;
+        }
         if(ftype) entry->ftype = ftype;
         if(confidence > entry->confidence) entry->confidence = confidence;
         // Keep the probe fingerprint so the detail screen can show it (for
@@ -603,8 +616,16 @@ void recon_app_survey_add(
         // the count by the number of dumps.
         e->count = count;
         e->fp = fp;
-        e->channel = channel;
-        if(rssi > e->rssi || e->rssi == 0) e->rssi = rssi;
+        // Channel moves WITH the RSSI, never on its own. The companion now pairs
+        // the two (see survey_note), and taking its channel while keeping a
+        // different sighting's RSSI would pull the pair apart again on this
+        // side. Air Survey feeds the Locator through Pin addr, so a fringe
+        // off-channel value here costs a hunt -- same failure as the detection
+        // table's chan_rssi.
+        if(rssi > e->rssi || e->rssi == 0) {
+            e->rssi = rssi;
+            e->channel = channel;
+        }
     }
     furi_mutex_release(app->mutex);
 
@@ -1544,6 +1565,11 @@ static void recon_hits_add(ReconApp* app, const FlockStoreRec* r) {
     e->ssid[RECON_SSID_LEN - 1] = '\0';
     e->rssi = r->rssi;
     e->channel = r->channel;
+    // hits.csv carries no separate channel-RSSI column, so seed it from the
+    // stored reading: that row's channel and RSSI came from the same sighting.
+    // Seeding INT8_MIN instead would let the first fringe capture of the new
+    // session overwrite a channel earned at close range on the last drive.
+    e->chan_rssi = r->rssi;
     e->ftype = r->ftype;
     e->confidence = (FlockConfidence)r->conf;
     e->dev_class = r->dev_class;
