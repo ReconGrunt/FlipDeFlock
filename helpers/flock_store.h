@@ -107,7 +107,7 @@ typedef struct {
     char ssid[FLOCK_STORE_SSID_LEN];
     int8_t rssi;
     uint8_t channel;
-    char ftype; /**< P/B/R/O/F/L, or 0 when unknown */
+    char ftype; /**< P/B/R/O/F/L/S, or 0 when unknown */
     uint8_t conf; /**< FlockConfidence rung, 0..4 */
     uint32_t ie_fp;
     float lat, lon, heading; /**< NAN when there was no fix */

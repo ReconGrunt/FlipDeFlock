@@ -384,7 +384,24 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
-**v0.96** - **Two new candidate fingerprints, and one retracted.** From a field
+**v0.96** - **A camera on a randomised MAC can now be detected at all.** That gap
+was structural, not a matter of tuning: every rung of the companion's ladder
+needed an OUI match or a Flock SSID, so a randomised address scored zero and was
+thrown away *before* its fingerprint was even computed. A known probe signature
+now gets a frame past that on its own, and lands as `Class?` — capped there,
+because one contributor's drive is not proof. Verified on the bench against real
+randomised addresses with no OUI and no SSID behind them.
+
+The probe fingerprint also got a great deal sharper. The old one hashed each
+element's tag and length and threw the contents away, so the fields that describe
+a radio counted for nothing — across 120 devices in a field capture it produced
+49 distinct values with **74% of devices colliding**, one hash covering 24
+separate devices. `survey.csv` now carries a content-aware hash and a *readable*
+signature alongside it, in a format deliberately byte-compatible with
+[flock-you](https://github.com/colonelpanichacks/flock-you)'s, so findings can be
+compared between projects instead of being eight opaque hex digits.
+
+**Two new candidate fingerprints, and one retracted.** From a field
 drive by @wiilover22, `ba9fafa0` ships as a candidate: four devices carry it, all
 on randomised addresses no OUI table can match, and they sit 1.1 km to 6.1 km
 apart — so they are four fixed installations, not one device rotating its MAC.

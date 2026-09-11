@@ -1106,6 +1106,16 @@ FlockMethod flock_method_of(const uint8_t* mac, const char* ssid, char ftype, ui
     // BLE is classified on the companion (mfg id 0x09C8 / Raven GATT) from advert
     // bytes that never reach this side, so name the source rather than guess.
     if(ftype == 'L') return FlockMethodBle;
+    // Community PROBE SIGNATURE, flagged by the companion as sg=1 and carried
+    // here as ftype 'S'. Last, because every test above re-derives something
+    // from fields we hold and this one cannot: the signature is the IE layout of
+    // a frame that never crosses the wire.
+    //
+    // It still has to be NAMED. This is the only indicator that fires on a
+    // randomised address, so it is the one an operator is most likely to be
+    // looking at and least able to explain -- on the bench it rendered as the
+    // generic "ESP probe rule", which says nothing about why the row exists.
+    if(ftype == 'S') return FlockMethodSig;
     return FlockMethodUnknown;
 }
 
@@ -1126,6 +1136,10 @@ const char* flock_method_str(FlockMethod method) {
         return "OUI";
     case FlockMethodBle:
         return "BLE mfg ID";
+    case FlockMethodSig:
+        // "probe sig", not "community signature": composed into
+        // "Method: <this> + <frame>" on a row with about 26 characters.
+        return "probe sig";
     case FlockMethodUnknown:
     default:
         // Not "none": the companion DID score it, on probe behaviour we cannot

@@ -696,6 +696,72 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(m.u.banner.version, 2);
     CHECK_STR_EQ(m.u.banner.build, "0.99");
 
+    // --- v0.96 wire additions: fp2, sg=1, and the printable SV signature -----
+
+    // OLD FIRMWARE STILL PARSES. Six-field SV is what every companion before
+    // v0.96 emits; the new fields must default rather than reject the line.
+    CHECK_INT_EQ(P("SV,06fccb3af89e,-26,6,89c3debf,10"), EspMsgSurvey);
+    CHECK_INT_EQ((int)m.u.survey.count, 10);
+    CHECK_INT_EQ((int)m.u.survey.fp2, 0);
+    CHECK_STR_EQ(m.u.survey.sig, "");
+
+    // NEW FIRMWARE: fp2 plus a signature that CONTAINS COMMAS. The signature is
+    // last on the line precisely so it can, and the splitter must hand back the
+    // whole remainder instead of the first comma-delimited piece of it.
+    CHECK_INT_EQ(
+        P("SV,06fccb3af89e,-26,6,89c3debf,10,1a2b3c4d,"
+          "2,12,127,221:506f9a16030103,45,191,221:0050f208000000"),
+        EspMsgSurvey);
+    CHECK_INT_EQ((int)m.u.survey.fp, (int)0x89c3debfu);
+    CHECK_INT_EQ((int)m.u.survey.fp2, (int)0x1a2b3c4du);
+    CHECK_STR_EQ(m.u.survey.sig, "2,12,127,221:506f9a16030103,45,191,221:0050f208000000");
+    CHECK_INT_EQ((int)m.u.survey.count, 10);
+
+    // THE RANDOMISED-CAMERA CASE, which is the whole reason any of this exists.
+    // conf=0 on the wire -- no OUI, no Flock SSID, nothing the ladder can score
+    // -- and a locally administered address. sg=1 alone has to produce a
+    // detection, or a camera that randomises stays invisible.
+    CHECK_INT_EQ(P("D,06fccb3af89e,-26,6,P,0,,sg=1"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.conf, (int)FlockConfidenceProbeFp);
+    // 'S', so the detail screen can NAME the signature as the reason. On the
+    // bench this row rendered as the generic "ESP probe rule", which tells an
+    // operator nothing about why the only indicator that survives a randomised
+    // address just fired.
+    CHECK_INT_EQ(m.u.flock.ftype, 'S');
+    CHECK_INT_EQ((int)flock_method_of(NULL, NULL, 'S', 0), (int)FlockMethodSig);
+    // A REAL fingerprint still wins the label: same rung, different evidence,
+    // and "IE fp" is the one the operator can go look up in signatures.json.
+    CHECK_INT_EQ(P("D,06fccb3af89e,-26,6,P,0,,fp=42d75cd1,sg=1"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.ftype, 'F');
+
+    // ...and it is CAPPED there. A community signature is single-source, so it
+    // must never reach Confirmed -- not even riding a real Flock OUI, where the
+    // OUI rungs have already had their say.
+    CHECK_INT_EQ(P("D,70c94e112233,-26,6,P,2,,sg=1"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.conf, (int)FlockConfidenceProbeFp);
+
+    // A stronger score from the ladder is never dragged DOWN by the cap.
+    CHECK_INT_EQ(P("D,70c94e112233,-26,6,B,3,Flock-A1B2C3,sg=1"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.conf, (int)FlockConfidenceConfirmed);
+
+    // sg=0 is not a match, and an absent sg= is not a match. The parser still
+    // returns a Flock message -- dropping a scoreless row is recon_app_flock_add's
+    // job, not this layer's -- so what matters is that confidence stays None and
+    // the row therefore never reaches the table.
+    CHECK_INT_EQ(P("D,06fccb3af89e,-26,6,P,0,,sg=0"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.conf, (int)FlockConfidenceNone);
+    CHECK_INT_EQ(P("D,06fccb3af89e,-26,6,P,0,"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.conf, (int)FlockConfidenceNone);
+
+    // An UNKNOWN trailing key is skipped, not treated as an error -- that is the
+    // forwards-compatibility contract, and it is what lets a newer companion add
+    // a field without breaking this build.
+    CHECK_INT_EQ(P("D,70c94e112233,-26,6,P,2,,fp=deadbeef,zz=9"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.fp, (int)0xdeadbeefu);
+    // Specifically: a key that merely STARTS like "fp=" must not be read as one.
+    CHECK_INT_EQ(P("D,70c94e112233,-26,6,P,2,,fp2=1a2b3c4d"), EspMsgFlock);
+    CHECK_INT_EQ((int)m.u.flock.fp, 0);
+
     CHECK_INT_EQ(P("GARBAGE"), EspMsgIgnore);
     CHECK_INT_EQ(P(""), EspMsgIgnore);
 

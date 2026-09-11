@@ -104,6 +104,14 @@ typedef enum {
 // twice it and the most recent drives always survive. ~2800 rows, i.e. dozens of
 // drives; a session contributes at most RECON_SURVEY_MAX.
 #define RECON_SURVEY_LOG_MAX      131072u
+// Printable IE signature carried per survey row. A real camera's full tag list
+// runs to about 51 characters, so 72 holds it with room for a couple more
+// elements; longer ones truncate rather than drop, because even a cut signature
+// shows its leading tag order. Must be >= the companion's SURVEY_SIG_LEN or the
+// CSV loses the tail of what the board already measured. 48 rows x 72 B =
+// 3.4 KB, which is real money on this heap and is why it lives in the survey
+// table only and not in FlockEntry.
+#define RECON_SURVEY_SIG_LEN      72
 #define RECON_SURVEY_LOG_OLD_PATH RECON_APP_FOLDER "/survey_log.old.csv"
 
 /** ViewDispatcher view indexes. */
@@ -239,9 +247,29 @@ typedef enum {
 typedef struct {
     uint8_t mac[6];
     uint32_t fp;
+    /**
+     * IE-CONTENT hash -- the fix for why `fp` above could not identify anything.
+     * `fp` folds in each IE's tag and length and discards the bytes, so the
+     * capability elements that describe a radio count for nothing: across 120
+     * devices in a real capture it produced 49 distinct values with 74% of
+     * devices colliding, one hash covering 24 separate devices. 0 from firmware
+     * older than v0.96.
+     */
+    uint32_t fp2;
     int8_t rssi; /**< strongest seen -- closest approach */
     uint8_t channel;
     uint16_t count;
+    /**
+     * Printable IE signature, in colonelpanichacks/flock-you's published format
+     * so findings are directly comparable between the two projects.
+     *
+     * A HASH CANNOT BE READ. It cannot be eyeballed against someone else's
+     * capture, partially matched, or published in a form another project can
+     * use -- which is exactly what was needed and missing when a field report
+     * arrived carrying nothing but eight hex digits per row. This goes in
+     * survey.csv beside the hashes, not instead of them.
+     */
+    char sig[RECON_SURVEY_SIG_LEN];
 } SurveyEntry;
 #define RECON_SURVEY_MAX 48
 
@@ -288,7 +316,7 @@ typedef struct {
     char ssid[RECON_SSID_LEN];
     int8_t rssi;
     uint8_t channel;
-    char ftype; /**< P/B/R/O/F/L */
+    char ftype; /**< P/B/R/O/F/L/S */
     FlockConfidence confidence;
     uint8_t dev_class; /**< FlockDevClass: ALPR camera vs SoundThinking acoustic
                          *   sensor. What it is, as opposed to how sure we are. */
@@ -783,7 +811,9 @@ void recon_app_survey_add(
     uint32_t fp,
     int8_t rssi,
     uint8_t channel,
-    uint16_t count);
+    uint16_t count,
+    uint32_t fp2,
+    const char* sig);
 
 /**
  * Release the four bulk detection tables, returning ~10 KB of contiguous heap.

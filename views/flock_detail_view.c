@@ -87,6 +87,7 @@ static const char* fd_src_phrase(char ftype) {
         return "beacon";
     case 'P':
     case 'F': // IE-fingerprint match -- still a probe request on the air
+    case 'S': // community probe-signature match -- likewise a probe request
         return "probe req";
     case 'R':
         return "probe resp";

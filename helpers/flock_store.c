@@ -167,8 +167,19 @@ size_t flock_store_fmt_line(char* out, size_t out_len, const FlockStoreRec* r) {
 
     // ftype is one of a small known set; anything else is written as empty
     // rather than risking a comma or quote landing mid-record.
+    //
+    // 'S' (community probe-signature match) HAS TO BE IN THIS SET. It was added
+    // to the parser and to flock_method_of() without being added here, and the
+    // whitelist silently wrote it out as empty -- so a signature detection
+    // survived a save/load cycle with no frame type at all and its detail screen
+    // reverted to the generic "ESP probe rule". Found on the bench by reading
+    // hits.csv, not by any test: every layer in between was individually right.
+    //
+    // Any NEW letter needs adding here too. That is easy to miss precisely
+    // because nothing breaks loudly -- the row still loads, it just quietly
+    // forgets what it was.
     char ft[2] = {0, 0};
-    if(r->ftype && strchr("PBROFL", r->ftype)) ft[0] = r->ftype;
+    if(r->ftype && strchr("PBROFLS", r->ftype)) ft[0] = r->ftype;
 
     int n = snprintf(
         out,
@@ -258,7 +269,11 @@ bool flock_store_parse_line(const char* line, FlockStoreRec* out) {
     r.channel = (uint8_t)u;
 
     if(f[4][0] != '\0') {
-        if(f[4][1] != '\0' || !strchr("PBROFL", f[4][0])) return false;
+        // Keep this set IDENTICAL to the writer's above. They were out of step
+        // for exactly one change ('S'), and the two whitelists fail in opposite
+        // directions: the writer silently blanks an unknown letter, the reader
+        // silently rejects the whole row. Neither says anything.
+        if(f[4][1] != '\0' || !strchr("PBROFLS", f[4][0])) return false;
         r.ftype = f[4][0];
     }
 

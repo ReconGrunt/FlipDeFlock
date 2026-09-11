@@ -108,6 +108,7 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     // Start at f[7] (AFTER the ssid at f[6]) so an SSID that literally begins
     // "fp=" or "cls=" can't be misread as one of these fields.
     uint32_t fp = 0;
+    bool sig_hit = false;
     bool hidden = false;
     uint8_t probe_rate = 0;
     // Default the class from the MAC's own OUI rather than assuming ALPR: that
@@ -116,7 +117,14 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
     FlockDevClass dev_class = flock_class_from_mac(mac);
     for(int i = 7; i < n; i++) {
         if(strncmp(f[i], "fp=", 3) == 0) {
+            // "fp2=" is NOT read here, deliberately. A detection is scored by
+            // sg= and fp=; the content hash is a COLLECTION field and its only
+            // consumer is survey.csv, which gets it from the SV line. Parsing it
+            // here too would store a value nothing reads, on every row of a
+            // 64-entry table, for a table of fp2 signatures that ships empty.
             fp = (uint32_t)strtoul(f[i] + 3, NULL, 16);
+        } else if(strncmp(f[i], "sg=", 3) == 0) {
+            sig_hit = (f[i][3] == '1');
         } else if(strncmp(f[i], "cls=", 4) == 0) {
             // Unknown letters fall back to the MAC-derived class rather than to
             // ALPR: a newer companion may name a class this build predates, and
@@ -163,6 +171,29 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
         // independent capture (see flock_ie_fps_candidate[] in flock_db.c).
         if(FlockConfidenceProbeFp > conf) conf = FlockConfidenceProbeFp;
         ftype = 'F';
+    }
+
+    // COMMUNITY PROBE SIGNATURE. The companion matched the whole IE signature
+    // against its published table and said so with sg=1; it deliberately did not
+    // raise its own score, because conf=3 on that wire means CONFIRMED.
+    //
+    // THIS IS THE ONE TELL THAT FIRES ON A RANDOMISED ADDRESS, so it is also the
+    // only rung that can produce a detection with no OUI behind it at all -- the
+    // companion now lets such a frame past its conf==0 gate purely on this.
+    //
+    // Capped at "Class?" for the same reason a candidate fingerprint is: it is
+    // single-source (one contributor, one geography, drive-tested by one
+    // project), and being right 11 times out of 12 is not the same as being
+    // proof. A Flock OUI underneath does NOT lift it, because then the OUI rungs
+    // above have already had their say.
+    if(sig_hit) {
+        if(FlockConfidenceProbeFp > conf) conf = FlockConfidenceProbeFp;
+        // 'S', not 'F', and only when a real fingerprint did not already claim
+        // the row. Both sit at the same rung, but they are different evidence
+        // and the detail screen names them separately -- a hit the operator can
+        // only have got from the signature must not say "IE fp", which they
+        // could then go looking for in signatures.json and never find.
+        if(ftype != 'F') ftype = 'S';
     }
 
     memcpy(out->u.flock.mac, mac, 6);
@@ -369,8 +400,13 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
     // SV,<mac12>,<rssi>,<ch>,<fp8hex>,<count>  one wildcard-probe transmitter,
     // matched or not. SVBEGIN/SVEND bracket a dump and carry nothing themselves.
     if(strncmp(line, "SV,", 3) == 0) {
-        char* f[6];
-        int n = esp_split_fields(line, f, 6);
+        // Split into EIGHT, not six: fields 7 and 8 (fp2 and the printable
+        // signature) were appended in v0.96 and older firmware simply stops at
+        // six. The signature is LAST on the line because it contains commas --
+        // esp_split_fields stops once it has filled the array, so f[7] is the
+        // whole remainder rather than one comma-delimited piece of it.
+        char* f[8];
+        int n = esp_split_fields(line, f, 8);
         if(n < 6) return (out->type = EspMsgIgnore);
         uint8_t mac[6];
         if(!parse_mac_compact(f[1], mac)) return (out->type = EspMsgIgnore);
@@ -379,6 +415,8 @@ EspMsgType esp_parse_companion_line(char* line, EspMsg* out) {
         out->u.survey.channel = (uint8_t)atoi(f[3]);
         out->u.survey.fp = (uint32_t)strtoul(f[4], NULL, 16);
         out->u.survey.count = (uint16_t)atoi(f[5]);
+        out->u.survey.fp2 = (n >= 7) ? (uint32_t)strtoul(f[6], NULL, 16) : 0u;
+        out->u.survey.sig = (n >= 8) ? f[7] : "";
         return (out->type = EspMsgSurvey);
     }
 

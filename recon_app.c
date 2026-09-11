@@ -582,7 +582,9 @@ void recon_app_survey_add(
     uint32_t fp,
     int8_t rssi,
     uint8_t channel,
-    uint16_t count) {
+    uint16_t count,
+    uint32_t fp2,
+    const char* sig) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     SurveyEntry* e = NULL;
     for(size_t i = 0; i < app->survey_count; i++) {
@@ -625,6 +627,14 @@ void recon_app_survey_add(
         if(rssi > e->rssi || e->rssi == 0) {
             e->rssi = rssi;
             e->channel = channel;
+        }
+        if(fp2) e->fp2 = fp2;
+        // First non-empty wins: the signature describes the DEVICE, not the
+        // sighting, so re-copying an identical 52-character string on every dump
+        // would be pure work. An empty one means firmware older than v0.96.
+        if(sig && sig[0] && !e->sig[0]) {
+            strncpy(e->sig, sig, RECON_SURVEY_SIG_LEN - 1);
+            e->sig[RECON_SURVEY_SIG_LEN - 1] = 0;
         }
     }
     furi_mutex_release(app->mutex);
@@ -680,13 +690,16 @@ void recon_survey_save(ReconApp* app) {
             out,
             "# FlipDeFlock probe survey -- every wildcard-probe transmitter seen, matched or not\n"
             "# No SSID and no position. A high count next to a camera you can see is that camera.\n"
-            "mac,rssi,channel,ie_fp,count\n");
+            "# ie_fp2 folds in the capability IE CONTENTS, not just their tag+length like ie_fp.\n"
+            "# ie_sig is the same probe in colonelpanichacks/flock-you's printable format, so a\n"
+            "# finding here is directly comparable with theirs. It is LAST because it has commas.\n"
+            "mac,rssi,channel,ie_fp,count,ie_fp2,ie_sig\n");
         furi_mutex_acquire(app->mutex, FuriWaitForever);
         for(size_t i = 0; i < app->survey_count; i++) {
             SurveyEntry* e = &app->survey[i];
             furi_string_cat_printf(
                 out,
-                "%02X:%02X:%02X:%02X:%02X:%02X,%d,%u,%08lx,%u\n",
+                "%02X:%02X:%02X:%02X:%02X:%02X,%d,%u,%08lx,%u,%08lx,%s\n",
                 e->mac[0],
                 e->mac[1],
                 e->mac[2],
@@ -696,7 +709,9 @@ void recon_survey_save(ReconApp* app) {
                 e->rssi,
                 e->channel,
                 (unsigned long)e->fp,
-                (unsigned)e->count);
+                (unsigned)e->count,
+                (unsigned long)e->fp2,
+                e->sig);
         }
         furi_mutex_release(app->mutex);
         storage_file_write(file, furi_string_get_cstr(out), furi_string_size(out));
@@ -746,14 +761,16 @@ void recon_survey_log_append(ReconApp* app, void* storage_rec) {
                 "# session = scan start, as a unix time. Counts are PER SESSION, never\n"
                 "# since the board booted, so they stay comparable within one row group.\n"
                 "# No SSID and no position, same as survey.csv.\n"
-                "session,mac,rssi,channel,ie_fp,count\n");
+                "# ie_fp2 folds in the capability IE contents; ie_sig is the same probe in\n"
+                "# flock-you's printable format. ie_sig is LAST because it contains commas.\n"
+                "session,mac,rssi,channel,ie_fp,count,ie_fp2,ie_sig\n");
         }
         furi_mutex_acquire(app->mutex, FuriWaitForever);
         for(size_t i = 0; i < app->survey_count; i++) {
             SurveyEntry* e = &app->survey[i];
             furi_string_cat_printf(
                 out,
-                "%lu,%02X:%02X:%02X:%02X:%02X:%02X,%d,%u,%08lx,%u\n",
+                "%lu,%02X:%02X:%02X:%02X:%02X:%02X,%d,%u,%08lx,%u,%08lx,%s\n",
                 (unsigned long)session,
                 e->mac[0],
                 e->mac[1],
@@ -764,7 +781,9 @@ void recon_survey_log_append(ReconApp* app, void* storage_rec) {
                 e->rssi,
                 e->channel,
                 (unsigned long)e->fp,
-                (unsigned)e->count);
+                (unsigned)e->count,
+                (unsigned long)e->fp2,
+                e->sig);
         }
         furi_mutex_release(app->mutex);
         storage_file_write(file, furi_string_get_cstr(out), furi_string_size(out));

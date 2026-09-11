@@ -142,7 +142,9 @@ static void esp_apply_companion(EspLink* esp, const EspMsg* m) {
             m->u.survey.fp,
             m->u.survey.rssi,
             m->u.survey.channel,
-            m->u.survey.count);
+            m->u.survey.count,
+            m->u.survey.fp2,
+            m->u.survey.sig);
         break;
     case EspMsgRemoteId:
         recon_app_report_remote_id(

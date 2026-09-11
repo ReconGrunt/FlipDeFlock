@@ -394,6 +394,16 @@ typedef enum {
     FlockMethodPin, /**< the operator pinned this exact address (FlockDbExtras.macs). */
     FlockMethodOui, /**< MAC is in a Flock/SoundThinking-associated OUI table. */
     FlockMethodBle, /**< BLE sighting: the companion classified it by mfg id / GATT. */
+    FlockMethodSig, /**< the companion matched a known community PROBE SIGNATURE
+                      *  (`sg=1` on the wire). Re-derived from ftype rather than
+                      *  from the fields here, because the signature is the IE
+                      *  layout of the frame and never reaches this side.
+                      *
+                      *  Needed as its own method because it is the ONLY tell
+                      *  that fires on a randomised address, so it is the one an
+                      *  operator most needs named. Before it existed such a hit
+                      *  rendered as the generic "ESP probe rule", which tells
+                      *  them nothing about why the row is on the screen. */
 } FlockMethod;
 
 /**
@@ -409,7 +419,7 @@ typedef enum {
  *
  * @param mac    6-byte MAC (NULL-safe).
  * @param ssid   SSID as stored, may be NULL/empty.
- * @param ftype  frame-type tag: P/B/R/O/F/L.
+ * @param ftype  frame-type tag: P/B/R/O/F/L/S.
  * @param ie_fp  IE-skeleton fingerprint, 0 = none.
  */
 FlockMethod flock_method_of(const uint8_t* mac, const char* ssid, char ftype, uint32_t ie_fp);

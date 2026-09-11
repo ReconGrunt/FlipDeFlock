@@ -208,6 +208,27 @@ void suite_flock_store(void) {
         CHECK(memcmp(&guard, &before, sizeof(guard)) == 0); // never partially written
     }
 
+    // EVERY ftype letter MUST SURVIVE A ROUND TRIP.
+    //
+    // 'S' did not. It was added to the parser and to flock_method_of() while the
+    // serializer's whitelist still read "PBROFL", so a community-signature
+    // detection was written out with an EMPTY frame type and came back from
+    // hits.csv having forgotten what it was -- its detail screen reverted to the
+    // generic "ESP probe rule". Nothing broke loudly; the row still loaded.
+    // Tested as a set rather than one letter, so the next letter cannot repeat it.
+    {
+        const char* letters = "PBROFLS";
+        for(const char* c = letters; *c; c++) {
+            FlockStoreRec r = sample();
+            r.ftype = *c;
+            char line[FLOCK_STORE_LINE_MAX];
+            CHECK(flock_store_fmt_line(line, sizeof(line), &r) > 0);
+            FlockStoreRec out;
+            CHECK(flock_store_parse_line(line, &out));
+            CHECK_INT_EQ(out.ftype, *c);
+        }
+    }
+
     // A schema/comment line must not parse as a record.
     {
         FlockStoreRec junk;

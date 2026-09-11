@@ -341,6 +341,60 @@ def check_version_parity():
     return True
 
 
+
+def check_sv_wire_format():
+    """The SV line's field count, on both sides of the wire.
+
+    WHY THIS EXISTS. On 2026-09-10 the companion's SV printf was extended to
+    carry fp2 and the printable IE signature, and the Flipper parser was
+    extended to read them -- but the companion edit was silently lost before it
+    reached disk. Both sides still COMPILED, both were flashed, and the only
+    symptom was that the two new fields were quietly missing from every field
+    report. Nothing caught it, because nothing compares a printf format against
+    the parser that consumes it.
+
+    A format string is not type-checked across a UART. This is the cheapest
+    check that would have caught it.
+    """
+    print("")
+    print("SV wire format: companion emitter vs Flipper parser")
+    esp = ESP.read_text(encoding="utf-8", errors="ignore")
+    app_parser = (ROOT / "helpers" / "esp_parser.c").read_text(
+        encoding="utf-8", errors="ignore"
+    )
+
+    m = re.search(r'"(SV,%02x%02x%02x%02x%02x%02x[^"]*)', esp)
+    if not m:
+        print("  FAIL could not find the SV printf format in the companion")
+        return False
+    fmt = m.group(1)
+    # The MAC is ONE field: the six %02x are concatenated with no commas between
+    # them, so the field count is simply commas + 1.
+    emitted = fmt.count(",") + 1
+    # ANCHOR ON THE SV BRANCH. esp_parser.c declares a char* f[N] for every line
+    # type it handles, and an unanchored search finds whichever appears first --
+    # which is how the first version of this guard reported "3 fields on both
+    # sides" and PASSED, while actually comparing the SV emitter against some
+    # other line's parser. A guard that can pass by coincidence is not a guard.
+    blk = re.search(r'"SV,", 3\) == 0\) \{(.*?)\n    \}', app_parser, re.S)
+    if not blk:
+        print("  FAIL could not find the SV branch in helpers/esp_parser.c")
+        return False
+    m2 = re.search(r"esp_split_fields\(line, f, (\d+)\)", blk.group(1))
+    if not m2:
+        print("  FAIL could not find the SV field split in helpers/esp_parser.c")
+        return False
+    parsed = int(m2.group(1))
+    if emitted != parsed:
+        print("  FAIL SV: companion emits %d fields, parser splits %d" % (emitted, parsed))
+        print("       format: %s" % fmt)
+        print("       Extend BOTH. The signature must stay LAST, because it is")
+        print("       the only field allowed to contain commas.")
+        return False
+    print("  OK   SV: %d fields emitted and split on both sides" % emitted)
+    return True
+
+
 def main():
     print("OUI table parity: Flipper app vs ESP32 companion")
     ok = True
@@ -373,6 +427,8 @@ def main():
     if mis_ok:
         print(f"  OK   none of the {len(MISATTRIBUTED)} look-alike prefixes are present")
     ok &= mis_ok
+
+    ok &= check_sv_wire_format()
 
     print()
     print('Shared chip-vendor / shared-block prefixes (never evidence on their own)')

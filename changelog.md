@@ -4,6 +4,64 @@
 
 Everything below was driven on the hardware, not inferred.
 
+### Added
+
+- **A camera on a randomised MAC can now be detected at all.** This is the gap
+  issue #25 spent three weeks inside, and it was structural rather than a matter
+  of curation: every rung of the companion's ladder needed an OUI match or a
+  Flock SSID, so a randomised address scored zero and was dropped *before the
+  fingerprint was even computed*. No amount of signature work could reach past
+  that `return`.
+
+  A known probe signature now gets a frame past it on its own. Verified on the
+  bench against real randomised addresses with nothing else behind them:
+
+  ```
+  D,7ab77794524e,-28,6,P,0,,fp=173d7a70,sg=1
+  ```
+
+  `conf=0` means the ladder scored it at nothing. It reached the Flipper purely
+  on the shape of its probe request, and landed as `Class?` — capped there and
+  never able to auto-Confirm, because the signature is single-source.
+
+  The one signature shipped is DeFlockJoplin's, via
+  [colonelpanichacks/flock-you](https://github.com/colonelpanichacks/flock-you)
+  (MIT, credited), where it was drive-tested at 11 of 12 cameras with 2 false
+  positives. It is matched as a SUBSTRING, not whole: their published string
+  begins `2,12,127,` which is not observed data at all — their canonicaliser
+  prepends it verbatim to cover leading tags their capture path truncates, and
+  tags 2 and 12 are not elements a modern probe carries. A whole-string compare
+  would never have fired. What is real is everything from the vendor anchor
+  onward, and that is what we match.
+
+- **The probe fingerprint now folds in IE CONTENT, not just tag and length.**
+  The old hash discarded every byte of every element, so supported rates and
+  HT/VHT/HE capabilities — the fields that actually describe a radio —
+  contributed nothing. Measured against the 120 devices in @wiilover22's capture:
+  49 distinct values, **74% of devices sharing a hash with something else**, one
+  hash covering 24 separate devices. A signature that coarse cannot identify
+  anything.
+
+  `ie_fp2` folds the capability contents in, while deliberately excluding DS
+  Parameter Set — that carries the channel, and including it would give a device
+  a different fingerprint on every channel it sweeps. Reported alongside the old
+  hash, never instead of it, so every `signatures.json` in the field keeps
+  working.
+
+- **`survey.csv` now carries a readable IE signature, not only hashes.** A hash
+  cannot be eyeballed, compared against another project's capture, partially
+  matched, or published for anyone else to use — which is exactly what was
+  needed and missing when a field report arrived as eight hex digits per row.
+  The format is byte-compatible with flock-you's on purpose, so a finding here
+  can be set beside theirs directly.
+
+- **`sigtest` on the companion**, kept permanently. The signature path cannot be
+  reached from the radio on a bench: the ESP-IDF will not inject a probe request
+  with a foreign source address, so no synthetic Flock probe can be put on the
+  air. `sigtest` runs a frame built to the known layout through the *same*
+  production functions the promiscuous callback uses, so the one detection path
+  that matters stays checkable on any bench, forever, without a camera.
+
 ### Signatures
 
 From @wiilover22's 2026-09-11 drive (discussion #27): three CSVs covering six

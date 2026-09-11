@@ -155,9 +155,26 @@ typedef struct {
              */
             uint8_t mac[6];
             uint32_t fp; /**< IE-skeleton hash -- survives MAC randomisation */
+            /**
+             * IE-CONTENT hash. The skeleton above folds in tag id and length and
+             * discards every byte of content, so the IEs that actually describe
+             * a radio -- rates, HT/VHT/HE capabilities, extended capabilities --
+             * count for nothing. Across 120 devices in a real capture it yielded
+             * 49 distinct values with 74% of devices in a collision, one hash
+             * covering 24 separate devices. This one folds the capability
+             * contents in. 0 from firmware that predates it.
+             */
+            uint32_t fp2;
             int8_t rssi; /**< strongest seen, i.e. closest approach */
             uint8_t channel;
             uint16_t count; /**< a camera probes forever; a phone bursts and stops */
+            /**
+             * Printable IE signature, in colonelpanichacks/flock-you's format so
+             * the two projects can compare findings directly. Borrowed pointer
+             * into the caller's line buffer, valid only for this callback --
+             * copy it if you keep it. Empty from older firmware.
+             */
+            const char* sig;
         } survey;
 
         struct { // EspMsgRemoteId (RID)
