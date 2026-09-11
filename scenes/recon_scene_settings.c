@@ -2,8 +2,18 @@
 // Copyright (c) 2026 ReconGrunt
 #include "../recon_app_i.h"
 
-static const char* const backend_text[] = {"Companion", "Marauder"};
-static const char* const port_text[] = {"USART 13/14", "LPUART 15/16"};
+// SEVEN-ISH CHARACTERS, and it is a PIXEL budget, not a character count.
+// VariableItemList gives the value column a fixed ~40 px regardless of how short
+// the label is -- verified on hardware by shortening "Board Mode" to "Board" and
+// watching the value clip identically. "Companion" rendered as "Compani" and
+// "Marauder" as "Maraude"; the selected row marquee-scrolls, so the truncation
+// is only visible at rest, which is exactly when the operator glances at it.
+// Same clip that already forced alert_conf_text[] short below.
+static const char* const backend_text[] = {"FDF FW", "Maraud"};
+// "US"/"LP" + the pin pair, because the full "USART 13/14" clipped to "USART 1"
+// at rest and the pins are the half an operator actually wires. Same fixed ~40 px
+// value column as backend_text[] above.
+static const char* const port_text[] = {"US13/14", "LP15/16"};
 static const char* const onoff_text[] = {"OFF", "ON"};
 
 static const uint32_t esp_baud_val[] = {115200, 921600};
@@ -13,7 +23,8 @@ static const char* const gps_baud_text[] = {"9600", "115200", "57600"};
 
 // Index-aligned with ESP_MARAUDER_CMDS in helpers/esp_link.c.
 #define MARAUDER_CMD_COUNT 4
-static const char* const marauder_text[] = {"Probe req", "AP scan", "Beacon", "Raw"};
+// "Probe req" clipped to "Probe re". Unambiguous against the other three.
+static const char* const marauder_text[] = {"Probe", "AP scan", "Beacon", "Raw"};
 
 static uint8_t index_of_u32(const uint32_t* arr, size_t n, uint32_t val) {
     for(size_t i = 0; i < n; i++) {
@@ -191,7 +202,8 @@ static void gps_baud_changed(VariableItem* item) {
 }
 
 // Index-aligned with ReconAlertMode in helpers/alerts.h.
-static const char* const alert_text[] = {"OFF", "Vibrate", "Beep", "Beep+Vibe"};
+// "Beep+Vibe" clipped to "Beep+Vi". "Both" is exact against OFF/Vibrate/Beep.
+static const char* const alert_text[] = {"OFF", "Vibrate", "Beep", "Both"};
 
 static void alert_mode_changed(VariableItem* item) {
     ReconApp* app = variable_item_get_context(item);
@@ -226,7 +238,12 @@ static void sound_changed(VariableItem* item) {
     recon_settings_save(app);
 }
 
-static const char* const flash_speed_text[] = {"Safe 115k", "Fast 921k"};
+// NAME THE BAUD THE FLASHER ACTUALLY USES. This read "Fast 921k" while
+// recon_scene_firmware_run.c passes 230400 -- a number the app never sends,
+// printed as if it were a setting. It also did not fit: nine characters overrun
+// the VariableItemList value column, and the "<" arrow drawn for the second
+// entry landed on top of the F ("<ast 921k" on screen).
+static const char* const flash_speed_text[] = {"115k", "230k"};
 
 static void flash_fast_changed(VariableItem* item) {
     ReconApp* app = variable_item_get_context(item);

@@ -85,7 +85,9 @@ void recon_scene_survey_on_enter(void* context) {
         snprintf(
             row,
             sizeof(row),
-            "%d x%u %02X:%02X:%02X%s%s",
+            // Two spaces before the OUI: with one, "-89 x1 14:91:82" reads as
+            // "x114" at this font size, which is a count that does not exist.
+            "%d x%u  %02X:%02X:%02X%s%s",
             (int)r->rssi,
             (unsigned)r->count,
             r->mac[0],

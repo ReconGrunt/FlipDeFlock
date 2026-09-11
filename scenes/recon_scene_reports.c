@@ -143,6 +143,15 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
                 app->flock[i].marked = false;
             }
             furi_mutex_release(app->mutex);
+            // PERSIST IT. Clearing only the in-memory flags made the popup and
+            // the "(N marked)" header both say it worked while hits.csv still
+            // held every mark, so closing the app brought all of them back --
+            // verified on hardware: cleared, restarted, three marks returned.
+            // The hit menu already saves after a single mark toggle; clearing
+            // every mark at once is not the one that should skip it. A no-op
+            // when Save Hits is off, which is the same contract as everywhere
+            // else this is called.
+            recon_hits_save(app);
             recon_scene_reports_build_menu(app);
             recon_scene_reports_show_popup(app, "Marks Cleared", "");
             consumed = true;

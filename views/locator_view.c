@@ -85,11 +85,22 @@ static void locator_view_draw_callback(Canvas* canvas, void* _model) {
     ui_title_bar_icon(canvas, UiIconCrosshair, "LOCATOR", kind == 'b' ? "BLE" : "WiFi");
 
     if(!connected) {
+        // DON'T CALL THIS A CONNECTION PROBLEM -- HERE IT USUALLY IS NOT.
+        //
+        // In Locator mode the companion emits NOTHING except LOC lines for the
+        // target: no status block, no detections. So "connected" on this one
+        // screen means "the target has been heard", and a perfectly healthy link
+        // looks identical to a dead board until the target next transmits. The
+        // old text asserted the board had not connected, and told the operator to
+        // "hold BOOT, tap RESET" -- which is the FLASHER's instruction and the one
+        // action that guarantees this screen never works, because BOOT held
+        // through a reset drops the ESP32 into the serial download loader where
+        // the companion firmware does not run at all.
         canvas_set_font(canvas, FontSecondary);
         canvas_draw_str(
-            canvas, 2, 30, port_busy ? "UART busy - check port" : "connecting ESP32...");
+            canvas, 2, 30, port_busy ? "UART busy - check port" : "listening for target...");
         canvas_draw_str(
-            canvas, 2, 42, port_busy ? "free the GPS UART/port" : "hold BOOT, tap RESET");
+            canvas, 2, 42, port_busy ? "free the GPS UART/port" : "no board? tap its RESET");
         return;
     }
 

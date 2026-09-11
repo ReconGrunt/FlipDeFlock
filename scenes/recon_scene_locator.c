@@ -72,12 +72,20 @@ void recon_scene_locator_on_enter(void* context) {
     for(size_t i = 0; i < app->flock_count && s_count < LOC_MAX_TARGETS; i++) {
         const FlockEntry* e = &app->flock[i];
         if(!e->marked) continue;
+        // NAME THE CLASS, NOT "Flock". This prefix was the literal word on every
+        // row of the detection table, so a Remote ID broadcast read "Flock
+        // BENCH-DRONE-01" and an entry already named Flock-A1B2C3 read "Flock
+        // Flock-A1B2C3". The class is what the app determined; asserting the
+        // vendor on rows where no vendor table matched is the over-claim
+        // FlockVendor exists to prevent.
+        //
+        // Bounds stated rather than left to snprintf's clamp: the longest class
+        // string is "Body cam" (8), so 8 + space + 18 + NUL is exactly buf.
+        const char* cls = flock_class_str((FlockDevClass)e->dev_class);
         if(e->ssid[0])
-            // Bounds stated rather than left to snprintf's clamp: "Flock " + 21
-            // + NUL is exactly buf. Same cut as before, no behaviour change.
-            snprintf(buf, sizeof(buf), "Flock %.21s", e->ssid);
+            snprintf(buf, sizeof(buf), "%s %.18s", cls, e->ssid);
         else
-            snprintf(buf, sizeof(buf), "Flock %02X%02X%02X", e->mac[3], e->mac[4], e->mac[5]);
+            snprintf(buf, sizeof(buf), "%s %02X%02X%02X", cls, e->mac[3], e->mac[4], e->mac[5]);
         loc_add(e->mac, (e->ftype == 'L') ? 'b' : 'w', e->channel, buf);
     }
     for(size_t i = 0; i < app->wifi_count && s_count < LOC_MAX_TARGETS; i++) {

@@ -32,8 +32,9 @@
 /**
  * Encoder version cap, mirrored on both sides of the ABI.
  *
- * Version 8 is 49x49 modules. A deflock.org URL with 6-decimal coordinates is
- * well inside that mode's byte capacity, and the cap is what keeps the two
+ * Version 8 is 49x49 modules. A maps.deflock.org URL with 6-decimal coordinates
+ * and a zoom is ~64 bytes, well inside version 8 ECC-LOW capacity (152), and the
+ * cap is what keeps the two
  * transient buffers small.
  */
 #define QR_PLUGIN_MAX_VERSION 8

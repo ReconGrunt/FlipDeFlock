@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (c) 2026 ReconGrunt
 #include "../recon_app_i.h"
+#include "../helpers/scene_util.h"
+
+#include <furi/core/memmgr_heap.h>
+
+/**
+ * Largest free block the file picker needs before it is worth trying.
+ *
+ * Measured on the bench: opening it costs about 8.5 KB and it fails outright
+ * below roughly that. 12 KB leaves headroom for the dialog plus the path
+ * strings, and is still well under a healthy ~24 KB after one browser use.
+ */
+#define FW_BROWSER_MIN_BLOCK 12288u
 
 #include <dialogs/dialogs.h>
 
@@ -71,6 +83,23 @@ bool recon_scene_firmware_on_event(void* context, SceneManagerEvent event) {
     }
 
     if(event.event == FwItemFlash) {
+        // SAY SO WHEN THERE IS NOT ENOUGH MEMORY TO OPEN THE PICKER.
+        //
+        // dialog_file_browser_show() returns false both when the operator
+        // cancels and when it could not allocate, so a low-memory failure was
+        // indistinguishable from a Back press: the button simply did nothing,
+        // twenty times over, and the app looked wedged. Seen on the bench after a
+        // long session -- the largest free block had fallen to 13,816 bytes.
+        //
+        // Fragmentation is SYSTEM-WIDE and survives restarting the app, so
+        // "reopen FlipDeFlock" is not the fix and must not be the advice; only a
+        // reboot returns the heap to one piece.
+        if(memmgr_heap_get_max_free_block() < FW_BROWSER_MIN_BLOCK) {
+            scene_show_companion_guard(
+                app,
+                "Not enough free memory\nto open the file picker.\n\nRestart your Flipper (not\njust this app) -- the heap\nonly un-fragments on a\nreboot.");
+            return true;
+        }
         DialogsApp* dialogs = furi_record_open(RECORD_DIALOGS);
         FuriString* path = furi_string_alloc_set(EXT_PATH("apps_data"));
         DialogsFileBrowserOptions opts;

@@ -810,6 +810,23 @@ void recon_app_request_gps_cfg(ReconApp* app) {
 }
 
 void recon_app_gps_cfg_tick(ReconApp* app) {
+    // HOLD THE RESEND WHILE THE LOCATOR IS HUNTING.
+    //
+    // `band` and `gpscfg` genuinely re-task the radio, so the companion is right
+    // to cancel Locator mode when it sees them -- which means firing them mid-
+    // hunt silently ends the hunt. The board stops streaming LOC and the meter
+    // sits on "acquiring signal..." with nothing to explain it.
+    //
+    // It fires exactly when it does the most damage: the flag is raised by the
+    // companion's boot banner, and opening the Locator on a fresh link is
+    // precisely when the board is most likely to have just come up. The flag is
+    // LEFT RAISED rather than dropped, so the relay config still gets re-sent --
+    // one tick after the operator leaves this screen.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    bool hunting = app->locate_kind != 0;
+    furi_mutex_release(app->mutex);
+    if(hunting) return;
+
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     bool want = app->gps_cfg_resend;
     app->gps_cfg_resend = false;
@@ -1312,6 +1329,23 @@ void recon_hits_save(ReconApp* app) {
 
 void recon_survey_tick(ReconApp* app) {
     if(!app->esp) return; // no link, nothing to ask
+    // NOT WHILE THE LOCATOR OWNS THE RADIO.
+    //
+    // This tick runs for EVERY scene, and on the companion any command that is
+    // not `locate` cancels locate mode outright. So a poll fired ten seconds
+    // into a hunt silently ended it: the board stopped streaming LOC, the meter
+    // froze on "acquiring signal..." or decayed to "out of range", and nothing
+    // on either side said why. Re-entering the Locator from a detection detail
+    // kept the existing link, which left the poll clock already expired, so the
+    // kill landed on the FIRST tick -- the Locator simply never worked at all
+    // from that entry point.
+    //
+    // Measured on the bench: a WiFi target 30 cm away, beaconing on the locked
+    // channel, never produced one reading across three attempts. With this skip
+    // it locks on. The companion now also refuses to let `survey` cancel a hunt
+    // (see flock_companion.ino), so this is belt and braces -- but the app must
+    // not be asking for a table while it is asking the same radio to home.
+    if(app->locate_kind) return;
     uint32_t now = furi_get_tick();
     if(app->survey_last_poll != 0 && (now - app->survey_last_poll) < RECON_SURVEY_POLL_MS) {
         return;
@@ -1692,6 +1726,9 @@ static ReconApp* recon_app_alloc(void) {
     memset(app, 0, sizeof(ReconApp));
 
     app->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
+    // AFTER the mutex: recon_tables_acquire takes it, and furi_mutex_acquire on
+    // a NULL handle faults.
+    recon_tables_acquire(app);
     app->fw_log = furi_string_alloc();
     app->gps_lat = NAN;
     app->gps_lon = NAN;
@@ -1764,6 +1801,60 @@ static ReconApp* recon_app_alloc(void) {
     return app;
 }
 
+// Byte size of each table, rounded up so the next one starts 8-byte aligned.
+#define TBL_ALIGN(n)  (((n) + 7u) & ~7u)
+#define TBL_FLOCK_SZ  TBL_ALIGN(RECON_FLOCK_MAX * sizeof(FlockEntry))
+#define TBL_WIFI_SZ   TBL_ALIGN(RECON_WIFI_MAX * sizeof(WifiAp))
+#define TBL_BLE_SZ    TBL_ALIGN(RECON_BLE_MAX * sizeof(BleDevice))
+#define TBL_SURVEY_SZ TBL_ALIGN(RECON_SURVEY_MAX * sizeof(SurveyEntry))
+#define TBL_TOTAL_SZ  (TBL_FLOCK_SZ + TBL_WIFI_SZ + TBL_BLE_SZ + TBL_SURVEY_SZ)
+
+void recon_tables_release(ReconApp* app) {
+    // Persist before dropping, or a screen that merely wants memory becomes data
+    // loss. A no-op when Save Hits is off, same contract as everywhere else.
+    recon_hits_save(app);
+
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    free(app->tables_block);
+    app->tables_block = NULL;
+    app->flock = NULL;
+    app->wifi = NULL;
+    app->ble = NULL;
+    app->survey = NULL;
+    // Counts must go with the storage. A stale non-zero count over a NULL table
+    // is the shape of every use-after-free this could produce.
+    app->flock_count = 0;
+    app->wifi_count = 0;
+    app->ble_count = 0;
+    app->survey_count = 0;
+    furi_mutex_release(app->mutex);
+}
+
+void recon_tables_acquire(ReconApp* app) {
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    if(!app->tables_block) {
+        // ONE BLOCK, carved. Four separate allocations left the heap a little
+        // worse after every release/acquire round trip, because the plugin that
+        // borrows the space in between is one big block and the four that come
+        // back afterwards do not refill the same hole. Measured: largest
+        // contiguous block 32,448 -> 25,776 in one firmware-screen visit,
+        // cumulative, until the file browser could no longer allocate at all.
+        uint8_t* p = calloc(1, TBL_TOTAL_SZ);
+        if(p) {
+            app->tables_block = p;
+            app->flock = (FlockEntry*)p;
+            app->wifi = (WifiAp*)(p + TBL_FLOCK_SZ);
+            app->ble = (BleDevice*)(p + TBL_FLOCK_SZ + TBL_WIFI_SZ);
+            app->survey = (SurveyEntry*)(p + TBL_FLOCK_SZ + TBL_WIFI_SZ + TBL_BLE_SZ);
+        }
+    }
+    app->flock_count = 0;
+    app->wifi_count = 0;
+    app->ble_count = 0;
+    app->survey_count = 0;
+    furi_mutex_release(app->mutex);
+}
+
 static void recon_app_free(ReconApp* app) {
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewSubmenu);
     view_dispatcher_remove_view(app->view_dispatcher, ReconViewVarItemList);
@@ -1796,6 +1887,10 @@ static void recon_app_free(ReconApp* app) {
 
     sig_db_free(app->sig_db); // clears the extra-signature registration first
     furi_string_free(app->fw_log);
+    // One block backing all four tables (see recon_tables_acquire). Freed before
+    // the mutex, since release takes it.
+    free(app->tables_block);
+
     furi_mutex_free(app->mutex);
     free(app);
 }

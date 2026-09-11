@@ -638,10 +638,12 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     // The badge names what is wrong in five characters, which is all the header
     // has room for and is useless on its own: a user hit !PORT and said "I don't
     // know what it means and have no way of finding out." Naming a fault without
-    // saying what to do about it just relocates the confusion. The full reference
-    // lives in Help & Warnings; this is the pointer to it, at the moment it
-    // matters. Dismissed with OK, and only re-armed on a fresh scan session, so
-    // it never becomes something to swat away every frame.
+    // saying what to do about it just relocates the confusion, so the card
+    // carries the fix line itself. It used to end "see Help" instead -- a pointer
+    // to a screen that no longer exists, which is worse than no pointer: the
+    // reference now lives in docs/TROUBLESHOOTING.md, which costs no RAM.
+    // Dismissed with OK, and only re-armed on a fresh scan session, so it never
+    // becomes something to swat away every frame.
     if(fault_msg && !warn_dismissed) {
         canvas_set_color(canvas, ColorWhite);
         canvas_draw_box(canvas, 0, 26, 128, 38);
@@ -652,7 +654,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         canvas_set_font(canvas, FontSecondary);
         ui_draw_str_fit(canvas, 3, 45, fault_msg, 125);
         ui_draw_str_fit(canvas, 3, 53, fault_fix, 125);
-        canvas_draw_str(canvas, 3, 62, "OK dismiss - see Help");
+        canvas_draw_str(canvas, 3, 62, "OK dismiss");
         canvas_draw_line(canvas, 0, 24, 128, 24);
         return;
     }
@@ -695,7 +697,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             AlignCenter,
             connected  ? "Scanning for ALPR..." :
             port_busy  ? "UART busy - check port" :
-            otg_failed ? "5V refused - see Help" :
+            otg_failed ? "5V refused - use USB" :
             otg_ours   ? "5V on, waiting for ESP" :
                          "Connect ESP32...");
         return;

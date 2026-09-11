@@ -437,7 +437,27 @@ typedef struct {
     SigDb* sig_db; /**< SD-loaded extra signatures (NULL = built-ins only) */
 
     FuriMutex* mutex; /**< protects flock[] and gps_* snapshot */
-    FlockEntry flock[RECON_FLOCK_MAX];
+    /* HEAP, NOT INLINE, so the ESP flasher can have the memory back.
+     *
+     * These four tables are the app's bulk. Inline in ReconApp they were locked
+     * up for the whole run, and with the app resident the largest contiguous
+     * block left was ~25 KB while the flasher plugin needs ~23 KB in one piece
+     * -- a firmware backup ran the device out of memory and crashed it. The
+     * ESP32 Firmware screen holds no scan, so it releases these first (see
+     * recon_tables_release/acquire) and the plugin gets a clean block.
+     *
+     * Indexing is unchanged: app->flock[i] reads identically for a pointer. */
+    /* ONE ALLOCATION, carved into the four pointers below.
+     *
+     * Freeing four separate blocks and re-allocating four left the heap more
+     * fragmented on every firmware-screen visit: measured on the bench, the
+     * largest contiguous block fell 32,448 -> 25,776 in a single cycle and did
+     * not recover, and a long session reached 13,816 -- below what the file
+     * browser needs, so "Flash a .bin" silently did nothing and the app looked
+     * wedged. One block frees one clean hole for the plugin and takes the same
+     * hole back afterwards. */
+    void* tables_block;
+    FlockEntry* flock;
     size_t flock_count;
     int selected; /**< selected flock index for the detail scene */
 
@@ -578,7 +598,7 @@ typedef struct {
     uint32_t diag_start_epoch; /**< wall clock at scan_session_start */
 
     /* ---- probe survey (see RECON_SURVEY_PATH) --------------------------- */
-    SurveyEntry survey[RECON_SURVEY_MAX];
+    SurveyEntry* survey;
     size_t survey_count;
     uint32_t survey_last_poll; /**< tick of the last `survey` request */
     /** Wall clock at scan start, the session column in survey_log.csv. Its own
@@ -592,13 +612,13 @@ typedef struct {
     /* The WiFi Audit SCREEN was removed, but this table stays: the Locator
      * builds its target list from it, so a marked camera can be hunted by
      * BSSID after a sweep. */
-    WifiAp wifi[RECON_WIFI_MAX]; /**< results of the last WiFi sweep */
+    WifiAp* wifi; /**< results of the last WiFi sweep */
     size_t wifi_count;
     bool wifi_scanning; /**< true between WBEGIN and WEND */
     bool wifi_done; /**< a scan has completed at least once */
     uint8_t saved_backend; /**< backend to restore after the WiFi-audit scene */
 
-    BleDevice ble[RECON_BLE_MAX]; /**< BLE devices / trackers */
+    BleDevice* ble; /**< BLE devices / trackers */
     size_t ble_count;
     bool ble_scanning;
     bool ble_done;
@@ -747,6 +767,18 @@ void recon_app_survey_add(
     int8_t rssi,
     uint8_t channel,
     uint16_t count);
+
+/**
+ * Release the four bulk detection tables, returning ~10 KB of contiguous heap.
+ *
+ * ONLY safe with no scan running and no ESP/GPS worker alive -- every consumer
+ * walks these under app->mutex and a NULL table would fault. The firmware screen
+ * is the one place that qualifies. Persists hits first, and is idempotent.
+ */
+void recon_tables_release(ReconApp* app);
+
+/** Re-allocate the tables released above, zeroed. Idempotent. Restores hits. */
+void recon_tables_acquire(ReconApp* app);
 
 /** Write survey.csv. Counts and signatures only -- no SSID, no position. */
 void recon_survey_save(ReconApp* app);

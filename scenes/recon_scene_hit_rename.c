@@ -27,7 +27,17 @@ void recon_scene_hit_rename_on_enter(void* context) {
     if(app->hit_menu_idx >= 0 && app->hit_menu_idx < (int)app->flock_count) {
         FlockEntry* e = &app->flock[app->hit_menu_idx];
         const char* seed = e->label[0] ? e->label : e->ssid;
-        snprintf(app->rename_buf, sizeof(app->rename_buf), "%s", seed);
+        // EXPLICIT precision, because the seed can be longer than the target. A
+        // label is FLOCK_STORE_LABEL_LEN (25) and an SSID is RECON_SSID_LEN (33),
+        // so seeding from a long SSID has always cut it -- correct, since that is
+        // the label's limit, but it was implicit enough that the compiler flagged
+        // it as a possible mistake. Say the bound out loud instead.
+        snprintf(
+            app->rename_buf,
+            sizeof(app->rename_buf),
+            "%.*s",
+            (int)(sizeof(app->rename_buf) - 1),
+            seed);
     }
     furi_mutex_release(app->mutex);
 

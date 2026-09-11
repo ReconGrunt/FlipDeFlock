@@ -18,7 +18,6 @@ typedef enum {
     ReconSceneLocator,
     ReconSceneLocatorHome,
     ReconSceneSupport,
-    ReconSceneHelp,
     ReconSceneHitMenu,
     ReconSceneHitRename,
     ReconSceneSavedHits,
@@ -50,9 +49,6 @@ bool recon_scene_settings_on_event(void* context, SceneManagerEvent event);
 void recon_scene_settings_on_exit(void* context);
 
 void recon_scene_about_on_enter(void* context);
-void recon_scene_help_on_enter(void* context);
-bool recon_scene_help_on_event(void* context, SceneManagerEvent event);
-void recon_scene_help_on_exit(void* context);
 bool recon_scene_about_on_event(void* context, SceneManagerEvent event);
 void recon_scene_about_on_exit(void* context);
 

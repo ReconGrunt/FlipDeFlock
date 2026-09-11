@@ -15,7 +15,6 @@ typedef enum {
     StartItemDeflockShare,
     StartItemLocator,
     StartItemSupport,
-    StartItemHelp,
 } StartItem;
 
 static void recon_scene_start_submenu_cb(void* context, uint32_t index) {
@@ -31,9 +30,14 @@ static void recon_scene_start_update_header(ReconApp* app) {
     // for BLE, or a companion SoC with no Bluetooth radio to ask.
     bool wifi_only = (app->settings.backend != EspBackendCompanion) ||
                      recon_esp_chip_has_no_ble(app->esp_chip);
+    // SHORT NAME WHEN THE WARNING IS ON. The full "FlipDeFlock v0.96 - WiFi only"
+    // ran off the 128 px header and rendered as "...v0.96 - WiFi", dropping the
+    // word that carries the meaning -- "WiFi" alone reads like a feature, "WiFi
+    // only" reads like the limitation it is. The warning matters more here than
+    // spelling the app's own name out, so the name gives way instead.
     submenu_set_header(
         app->submenu,
-        wifi_only ? "FlipDeFlock " RECON_VERSION " - WiFi only" : "FlipDeFlock " RECON_VERSION);
+        wifi_only ? "FDF " RECON_VERSION " - WiFi only" : "FlipDeFlock " RECON_VERSION);
 }
 
 void recon_scene_start_on_enter(void* context) {
@@ -71,7 +75,6 @@ void recon_scene_start_on_enter(void* context) {
     submenu_add_item(
         submenu, "Share to DeFlock", StartItemDeflockShare, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Settings", StartItemSettings, recon_scene_start_submenu_cb, app);
-    submenu_add_item(submenu, "Help & Warnings", StartItemHelp, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "About", StartItemAbout, recon_scene_start_submenu_cb, app);
     submenu_add_item(submenu, "Support", StartItemSupport, recon_scene_start_submenu_cb, app);
     submenu_set_selected_item(
@@ -112,9 +115,6 @@ bool recon_scene_start_on_event(void* context, SceneManagerEvent event) {
             break;
         case StartItemSettings:
             scene_manager_next_scene(app->scene_manager, ReconSceneSettings);
-            break;
-        case StartItemHelp:
-            scene_manager_next_scene(app->scene_manager, ReconSceneHelp);
             break;
         case StartItemAbout:
             scene_manager_next_scene(app->scene_manager, ReconSceneAbout);

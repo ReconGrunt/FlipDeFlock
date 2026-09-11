@@ -82,8 +82,13 @@
  *   band <2g|5g|all>         pick which band(s) the hopper sweeps (C5 only;
  *                            a 2.4-only radio always ends up on 2g)
  *   locate <w|b> <mac> [ch]  stream LOC for a target (w=Wi-Fi, b=BLE; mac is
- *                            aabbccddeeff). "locate off" (or any other command)
- *                            ends Locator mode.
+ *                            aabbccddeeff). "locate off" ends Locator mode, as
+ *                            does any command that re-tasks the radio. The
+ *                            read-only queries "survey", "surveyclear" and
+ *                            "ver" are exempt: the app polls the survey every
+ *                            10 s from a tick that runs in every scene, so
+ *                            cancelling on those ended every hunt within
+ *                            seconds of it starting.
  *   ble_ping <mac>            one-shot active GATT reachability check for a
  *                            validated tracker; replies ACT,PING,...
  *   ble_ring <mac>            separated-state non-owner sound request for an
@@ -1118,8 +1123,21 @@ static void promisc_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
     if(len < 28) return;
     len -= 4;
 
-    // Snapshot the channel now: the hopper may advance before we finish.
-    uint8_t frame_channel = g_channel;
+    // THE CHANNEL COMES FROM THE FRAME, NOT FROM THE HOPPER VARIABLE.
+    //
+    // This used to read g_channel -- where the sweep had got to by the time the
+    // callback ran, which is not where the frame was received. The promiscuous
+    // queue drains behind the hop, and every BLE scan window stalls it for a
+    // second or more, so frames surfaced several hops late and got stamped with
+    // a channel the transmitter had never used. On the bench, an emitter pinned
+    // to channel 6 was logged on 7, 10 and 12.
+    //
+    // That is not cosmetic: the Flipper stores this channel and `locate` parks
+    // the radio on it, so the Locator sat on "acquiring signal..." indefinitely
+    // for a WiFi target 30 cm away. rx_ctrl.channel is the primary channel the
+    // packet was actually received on, and it cannot race.
+    uint8_t frame_channel = pkt->rx_ctrl.channel;
+    if(frame_channel < 1 || frame_channel > 14) frame_channel = g_channel;
 
     g_frames++;
 
@@ -1443,7 +1461,7 @@ static void start_promisc() {
  * precisely what this exists to expose. tools/check_oui_parity.py fails CI if
  * they drift.
  */
-#define FLOCK_COMPANION_VERSION "0.95"
+#define FLOCK_COMPANION_VERSION "0.96"
 
 static void banner() {
     // Third field is the BUILD version. Appending is wire-safe: an older app
@@ -2503,9 +2521,23 @@ void setup() {
 
 static void handle_command(String cmd) {
     cmd.trim();
-    // Any non-locate command ends Locator mode: unlock the Wi-Fi channel it
-    // pinned, and restore promiscuous if BLE-locate had turned it off.
-    if(!cmd.startsWith("locate")) {
+    // Any command that RE-TASKS THE RADIO ends Locator mode: unlock the Wi-Fi
+    // channel it pinned, and restore promiscuous if BLE-locate had turned it off.
+    //
+    // READ-ONLY QUERIES ARE EXEMPT, and that exemption is the whole point of
+    // this list. The rule used to be "anything that is not `locate`", which
+    // included `survey` -- a pure table dump that touches no radio state. The
+    // app polls for the survey every ten seconds from a tick that runs in every
+    // scene, the Locator included, so a hunt was cancelled about ten seconds
+    // after it began, or immediately when the Locator was opened on an already
+    // live link. Nothing was reported on either side: the board just stopped
+    // streaming LOC and the meter sat on "acquiring signal..." forever.
+    //
+    // Keep this list to commands that genuinely cannot coexist with a locked
+    // channel or a dedicated BLE scan. When in doubt, exempt -- a stale locate
+    // is recoverable with one Back press; a Locator that never works is not.
+    bool radio_retask = !(cmd.startsWith("locate") || cmd.startsWith("survey") || cmd == "ver");
+    if(radio_retask) {
         if(g_locate_kind == 'w') g_lock_channel = 0;
         if(g_locate_kind == 'b') {
             esp_wifi_set_promiscuous(true);

@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ReconGrunt
 #include "../recon_app_i.h"
 #include "../helpers/plugin_host.h"
+#include "../helpers/deflock_url.h"
 #include "../plugins/qr_plugin_api.h"
 
 #include <math.h>
@@ -18,6 +19,8 @@ typedef struct {
     float lon;
     float heading;
     FlockConfidence confidence;
+    FlockDevClass dev_class;
+    FlockVendor vendor;
 } HandoffCam;
 
 /**
@@ -50,33 +53,59 @@ static void recon_scene_deflock_handoff_show(ReconApp* app) {
 
     HandoffCam* c = &g_cams[g_selected];
 
-    char url[64];
-    snprintf(
-        url, sizeof(url), "https://deflock.org/?lat=%.6f&lng=%.6f", (double)c->lat, (double)c->lon);
+    // THE MAP IS ON ITS OWN SUBDOMAIN, and the zoom is not optional. Both facts,
+    // the worst-case buffer size, and the reason the apex domain is wrong now
+    // live in helpers/deflock_url.h -- where test_deflock_url.c can assert them,
+    // rather than in a scene where the only check available was to scan the QR
+    // off the screen with a phone. That is why issue #25 survived four releases.
+    char url[DEFLOCK_URL_LEN];
+    deflock_map_url(url, sizeof(url), (double)c->lat, (double)c->lon);
 
-    char coords[28];
-    snprintf(coords, sizeof(coords), "%.6f,%.6f", (double)c->lat, (double)c->lon);
+    // RIGHT COLUMN -- two SHORT lines. It is 72 px wide, about fourteen
+    // characters, and the full coordinates used to be drawn here: they ran off
+    // the edge as "40.712799,-74.0", losing the longitude on the one screen
+    // whose job is to hand over a position. They now live in the full-width
+    // strip below, which fits them.
+    char who[28];
+    snprintf(
+        who,
+        sizeof(who),
+        "%s",
+        (c->vendor != FlockVendorUnknown) ? flock_vendor_str(c->vendor) :
+                                            flock_class_str(c->dev_class));
 
     char conf[16];
-    snprintf(conf, sizeof(conf), "Conf: %s", flock_confidence_str(c->confidence));
+    snprintf(conf, sizeof(conf), "%s", flock_confidence_str(c->confidence));
 
-    // OSM tag set (display only -- the report writer owns the real serialization).
+    // BOTTOM STRIP: the coordinates, then the OSM tagging to copy into DeFlock.
+    //
+    // THE TAGS USED TO BE HARDCODED, claiming surveillance:type=ALPR and
+    // manufacturer="Flock Safety" about whatever happened to be marked.
+    // recon_report.c carried the identical bug in the export path and was fixed;
+    // this screen kept it, so a Ubicquia streetlight, an Axon pole or a hit on a
+    // MAC in no vendor table at all was handed to the operator as a Flock ALPR
+    // camera to type into a public map. Same rule as the exporter: state the
+    // class actually determined, and name a manufacturer only when a vendor
+    // table matched. Drones never reach here at all (see the snapshot loop).
+    //
+    // direction= is gone from this screen: the strip holds three lines and the
+    // coordinates had to have one of them. It is still written to every export,
+    // which is what anyone actually submits from.
     char tags[96];
-    if(!isnan(c->heading)) {
-        snprintf(
-            tags,
-            sizeof(tags),
-            "man_made=surveillance\nsurveillance:type=ALPR\nmanufacturer=Flock Safety\ndirection=%.0f",
-            (double)c->heading);
-    } else {
-        snprintf(
-            tags,
-            sizeof(tags),
-            "man_made=surveillance\nsurveillance:type=ALPR\nmanufacturer=Flock Safety");
-    }
+    int tw = snprintf(tags, sizeof(tags), "%.6f,%.6f\n", (double)c->lat, (double)c->lon);
+    if(tw < 0) tw = 0;
+    if((size_t)tw >= sizeof(tags)) tw = (int)sizeof(tags) - 1;
+    snprintf(
+        tags + tw,
+        sizeof(tags) - (size_t)tw,
+        "man_made=surveillance\nsurveillance:type=%s",
+        (c->dev_class == FlockClassAcoustic) ? "acoustic" :
+        (c->dev_class == FlockClassBodycam)  ? "camera" :
+        (c->dev_class == FlockClassGear)     ? "unknown" :
+                                               "ALPR");
 
     deflock_qr_view_set_content(
-        app->deflock_qr_view, url, g_selected, g_cam_count, coords, conf, tags);
+        app->deflock_qr_view, url, g_selected, g_cam_count, who, conf, tags);
 }
 
 /** QR encoder plugin, mapped in only while this screen is open. NULL when it
@@ -100,12 +129,21 @@ void recon_scene_deflock_handoff_on_enter(void* context) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     for(size_t i = 0; g_cams && i < app->flock_count && g_cam_count < HANDOFF_MAX; i++) {
         FlockEntry* e = &app->flock[i];
+        // A DRONE IS NOT A PLACE. Its Remote ID broadcast carries a position, so
+        // it passed the geotag test and was offered here like any camera -- with
+        // a QR pointing DeFlock at a spot an aircraft flew over minutes ago, and
+        // OSM tags calling it permanent surveillance. The exporter already
+        // refuses to tag one; this screen is the other way the same coordinate
+        // reaches a public map, and it has to refuse too.
+        if(e->dev_class == FlockClassDrone) continue;
         if(e->marked && !isnan(e->lat) && !isnan(e->lon)) {
             HandoffCam* c = &g_cams[g_cam_count++];
             c->lat = e->lat;
             c->lon = e->lon;
             c->heading = e->heading;
             c->confidence = e->confidence;
+            c->dev_class = (FlockDevClass)e->dev_class;
+            c->vendor = flock_vendor_of(e->mac, e->ssid);
         }
     }
     furi_mutex_release(app->mutex);

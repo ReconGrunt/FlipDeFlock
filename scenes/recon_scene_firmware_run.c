@@ -66,19 +66,35 @@ static int32_t fw_worker(void* context) {
         }
         api->free(fl);
     }
+    // BACK TO THE LOG VIEW BEFORE THE LAST LINES GO OUT.
+    //
+    // While pct >= 0 the renderer draws the progress layout, which has room for
+    // one status line and a bar -- so anything logged after the transfer would
+    // be invisible behind "100%". Dropping to -1 hands the screen to the
+    // one-page log, where the closing lines below are actually readable.
+    app->fw_pct = -1;
+
+    // The "Tap RESET on ESP" hint belongs to the flasher, which is what knows it
+    // left the board in the download loader -- both operations emit their own.
+    // Do NOT add one here: doing that once produced three lines all saying the
+    // same thing, because the plugin's had merely been INVISIBLE behind the
+    // progress layout rather than missing.
     fw_log_cb(app, ok ? "== DONE ==" : "== FAILED ==");
     app->fw_ok = ok;
     app->fw_running = false;
     return 0;
 }
 
-// Render the status tail, plus a SINGLE progress bar that stays in one place.
+// Render the flasher status. FIXED LAYOUT IN BOTH STATES -- this screen never
+// scrolls.
 //
 // The percentage used to be log lines, so a flash pushed eleven of them into a
 // scrolling text box and the operator had to scroll to see where it was. A
-// transfer in progress now gets a fixed three-line layout with the bar pinned to
-// the bottom; the scrolling log is kept only for the idle/finished case, where
-// what matters is reading an error message rather than watching a number.
+// transfer in progress gets a fixed three-line layout with the bar pinned to the
+// bottom. Everything else -- connecting, retrying, failed -- gets the newest few
+// lines at fixed positions, because the one line that matters there ("hold BOOT,
+// tap RESET") is only actionable while the attempt counter is running, and a
+// prompt you have to scroll to find is a prompt you miss.
 static void fw_render(ReconApp* app) {
     widget_reset(app->widget);
     furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -126,24 +142,69 @@ static void fw_render(ReconApp* app) {
         return;
     }
 
-    // Not transferring: show the tail of the log, scrollable, so a failure
-    // message is fully readable.
-    const char* start = full;
-    int nl = 0;
-    for(int i = (int)len - 1; i >= 0; i--) {
-        if(full[i] == '\n') {
-            if(++nl >= 8) {
-                start = full + i + 1;
-                break;
-            }
-        }
+    // Not transferring (connecting, retrying, failed): ONE PAGE, NEVER A SCROLL.
+    //
+    // This used to be a text-scroll element holding the last eight lines, so the
+    // operator had to scroll to read a prompt that is only actionable in the
+    // moment -- "hold BOOT, tap RESET" is useless if it is off-screen while the
+    // attempt counter is running. Nothing here is long enough to need paging;
+    // the newest four lines are the whole story and they fit.
+    //
+    // Newest LAST, reading top to bottom like the log it replaces.
+#define FW_VIEW_LINES 4
+// Copy budget only, NOT a display width. widget_add_string_element draws onto a
+// canvas that clips at 128 px, so a long line is cut at the true pixel edge for
+// free. Truncating to an estimated character count instead threw away text that
+// would have fitted: "Power-cycle" rendered as "Power-cyc" at a 25-char guess,
+// with the screen visibly not full. Copy generously and let the canvas decide.
+#define FW_VIEW_COLS  47
+    char lines[FW_VIEW_LINES][FW_VIEW_COLS + 1];
+    int got = 0;
+
+    // Walk backwards, newest first, collecting non-empty lines.
+    int end = (int)len;
+    while(end > 0 && got < FW_VIEW_LINES) {
+        while(end > 0 && (full[end - 1] == '\n' || full[end - 1] == '\r'))
+            end--;
+        if(end <= 0) break;
+        int start_i = end;
+        while(start_i > 0 && full[start_i - 1] != '\n')
+            start_i--;
+        int n = end - start_i;
+        if(n > FW_VIEW_COLS) n = FW_VIEW_COLS;
+        memcpy(lines[got], full + start_i, (size_t)n);
+        lines[got][n] = '\0';
+        got++;
+        end = start_i;
     }
-    widget_add_text_scroll_element(app->widget, 0, 0, 128, 64, start);
+
+    widget_add_string_element(
+        app->widget, 0, 0, AlignLeft, AlignTop, FontPrimary, app->fw_op == 0 ? "Backup" : "Flash");
+
+    // Reverse into display order: oldest of the four at the top.
+    for(int i = 0; i < got; i++) {
+        widget_add_string_element(
+            app->widget, 0, 15 + (got - 1 - i) * 12, AlignLeft, AlignTop, FontSecondary, lines[i]);
+    }
     furi_mutex_release(app->mutex);
 }
 
 void recon_scene_firmware_run_on_enter(void* context) {
     ReconApp* app = context;
+
+    // GIVE THE FLASHER THE MEMORY BEFORE IT ASKS FOR IT.
+    //
+    // The plugin is a ~23 KB .fal that has to map into ONE contiguous block, on
+    // top of a 2 KB UART stream buffer and a 2 KB transfer chunk. With the app's
+    // four detection tables resident the largest block left was ~25 KB, and a
+    // firmware backup ran the device out of memory and crashed it outright --
+    // reproduced on the bench, not theorised.
+    //
+    // Nothing is scanning here: this screen owns the UART and the ESP/GPS links
+    // are already down, so no worker can touch the tables while they are gone.
+    // Hits are persisted by release() first, and the tables come back on exit.
+    recon_tables_release(app);
+
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     furi_string_reset(app->fw_log);
     app->fw_pct = -1; // no transfer yet -- the log view, not the bar
@@ -250,5 +311,11 @@ void recon_scene_firmware_run_on_exit(void* context) {
     g_fw_api = NULL; // drop the borrowed pointer before unmapping what it points into
     plugin_host_free(g_fw_plugin);
     g_fw_plugin = NULL;
+
+    // Tables back, AFTER the plugin is unmapped so the allocation lands in the
+    // block it just vacated rather than fragmenting around it. Restores the
+    // saved hits release() flushed on the way in.
+    recon_tables_acquire(app);
+    recon_hits_load(app);
     widget_reset(app->widget);
 }

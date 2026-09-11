@@ -47,6 +47,21 @@ blocked in Marauder mode — you should see an explicit notice saying so. Either
 the companion firmware (**ESP32 Firmware → Flash a .bin**, no computer needed) or use
 the screens Marauder mode supports: Flock/ALPR Detect, Flock Map, and Reports.
 
+On **v0.95 and earlier this screen was broken outright**: the app's probe-survey
+poll cancelled Locator mode on the board within ten seconds of a hunt starting,
+and immediately when the Locator was opened from a detection. The symptom is a
+meter stuck on "acquiring signal..." or decaying to "out of range" and never
+recovering. Update both halves — the app *and* the companion firmware.
+
+**The Locator says "listening for target...".** That is not a connection error.
+While homing, the companion sends nothing but readings for the one device you
+picked, so until that device next transmits the app genuinely cannot tell a
+healthy link from an unpowered board. A camera sweeping channels lands on you
+roughly once every second or two; give it that long before assuming anything. If
+it never reads, check the board has power and tap its **RESET** — do *not* hold
+BOOT, which puts the ESP32 into the flash loader where the companion does not run
+at all.
+
 **GPS never gets a fix / the badge shows `!PORT`, `!PIN` or `!FW`.** These mean the app knows a fix is
 impossible with the current settings, rather than that it is still searching. Almost
 always **GPS Port is set to the same UART as the ESP** — one UART cannot serve both, so
@@ -165,9 +180,15 @@ tight, the save fails cleanly rather than crashing, and no empty file is left be
 
 ## Share to DeFlock
 
-**The QR won't scan.** It encodes a `https://deflock.org/?lat=…&lng=…` deep link and is
-rendered entirely offline — the Flipper never opens a connection. A detection with no GPS
+**The QR won't scan.** It encodes a `https://maps.deflock.org/?lat=…&lng=…&zoom=18` deep
+link and is rendered entirely offline — the Flipper never opens a connection. A detection with no GPS
 fix has no coordinates to share, so it won't produce a QR. Turn GPS on and re-detect.
+
+**The QR opens the DeFlock home page instead of the map.** That was a bug in v0.95 and
+earlier: the link pointed at `deflock.org`, which is the landing page and silently drops
+the coordinates. Fixed in v0.96. If you are on an older build, the coordinates are shown
+on the same screen and can be entered by hand at
+[deflock.org/report](https://deflock.org/report).
 
 ## Still stuck?
 

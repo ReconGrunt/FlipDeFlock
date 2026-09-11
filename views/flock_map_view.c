@@ -164,13 +164,27 @@ static void flock_map_view_draw_callback(Canvas* canvas, void* _model) {
     }
 
     // ---- scale bar (bottom-left) -------------------------------------------
+    //
+    // CLEARED BACKGROUND FIRST. The range ring is centred on the operator and
+    // grows with the fit, so at wide scales its lower arc runs straight through
+    // this corner and the digits become unreadable -- "136863m" rendered as
+    // "1368" + arc + "3m" on the bench, which is worse than useless because it
+    // still looks like a number. Everything else on this screen can be drawn
+    // over; the one label that states what the picture MEANS cannot.
     int span_m = (int)lroundf(mpp * SCALE_PX);
+    char scale[12];
+    snprintf(scale, sizeof(scale), "%dm", span_m);
+
+    int label_x = MAP_LEFT + SCALE_PX + 3;
+    int label_w = (int)canvas_string_width(canvas, scale);
+    canvas_set_color(canvas, ColorWhite);
+    canvas_draw_box(canvas, MAP_LEFT - 1, 55, SCALE_PX + 5 + label_w + 1, 9);
+    canvas_set_color(canvas, ColorBlack);
+
     canvas_draw_line(canvas, MAP_LEFT, 62, MAP_LEFT + SCALE_PX, 62);
     canvas_draw_line(canvas, MAP_LEFT, 60, MAP_LEFT, 62);
     canvas_draw_line(canvas, MAP_LEFT + SCALE_PX, 60, MAP_LEFT + SCALE_PX, 62);
-    char scale[12];
-    snprintf(scale, sizeof(scale), "%dm", span_m);
-    canvas_draw_str(canvas, MAP_LEFT + SCALE_PX + 3, 63, scale);
+    canvas_draw_str(canvas, label_x, 63, scale);
 }
 
 static bool flock_map_view_input_callback(InputEvent* event, void* context) {

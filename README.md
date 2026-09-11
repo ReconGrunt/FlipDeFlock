@@ -282,8 +282,8 @@ firmware; in Marauder mode they explain what's missing.
   situation, switch it off. Turning it off deletes the file, and *Reports → Clear
   Saved Hits* erases it any time.
 - **Share to DeFlock** — renders a QR per marked, geotagged camera that opens
-  [DeFlock](https://deflock.org) at that location on your phone, so you submit
-  through the official app's review flow. The Flipper and ESP never touch a
+  the [DeFlock map](https://maps.deflock.org) zoomed to that location on your
+  phone, so you submit through the official app's review flow. The Flipper and ESP never touch a
   network. No Flipper GPS? DeFlock lets you place the pin by hand at
   [deflock.org/report](https://deflock.org/report).
 
@@ -383,6 +383,30 @@ indicators and verify by eye; if you rely on it for anything that matters, read
 the code and confirm the behavior yourself.
 
 ## What's new
+
+**v0.96** - **Share to DeFlock sent you to the wrong page.** The QR pointed at
+`deflock.org`, which is the landing page: it has no map on it and silently drops
+the coordinates, so every QR this screen produced landed on "Welcome to DeFlock"
+with the location thrown away. It points at `maps.deflock.org` now and carries a
+zoom, without which the map opens at a whole-country view even on the right host.
+Thanks to @wiilover22 for the report.
+
+**The Locator never locked on, either.** The companion ends Locator mode on any
+command it gets, and the app polls its probe survey every ten seconds from a tick
+that runs in every screen -- so a hunt was cancelled seconds after it began, or
+instantly when opened from a detection on a link that was already up. A target
+30 cm away produced nothing across three attempts on the bench; it locks on in
+about a second now. The companion was also stamping detections with wherever its
+channel sweep had reached rather than the channel the frame arrived on, which
+then sent the Locator to a channel the camera never uses.
+
+Also: Share to DeFlock no longer labels everything a Flock ALPR camera (a
+streetlight, an Axon pole or an unknown MAC was handed over as one, and a passing
+drone was offered as a fixed camera), its coordinates are no longer cut in half,
+the donation addresses are readable instead of overlapping into a smear, Help &
+Warnings is gone with About cut back to name/version/author/contributors, and the
+Locator no longer tells you to hold BOOT -- which drops the board into the flash
+loader and guarantees it never connects.
 
 **v0.95** - **Pin a whole address.** Randomised is not the same as rotating: the
 first camera anyone checked twice kept the identical invented address across

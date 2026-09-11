@@ -470,6 +470,13 @@ bool esp_flasher_backup(EspFlasher* f, Storage* storage, const char* out_path) {
 
     if(ok) {
         esp_flasher_logf(f, "Backup saved.");
+        // SAME HINT THE FLASH PATH GIVES, for the same reason: reading the flash
+        // required putting the ESP in the ROM download loader, and nothing takes
+        // it back out. A backup therefore ends with a board that is NOT running
+        // its firmware -- the app shows "no link" and zero frames -- and only the
+        // flash path ever said so. The operator has no way to tell that from a
+        // dead board.
+        esp_flasher_logf(f, "Done. Tap RESET on ESP.");
     } else {
         // Don't leave a truncated image around that could be flashed later.
         storage_simply_remove(storage, out_path);

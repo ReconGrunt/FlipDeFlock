@@ -78,6 +78,39 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
     }
 
     FuriString* s = furi_string_alloc();
+
+    // THE RESULT GOES FIRST, ABOVE THE FOLD.
+    //
+    // It used to be appended after the address, RSSI, fingerprint and address
+    // kind -- six lines into a scroll element four lines tall. Pressing "I saw
+    // it" on the bench therefore changed nothing visible at all: the screen
+    // still had to be scrolled down two lines to find "Learned." That is the
+    // exact failure this state machine was added to prevent, arriving from the
+    // one direction nobody checked -- where on the screen the answer landed.
+    switch(g_state) {
+    case SurveyLearnOk:
+        furi_string_cat_str(s, "Learned. Restart the app\nto use it.\n \n");
+        break;
+    case SurveyLearnGeneric:
+        furi_string_cat_str(s, "Not learned: too common,\nit would flag phones.\n \n");
+        break;
+    case SurveyLearnNoFp:
+        furi_string_cat_str(s, "Nothing to learn: no\nfingerprint captured.\n \n");
+        break;
+    case SurveyLearnFailed:
+        furi_string_cat_str(s, "Not learned: already\nknown, or list full.\n \n");
+        break;
+    case SurveyPinOk:
+        furi_string_cat_str(s, "Address pinned. Restart\nthe app to use it.\n \n");
+        break;
+    case SurveyPinFailed:
+        furi_string_cat_str(s, "Not pinned: already\npinned, or list full.\n \n");
+        break;
+    case SurveyLearnIdle:
+    default:
+        break;
+    }
+
     furi_string_cat_printf(
         s,
         "%02X:%02X:%02X:%02X:%02X:%02X\n",
@@ -105,31 +138,10 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
         furi_string_cat_str(s, "Common scan pattern -\nshared with phones.\n");
     }
 
-    switch(g_state) {
-    case SurveyLearnOk:
-        furi_string_cat_str(s, "\nLearned. Restart the\napp to use it.");
-        break;
-    case SurveyLearnGeneric:
-        furi_string_cat_str(s, "\nNot learned: too common,\nit would flag phones.");
-        break;
-    case SurveyLearnNoFp:
-        furi_string_cat_str(s, "\nNothing to learn: no\nfingerprint captured.");
-        break;
-    case SurveyLearnFailed:
-        furi_string_cat_str(s, "\nNot learned: already\nknown, or list full.");
-        break;
-    case SurveyPinOk:
-        furi_string_cat_str(s, "\nAddress pinned. Restart\nthe app to use it.");
-        break;
-    case SurveyPinFailed:
-        furi_string_cat_str(s, "\nNot pinned: already\npinned, or list full.");
-        break;
-    case SurveyLearnIdle:
-    default:
-        break;
-    }
-
-    widget_add_text_scroll_element(widget, 0, 0, 128, 52, furi_string_get_cstr(s));
+    // x=2/y=1, not 0/0: at the origin the scroll element puts the first
+    // baseline on row 0 and shaves the top pixel row off every glyph, and the
+    // leftmost column sits flush against the bezel.
+    widget_add_text_scroll_element(widget, 2, 1, 124, 51, furi_string_get_cstr(s));
     furi_string_free(s);
 
     // Offered only when there is something learnable. A button that always
