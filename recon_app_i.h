@@ -112,6 +112,12 @@ typedef enum {
 // 3.4 KB, which is real money on this heap and is why it lives in the survey
 // table only and not in FlockEntry.
 #define RECON_SURVEY_SIG_LEN      72
+// How often survey.csv is re-snapshotted while a scan runs. 20 s bounds the loss
+// from a battery dying or a device wedging mid-stop to the last 20 seconds of
+// probing, against a file of a few KB. Detections already had this
+// (RECON_HITS_AUTOSAVE_MS); the survey did not, which is the asymmetry this
+// closes -- and the survey is the half that explains a stop.
+#define RECON_SURVEY_AUTOSAVE_MS  20000u
 #define RECON_SURVEY_LOG_OLD_PATH RECON_APP_FOLDER "/survey_log.old.csv"
 
 /** ViewDispatcher view indexes. */
@@ -663,7 +669,8 @@ typedef struct {
     /* ---- probe survey (see RECON_SURVEY_PATH) --------------------------- */
     SurveyEntry* survey;
     size_t survey_count;
-    uint32_t survey_last_poll; /**< tick of the last `survey` request */
+    uint32_t survey_last_poll;
+    uint32_t survey_last_autosave; /**< tick of the last mid-scan survey snapshot */
     /** Wall clock at scan start, the session column in survey_log.csv. Its own
      *  field rather than diag_start_epoch, which recon_diag_save() zeroes before
      *  recon_survey_save() runs. */
@@ -848,6 +855,12 @@ void recon_tables_acquire(ReconApp* app);
 
 /** Write survey.csv. Counts and signatures only -- no SSID, no position. */
 void recon_survey_save(ReconApp* app);
+
+/**
+ * Snapshot survey.csv mid-scan, so a session that ends badly still leaves its
+ * survey on the card. See the definition for why the log append is excluded.
+ */
+void recon_survey_autosave_tick(ReconApp* app);
 
 /**
  * Append this session's survey rows to survey_log.csv, rotating past the cap.

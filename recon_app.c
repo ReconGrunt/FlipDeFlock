@@ -677,7 +677,7 @@ void recon_app_survey_add(
     }
 }
 
-void recon_survey_save(ReconApp* app) {
+static void recon_survey_write(ReconApp* app, bool append_log) {
     // Written even with ZERO rows, on purpose. "No file" is indistinguishable
     // from "the feature is broken" -- which is exactly how this landed on issue
     // #25, where short sessions produced nothing and the reporter could not tell
@@ -725,8 +725,49 @@ void recon_survey_save(ReconApp* app) {
     storage_file_close(file);
     storage_file_free(file);
 
-    recon_survey_log_append(app, storage);
+    // The LOG APPEND IS NOT IDEMPOTENT, so it only happens at session end.
+    // survey.csv above is a truncate-and-rewrite snapshot and can be repeated
+    // safely; survey_log.csv appends a row group per session, and repeating it
+    // would file the same stop several times over.
+    if(append_log) recon_survey_log_append(app, storage);
     furi_record_close(RECORD_STORAGE);
+}
+
+void recon_survey_save(ReconApp* app) {
+    recon_survey_write(app, true);
+}
+
+/**
+ * Periodic snapshot of survey.csv while a scan is still running.
+ *
+ * WHY. Until now the survey reached the card only from scan_session_stop(), so
+ * a flat battery or a wedged device mid-stop took the whole session's survey
+ * with it -- while the DETECTIONS from that same session survived, because
+ * recon_hits_autosave_tick() was added for exactly this failure and the survey
+ * was never given the same treatment. Losing the survey is the worse half: it
+ * is the file that explains a stop, and on a drive it is the thing that cost a
+ * trip to collect.
+ *
+ * Only the snapshot is written. survey.csv is per-session by design, so its
+ * contents at any moment ARE the session so far, and the file is a few KB, so
+ * rewriting it on an interval costs nothing worth counting.
+ */
+void recon_survey_autosave_tick(ReconApp* app) {
+    if(!app->esp) return; // no live session, nothing to snapshot
+    uint32_t now = furi_get_tick();
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    size_t rows = app->survey_count;
+    uint32_t last = app->survey_last_autosave;
+    furi_mutex_release(app->mutex);
+    if(rows == 0) return; // nothing measured yet; do not truncate a good file
+    // Seeded on the first tick that HAS rows, so the interval is measured from
+    // "there is something worth saving" rather than from scan start.
+    if(last != 0 && (now - last) < RECON_SURVEY_AUTOSAVE_MS) return;
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->survey_last_autosave = now;
+    furi_mutex_release(app->mutex);
+    if(last == 0) return; // first tick only seeds the clock
+    recon_survey_write(app, false);
 }
 
 void recon_survey_log_append(ReconApp* app, void* storage_rec) {
@@ -1761,6 +1802,11 @@ static void recon_tick_event_callback(void* context) {
     // scene has to remember. Cheap -- it is a flag test on all but one tick in
     // 120, and a no-op entirely when Save hits is off.
     recon_hits_autosave_tick(app);
+    // The survey needs the same protection, and for longer than hits did: a
+    // stop's survey is the file that EXPLAINS the stop, and it took a drive to
+    // collect. Hoisted here for the same reason as everything above -- every
+    // scene gets it and no new scene has to remember.
+    recon_survey_autosave_tick(app);
     // Pull the probe survey off the companion periodically. It is held in RAM on
     // the board and only moves when asked, so this is the one thing that puts it
     // on the card -- and it must happen DURING the session, because the link is

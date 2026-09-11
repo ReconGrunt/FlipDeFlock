@@ -1082,6 +1082,16 @@ static void ie_sig_string(const uint8_t* p, int len, char* out, size_t cap) {
 // still matches when the front of the list is damaged, and it costs nothing in
 // precision because the discriminating content is all in that run.
 //
+// THE ANCHOR ALONE WOULD FALSE-POSITIVE, measured rather than assumed. Two
+// ordinary devices on this project's bench carry the same Wi-Fi Alliance MBO
+// element, one of them with the identical 03 01 03 payload:
+//   1,50,3,45,191,221:0050f208002600,255,127,255,221:506f9a16030103
+//   1,50,3,45,127,191,221:0050f208002a00,255,255,221:506f9a16030102
+// Neither matches, because in both the MBO element sits at the END of the tag
+// list while the signature requires it FOLLOWED BY 45,191 and the second vendor
+// element. Matching the ordered run rather than the anchor is what keeps those
+// two out, and it is why this is a substring of a sequence and not a keyword.
+//
 // SINGLE-SOURCE, so it is capped at Class? on the Flipper and can never
 // auto-Confirm. It came from one contributor's drive, where it matched 11 of 12
 // cameras with 2 false positives. That is good evidence and it is not proof.
