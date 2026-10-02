@@ -25,6 +25,7 @@ void suite_fast_trig(void);
 void suite_open_drone_id(void);
 void suite_survey_rank(void);
 void suite_deflock_url(void);
+void suite_preflight(void);
 
 int main(void) {
     printf("FlipDeFlock host unit tests\n");
@@ -44,6 +45,7 @@ int main(void) {
     suite_open_drone_id();
     suite_survey_rank();
     suite_deflock_url();
+    suite_preflight();
 
     printf("\n%d checks, %d failed\n", g_checks, g_fails);
     if(g_fails) {

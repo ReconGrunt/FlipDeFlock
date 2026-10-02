@@ -20,14 +20,14 @@ jobs:
     # One build per firmware family, because they do NOT share an API version.
     # A .fap carries the API it was built against and the loader refuses one that
     # does not match, so a single build only ever served whoever happened to be on
-    # 87.1. Unleashed and RogueMaster are on 88.3 and were being told the app is
+    # 87.1. Unleashed and RogueMaster are on 88.9 and were being told the app is
     # old -- correctly, from the loader's point of view.
     #
     # fail-fast is off on purpose: one firmware moving its API should not cancel
     # the builds for the others. That is precisely when you most want the rest.
     #
     # RogueMaster has no ufbt SDK index of its own. It tracks Unleashed and reports
-    # the same 88.3 API, so this matrix builds the same SDK under RM's filename.
+    # the same 88.9 API, so this matrix builds the same SDK under RM's filename.
     strategy:
       fail-fast: false
       matrix:
@@ -36,11 +36,11 @@ jobs:
             api: "87.1"
             index: https://update.flipperzero.one/firmware/directory.json
           - target: unleashed
-            api: "88.3"
+            api: "88.9"
             index: https://up.unleashedflip.com/directory.json
           # RM doesn't have a directory.json, however its close enough to unleashed
           - target: roguemaster
-            api: "88.3"
+            api: "88.9"
             index: https://up.unleashedflip.com/directory.json
           - target: momentum
             api: "87.1"
@@ -167,10 +167,9 @@ jobs:
         with:
           expected-api: ${{ matrix.api }}
           target: ${{ matrix.target }}
-      - name: Lint sources (advisory)
+      - name: Lint sources
         if: matrix.target == 'ofw'
         uses: flipperdevices/flipperzero-ufbt-action@e7cd34914e61ddc056acd8daaab96d8b4d4d9f55 # v0.1.4
-        continue-on-error: true
         with:
           skip-setup: true
           task: lint

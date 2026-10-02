@@ -104,7 +104,8 @@ static void recon_scene_survey_detail_draw(ReconApp* app) {
         // Says what will HAPPEN, not what was filed. "Address pinned" described
         // the bookkeeping; an operator needs to know this row will show up as a
         // hit from now on, which is the only reason to press the button.
-        furi_string_cat_str(s, "Flagged. This MAC counts\nas a hit now. Restart the\napp to use it.\n \n");
+        furi_string_cat_str(
+            s, "Flagged. This MAC counts\nas a hit now. Restart the\napp to use it.\n \n");
         break;
     case SurveyPinFailed:
         furi_string_cat_str(s, "Not flagged: already\nflagged, or list full.\n \n");

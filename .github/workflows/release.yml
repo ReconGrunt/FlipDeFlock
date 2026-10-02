@@ -282,13 +282,14 @@ jobs:
           # SHA256SUMS.txt without it is the exact "looks complete but is not"
           # file this job exists to avoid.
           #
-          # The two images come from DIFFERENT jobs in esp32.yml (build-bin and
+          # The three images come from DIFFERENT jobs in esp32.yml (build-bin and
           # build-core3), which start together but do not finish together, so
           # waiting on the WROOM image says nothing about the C5 one. On v0.69 the
           # C5 image happened to land first and got hashed; nothing made that
           # happen, and it would have been omitted silently if it had not.
           WANT: |
             flipdeflock_companion_esp32wroom.bin
+            flipdeflock_companion_esp32s2.bin
             flipdeflock_companion_esp32c5_EXPERIMENTAL.bin
         run: |
           set -euo pipefail

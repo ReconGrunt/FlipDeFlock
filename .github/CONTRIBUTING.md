@@ -31,7 +31,7 @@ anything substantial.
   Don't trade precision for recall without good reason.
 - **Detections are indicators, not proof.** Never over-claim in UI text, reports, or docs.
 - It must build against **every target in the release matrix** (official, Unleashed,
-  Momentum and RogueMaster, currently APIs 87.1 and 88.3), with both `ufbt` and
+  Momentum and RogueMaster, currently APIs 87.1 and 88.9), with both `ufbt` and
   `fbt`. CI builds all four on every push, so a change that only compiles on one will
   show up there.
 - Keep it lean — the `.fap` loads entirely into the Flipper's ~256 KB of RAM.

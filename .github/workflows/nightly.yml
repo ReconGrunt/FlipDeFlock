@@ -120,11 +120,11 @@ jobs:
             api: "87.1"
             index: https://update.flipperzero.one/firmware/directory.json
           - target: unleashed
-            api: "88.3"
+            api: "88.9"
             index: https://up.unleashedflip.com/directory.json
           # RM doesn't have a directory.json, however its close enough to unleashed
           - target: roguemaster
-            api: "88.3"
+            api: "88.9"
             index: https://up.unleashedflip.com/directory.json
           - target: momentum
             api: "87.1"

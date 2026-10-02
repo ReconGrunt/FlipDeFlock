@@ -29,7 +29,7 @@ Only the **latest release** receives fixes. There are no long-term support branc
   SSID or BLE device name must not be able to break out of a CSV column, inject KML
   elements, or otherwise corrupt a report.
 - **The ESP32 companion firmware** (`esp32_companion/`) and the UART wire protocol.
-- **The in-app flasher** (`helpers/esp_flasher.c`).
+- **The in-app flasher plugin** (`plugins/flasher/`).
 
 ## Out of scope
 
@@ -45,18 +45,25 @@ Only the **latest release** receives fixes. There are no long-term support branc
 
 Official binaries come only from this repository's
 [Releases](https://github.com/ReconGrunt/FlipDeFlock/releases) or from
-per-push CI artifacts under the **Actions** tab. There are exactly two of them:
+per-push CI artifacts under the **Actions** tab. A tagged release currently contains:
 
-| Artifact | What it is | Approx. size |
-|---|---|---|
-| `flipdeflock.fap` | The Flipper app | ~150 KB |
-| `flipdeflock_companion_esp32wroom.bin` | ESP32 companion firmware | — |
+| Artifact | What it is |
+|---|---|
+| `flipdeflock.fap` | Official-firmware Flipper app |
+| `flipdeflock-momentum.fap` | Momentum Flipper app |
+| `flipdeflock-unleashed.fap` | Unleashed Flipper app |
+| `deflock.fap` | RogueMaster Flipper app |
+| `flipdeflock_companion_esp32wroom.bin` | Classic ESP32 companion firmware |
+| `flipdeflock_companion_esp32s2.bin` | ESP32-S2 Wi-Fi-only companion firmware |
+| `flipdeflock_companion_esp32c5_EXPERIMENTAL.bin` | Experimental ESP32-C5 companion firmware |
+| `flipdeflock_asset_pack.zip` | Optional Flipper desktop-animation asset pack |
+| `SHA256SUMS.txt` | Checksums for every release asset |
 
 **Anything else distributed under this project's name is not from this project.** In
-particular, FlipDeFlock ships no Windows `.exe`, `.dll`, `.bat`, or `.zip` — this
-repository has never contained one, and nothing in FlipDeFlock runs on Windows. A
-download link pointing at an archive inside a source directory rather than at a GitHub
-Release is a strong sign you are not on the official repository.
+particular, FlipDeFlock ships no Windows `.exe`, `.dll`, or `.bat`, and no executable
+archive. The only official ZIP is the named animation asset pack above. A download
+link pointing at an archive inside a source directory rather than at a GitHub Release
+is a strong sign you are not on the official repository.
 
 If you find a third-party repository distributing something as "FlipDeFlock", please
 report it to GitHub and let us know. See the name reservation in

@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.98
+
+### Added
+
+- **Health / Preflight answers whether an empty scan is meaningful.** Before a
+  field session it now brings the companion up and checks the live UART, wire
+  protocol, signature-table revision, production signature self-test, and an
+  advancing RF frame counter. It shows app/ESP builds, receive rate, total
+  frames, dropped UART lines, companion resets, chip, band/channel coverage,
+  and GPS state on the Flipper. A companion-backed Detect action is not offered
+  until those checks reach `READY`; a live Marauder/Generic text stream is
+  labelled `LIMITED` because it cannot prove companion-only facts.
+
+- **The app and companion now identify the classifier data they are actually
+  running.** The companion emits `SIGREV,<revision>` at boot and on `ver`; the
+  app compares it with its own production table identity and reports a mismatch
+  rather than treating two separately flashed builds as equivalent. The value is
+  the first eight hex digits of SHA-256 over the ordered production signature
+  entries, and the parity check derives it independently so two stale constants
+  cannot make CI green.
+
+- **The existing companion signature test is now part of field readiness.** A
+  `sigtest` request runs a fixed probe through the production signature builder,
+  content hash, and matcher, then returns `SIGTEST,<signature>,<hash>,<result>`.
+  The app parses the record from the right because the readable signature itself
+  contains commas, displays the result, and refuses a failed check.
+
+### Fixed
+
+- **Release and compatibility documentation now matches the files that ship.**
+  The Unleashed/RogueMaster API target is 88.9, nightly instructions include the
+  WROOM, S2, and experimental C5 companion images, the release checksum gate
+  requires S2 as well as WROOM/C5, and the security page lists the complete
+  release artifact set.
+
+- **Formatting is a real CI gate.** The FAP workflow no longer marks `ufbt lint`
+  advisory, and the existing survey-detail formatting failure is corrected.
+
+- **Running the documented Arduino or Python tools can no longer poison the next
+  FAP build.** `application.fam` excludes the companion and tools trees from its
+  broad source glob, preventing generated `partitions.csv`, Python bytecode, or
+  other local build products from reaching the Flipper linker.
+
+- **The companion builds cleanly across supported Arduino generations.** BLE-only
+  state is compiled only on chips that have BLE, and `uint32_t` serial fields use
+  portable format arguments, removing core 3.x target warnings without changing
+  the wire format.
+
+- **Session diagnostics now carry the evidence needed to explain a bad pairing.**
+  Schema v3 adds expected/actual signature revisions, match state, and signature
+  self-test result while remaining counts-only and excluding captured identifiers
+  and positions. Older schemas rotate aside before a v3 row is appended.
+
+### Verified
+
+- The classic ESP32 companion image was flashed through FlipDeFlock's own
+  flasher, post-write verification completed, Health reached `READY`, and live
+  authorized bench traffic advanced frames, channels, and detections with zero
+  dropped UART lines or companion resets. WROOM/S2 builds pass on Arduino core
+  2.x; WROOM/S2/C5 builds pass on core 3.x. S2 and C5 remain compile-verified,
+  not hardware-verified.
+
 ## v0.97
 
 ### Fixed
