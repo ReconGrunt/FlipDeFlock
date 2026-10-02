@@ -44,6 +44,45 @@ void suite_preflight(void) {
     in.elapsed_ms = 0;
     CHECK_INT_EQ(recon_preflight_evaluate(&in), ReconPreflightFailed);
 
+    // A companion OLDER than the SIGREV/sigtest handshake: capturing fine, on a
+    // matching protocol, but it cannot prove which signature table it holds.
+    // That is LIMITED, not FAILED. Discussion #26: @h00die reflashes roughly
+    // every fifth release on purpose, and his working board must not be called
+    // broken. The distinction under test is "could not verify" vs "verified
+    // wrong" -- so flip each unproven field to a WRONG answer below and the
+    // verdict must drop to FAILED.
+    in = (ReconPreflightInput){
+        .companion_backend = true,
+        .link_running = true,
+        .connected = true,
+        .protocol_seen = true,
+        .protocol_match = true,
+        .signature_seen = false, // predates SIGREV
+        .sigtest_seen = false, // predates sigtest
+        .frames = 500,
+        .elapsed_ms = 1000,
+    };
+    CHECK_INT_EQ(recon_preflight_evaluate(&in), ReconPreflightWaiting);
+    in.elapsed_ms = RECON_PREFLIGHT_GRACE_MS;
+    CHECK_INT_EQ(recon_preflight_evaluate(&in), ReconPreflightLimited);
+
+    // Silence is forgiven; a wrong answer never is.
+    in.signature_seen = true;
+    in.signature_match = false;
+    CHECK_INT_EQ(recon_preflight_evaluate(&in), ReconPreflightFailed);
+    in.signature_seen = false;
+    in.signature_match = false;
+    in.sigtest_seen = true;
+    in.sigtest_pass = false;
+    CHECK_INT_EQ(recon_preflight_evaluate(&in), ReconPreflightFailed);
+
+    // And an old companion that is not actually capturing is still a hard fault:
+    // zero frames is a capture failure, not a missing handshake.
+    in.sigtest_seen = false;
+    in.sigtest_pass = false;
+    in.frames = 0;
+    CHECK_INT_EQ(recon_preflight_evaluate(&in), ReconPreflightFailed);
+
     in = (ReconPreflightInput){
         .companion_backend = false,
         .link_running = true,

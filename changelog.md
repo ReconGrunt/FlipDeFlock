@@ -9,9 +9,15 @@
   protocol, signature-table revision, production signature self-test, and an
   advancing RF frame counter. It shows app/ESP builds, receive rate, total
   frames, dropped UART lines, companion resets, chip, band/channel coverage,
-  and GPS state on the Flipper. A companion-backed Detect action is not offered
-  until those checks reach `READY`; a live Marauder/Generic text stream is
-  labelled `LIMITED` because it cannot prove companion-only facts.
+  and GPS state on the Flipper. The second page adds what the board can hear at
+  all, `BLE`, `5G` and SD-card state, because "no BLE hits" from a chip with no
+  Bluetooth radio is not evidence of quiet air, and a card that cannot be written
+  throws away every hit of the session. Its left key fires the configured alert,
+  so the buzzer and vibration are proven before the drive rather than after it.
+  The Detect shortcut on this screen is withheld until the checks reach `READY`
+  or `LIMITED`; the main menu's own Detect entry is unaffected. A live
+  Marauder/Generic text stream can only reach `LIMITED`, because that protocol
+  cannot prove companion-only facts.
 
 - **The app and companion now identify the classifier data they are actually
   running.** The companion emits `SIGREV,<revision>` at boot and on `ver`; the
@@ -26,6 +32,32 @@
   content hash, and matcher, then returns `SIGTEST,<signature>,<hash>,<result>`.
   The app parses the record from the right because the readable signature itself
   contains commas, displays the result, and refuses a failed check.
+
+### Changed
+
+- **Probe fingerprint `ba9fafa0` is retracted and denylisted.** It was the
+  strongest candidate this project ever shipped, promoted because four devices
+  carrying it sat 1.1 to 6.1 km apart, which ruled out one unit rotating its
+  address, and because a mapped ALPR sat 44 m from the closest one. The reporter
+  who supplied it later observed the same fingerprint following his car. Both
+  observations fit one explanation the geography argument never considered, a
+  fingerprint shared by a class of consumer hardware. Its signature is a lone WMM
+  vendor element with no Wi-Fi Alliance anchor and no capability elements, which
+  is a bare client probe rather than the ordered shape the matcher looks for. The
+  denylist overrides `signatures.json`, so cards already carrying it go inert on
+  upgrade with no edit required.
+
+- **A companion too old to describe its signature table now reads `LIMITED`
+  rather than `FAILED`.** Firmware predating the revision handshake never answers
+  `SIGREV` or `sigtest`, and reporting a working board as failed is the detector
+  lying about itself. Anything that answers and answers wrongly is still a hard
+  failure, and zero received frames still is too.
+
+- **The Wi-Fi chip vendor prefix exposed by a published camera firmware image is
+  blocked from the detection tables.** It identifies the silicon, which ships in
+  a decade of unrelated consumer hardware, not the operator. The chipset is still
+  useful for predicting what the camera's probe looks like; the prefix is not
+  evidence and CI now rejects it.
 
 ### Fixed
 

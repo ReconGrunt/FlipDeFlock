@@ -33,8 +33,22 @@ ReconPreflightState recon_preflight_evaluate(const ReconPreflightInput* input) {
         return ReconPreflightReady;
     }
 
-    return input->elapsed_ms < RECON_PREFLIGHT_GRACE_MS ? ReconPreflightWaiting :
-                                                          ReconPreflightFailed;
+    if(input->elapsed_ms < RECON_PREFLIGHT_GRACE_MS) return ReconPreflightWaiting;
+
+    // Grace is up and something is unproven. Separate "could not verify" from
+    // "verified and wrong": a companion that is plainly capturing, on a matching
+    // protocol, but never answers SIGREV or sigtest is simply older than that
+    // handshake. Reported by @h00die (discussion #26), who deliberately reflashes
+    // about every fifth release -- calling his working board FAILED would be the
+    // detector lying about itself, which is the one thing this screen exists to
+    // stop. Anything actually contradicted was already caught above, and zero
+    // frames is still a hard fault because it is a real capture failure.
+    if(input->link_running && input->connected && input->protocol_seen && input->protocol_match &&
+       input->frames > 0) {
+        return ReconPreflightLimited;
+    }
+
+    return ReconPreflightFailed;
 }
 
 const char* recon_preflight_state_label(ReconPreflightState state) {

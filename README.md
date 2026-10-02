@@ -368,6 +368,44 @@ maxes out at `Class?`). Each detection's fingerprint shows as `IE-fp:` on its
 detail screen, so you can read one off a confirmed camera and catch its
 MAC-randomized twins. See the [signatures guide](docs/signatures.md).
 
+## Every identifier is verified
+
+Detector tables tend to get inherited. A prefix shows up on one list, gets copied
+to the next, and nobody goes back to ask who actually registered it. That is how
+a body-cam vendor's prefix ends up pointing at an unrelated networking company
+with a similar name, and how somebody's phone ends up flagged as a police camera.
+
+Every prefix in this repo was resolved against the IEEE registry by organisation
+name before it was added, and that name is the whole argument for keeping it.
+
+A worked example from September 2026. A Flock camera firmware image was published
+showing the hardware runs a Qualcomm radio chip, and the chip's default MAC prefix
+started circulating as a Flock identifier. It is registered to the silicon vendor,
+not to Flock, and that chip has shipped in a decade of routers, tablets and IoT
+gear. Detecting on it would light up a shelf of consumer hardware as surveillance.
+The chipset itself is genuinely useful intelligence, because it tells you what the
+camera's probe request should look like. The chip vendor's prefix is the one part
+of that firmware dump that must never become evidence, so it went on the blocklist
+instead of the detection table.
+
+CI enforces this on every push rather than trusting anyone to remember:
+
+- 6 prefixes that were published and later withdrawn cannot come back
+- 15 look-alike registrations, right-sounding name and wrong company, are blocked
+- 26 chip-vendor and shared IEEE blocks are blocked, including the one above
+- the Flipper and companion tables must agree, and the signature table carries a
+  revision hash the app checks against the companion it is actually talking to
+
+The same standard applies to this project's own mistakes. Six probe fingerprints
+are on a permanent denylist because field evidence later showed them on phones and
+consumer hardware rather than cameras. Two of those were ours, including one we
+had told an operator to add to his own signature file. A denylisted fingerprint
+overrides `signatures.json` as well as the built-ins, so a retraction reaches
+cards already in the field without anyone editing anything.
+
+A false positive costs more than a missed detection here. A detector that cries
+wolf gets ignored, and an ignored detector protects nobody.
+
 ## On-screen legend
 
 RSSI is shown as signal bars (taller = stronger); the highlighted row shows the

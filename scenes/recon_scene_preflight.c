@@ -6,18 +6,21 @@
 // wire protocol, signature-table revision, production signature matcher, and RF
 // receive counter before allowing a companion-backed detection session.
 #include "../recon_app_i.h"
+#include "../helpers/alerts.h"
 #include "../helpers/esp_link.h"
 #include "../helpers/esp_parser.h"
 #include "../helpers/preflight.h"
 #include "../helpers/scan_session.h"
 
 #include <gui/modules/widget.h>
+#include <storage/storage.h>
 #include <string.h>
 
 typedef enum {
     PreflightEventRetry = 100,
     PreflightEventPage,
     PreflightEventDetect,
+    PreflightEventTest,
 } PreflightEvent;
 
 typedef struct {
@@ -31,6 +34,8 @@ typedef struct {
     bool sigtest_seen;
     bool sigtest_pass;
     bool has_5ghz;
+    bool has_ble; /**< the chip has a BLE radio at all (the S2 does not) */
+    bool sd_ok; /**< the card is mounted, so hits and survey can be written */
     bool gps_enabled;
     bool gps_valid;
     uint8_t gps_source;
@@ -52,7 +57,8 @@ static void preflight_button_cb(GuiButtonType type, InputType input, void* conte
     if(input != InputTypeShort) return;
     ReconApp* app = context;
     if(type == GuiButtonTypeLeft) {
-        view_dispatcher_send_custom_event(app->view_dispatcher, PreflightEventRetry);
+        view_dispatcher_send_custom_event(
+            app->view_dispatcher, app->preflight_page ? PreflightEventTest : PreflightEventRetry);
     } else if(type == GuiButtonTypeCenter) {
         view_dispatcher_send_custom_event(app->view_dispatcher, PreflightEventPage);
     } else if(type == GuiButtonTypeRight) {
@@ -73,6 +79,7 @@ static void preflight_snapshot(ReconApp* app, PreflightSnapshot* out) {
     out->sigtest_seen = app->esp_sigtest_seen;
     out->sigtest_pass = app->esp_sigtest_pass;
     out->has_5ghz = app->esp_has_5ghz;
+    out->has_ble = !recon_esp_chip_has_no_ble(app->esp_chip);
     out->gps_enabled = app->settings.gps_enabled;
     out->gps_valid = app->gps_valid;
     out->gps_source = app->settings.gps_source;
@@ -89,6 +96,13 @@ static void preflight_snapshot(ReconApp* app, PreflightSnapshot* out) {
     snprintf(out->sig_revision, sizeof(out->sig_revision), "%s", app->esp_sig_revision);
     snprintf(out->chip, sizeof(out->chip), "%s", app->esp_chip);
     furi_mutex_release(app->mutex);
+
+    // Outside the lock on purpose: this reaches the storage service, and the
+    // worker thread takes app->mutex on every companion line. A card that is
+    // missing or unmounted means every hit and every survey row this session
+    // produces is thrown away at save time, which is a silent way to lose a
+    // whole drive -- so it belongs on the readiness screen next to the radio.
+    out->sd_ok = storage_sd_status(app->storage) == FSE_OK;
 }
 
 static ReconPreflightState preflight_state(const PreflightSnapshot* s, uint32_t elapsed_ms) {
@@ -206,27 +220,53 @@ static void preflight_draw(ReconApp* app) {
                 (unsigned long)s.dropped,
                 (unsigned long)s.reboots);
         }
+        // The SD marker is appended only when the card is BAD. Worst-case this
+        // row is already near the 128 px limit ("esp32s2 all/13 Gsearch"), and a
+        // healthy card is the uninteresting case; page 1 always spells it out.
         snprintf(
             lines[4],
             sizeof(lines[4]),
-            "%s %s/%u G%s",
+            "%s %s/%u G%s%s",
             chip,
             preflight_band(&s),
             (unsigned)s.channels,
-            gps);
+            gps,
+            s.sd_ok ? "" : " SD!");
     } else {
         snprintf(lines[0], sizeof(lines[0]), "DETAILS: %s", recon_preflight_state_label(state));
-        snprintf(lines[1], sizeof(lines[1]), "Sig want %s", FDF_SIGNATURE_REVISION);
-        snprintf(lines[2], sizeof(lines[2]), "Sig got  %s", actual_sig);
-        snprintf(lines[3], sizeof(lines[3]), "Test %08lx %s", (unsigned long)s.sigtest_hash, test);
+        // Two rows to print one agreeing pair is a waste of a five-row screen.
+        // Collapse to one while they match, and spend the row freed on the
+        // capability line; split back out the moment they disagree, which is the
+        // only time the two values are separately interesting.
+        size_t i = 1;
+        if(s.sig_revision[0] && !s.sig_mismatch) {
+            snprintf(lines[i++], sizeof(lines[0]), "Sig OK %s", actual_sig);
+        } else {
+            snprintf(lines[i++], sizeof(lines[0]), "Sig want %s", FDF_SIGNATURE_REVISION);
+            snprintf(lines[i++], sizeof(lines[0]), "Sig got  %s", actual_sig);
+        }
         snprintf(
-            lines[4],
-            sizeof(lines[4]),
-            "L%lu D%lu R%lu G%s",
-            (unsigned long)s.lines,
-            (unsigned long)s.dropped,
-            (unsigned long)s.reboots,
-            gps);
+            lines[i++], sizeof(lines[0]), "Test %08lx %s", (unsigned long)s.sigtest_hash, test);
+        // What this board can hear AT ALL, which no counter above can express: an
+        // S2 has no BLE radio, so "no BLE hits" from one is not evidence of quiet
+        // air. has_5ghz was plumbed into this screen and then never printed.
+        snprintf(
+            lines[i++],
+            sizeof(lines[0]),
+            "Cap BLE%s 5G%s SD%s",
+            s.has_ble ? "+" : "-",
+            s.has_5ghz ? "+" : "-",
+            s.sd_ok ? "+" : "!");
+        if(i < 5) {
+            snprintf(
+                lines[i],
+                sizeof(lines[0]),
+                "L%lu D%lu R%lu G%s",
+                (unsigned long)s.lines,
+                (unsigned long)s.dropped,
+                (unsigned long)s.reboots,
+                gps);
+        }
     }
 
     Widget* widget = app->widget;
@@ -234,7 +274,16 @@ static void preflight_draw(ReconApp* app) {
     // Re-add actions first. Screen streaming can observe widget construction
     // between element additions; text-first ordering briefly produced a full
     // status page with no visible controls on every periodic refresh.
-    widget_add_button_element(widget, GuiButtonTypeLeft, "Retry", preflight_button_cb, app);
+    // Page 1 trades Retry for the alert check. Retry restarts the link, which is
+    // a page-0 concern, and the operator needs to know the buzzer and vibro they
+    // are about to rely on actually fire -- using the CONFIGURED mode, so this
+    // proves the alert they will really get rather than a generic beep.
+    widget_add_button_element(
+        widget,
+        GuiButtonTypeLeft,
+        app->preflight_page ? "Test" : "Retry",
+        preflight_button_cb,
+        app);
     widget_add_button_element(
         widget,
         GuiButtonTypeCenter,
@@ -327,6 +376,16 @@ bool recon_scene_preflight_on_event(void* context, SceneManagerEvent event) {
 
     if(event.event == PreflightEventRetry) {
         preflight_begin(app, true);
+        return true;
+    }
+    if(event.event == PreflightEventTest) {
+        furi_mutex_acquire(app->mutex, FuriWaitForever);
+        uint8_t mode = app->settings.alert_mode;
+        bool sound = app->settings.sound;
+        furi_mutex_release(app->mutex);
+        // Fired outside the lock, same reason as recon_app_alert_tick(): the
+        // notification service must not stall behind the ESP worker.
+        recon_alert_fire(app->notifications, mode, sound);
         return true;
     }
     if(event.event == PreflightEventPage) {

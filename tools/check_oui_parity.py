@@ -180,6 +180,15 @@ MISATTRIBUTED = {
 # And every Espressif entry would make FlipDeFlock detect its OWN companion
 # board, which is an ESP32.
 TOO_GENERIC = {
+    # Added 2026-10-02. A Flock camera firmware image was published in September
+    # 2026 showing the hardware is a Qualcomm MSM8953 with a QCA9377 radio, and
+    # the chip's default MAC prefix was promptly listed elsewhere as a Flock
+    # prefix. It is not one. Resolved at the registry the same day: 00:03:7f is
+    # "Atheros Communications, Inc.", MA-L -- the Wi-Fi silicon vendor, shipped
+    # in a decade of routers, tablets and IoT. Knowing the camera's chipset is
+    # genuinely useful for what its PROBE should look like; the chip vendor's
+    # OUI is the one part of that dump that must never become evidence.
+    "00:03:7f": "Atheros Communications -- Wi-Fi chip vendor (QCA9377); identifies silicon, not an operator",
     "48:27:ea": "Samsung Electronics -- phones and hotspots; the exact FP class already field-reported",
     "a4:cf:12": "Espressif -- chip vendor, incl. our own companion board",
     "24:0a:c4": "Espressif -- chip vendor, incl. our own companion board",
