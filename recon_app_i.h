@@ -23,6 +23,7 @@
 #include "helpers/flock_db.h"
 #include "helpers/flock_store.h"
 #include "helpers/flock_ble.h"
+#include "helpers/sig_db.h" // SIG_IGNORED_MAX_* for the in-memory exclusion lists
 #include "views/flock_view.h"
 #include "views/flock_detail_view.h"
 #include "views/flock_map_view.h"
@@ -78,7 +79,7 @@ typedef enum {
 // diag.old.csv rather than appending rows of a new shape under an old header --
 // which is what produced a file nobody could parse correctly. See recon_diag_save().
 #define RECON_DIAG_HEADER_LINE \
-    "# FlipDeFlock session diagnostics v3 -- counts only, no MAC/SSID/position\n"
+    "# FlipDeFlock session diagnostics v4 -- counts only, no MAC/SSID/position\n"
 #define RECON_DIAG_OLD_PATH       RECON_APP_FOLDER "/diag.old.csv"
 // Every wildcard-probe transmitter seen during a session, MATCHED OR NOT.
 // Exists because "83,916 frames, zero candidates" is the one result the detector
@@ -505,6 +506,22 @@ typedef struct {
     GpsRpc* gps_rpc; /**< phone GPS over the Unleashed RPC service; NULL unless selected */
     SigDb* sig_db; /**< SD-loaded extra signatures (NULL = built-ins only) */
 
+    /* ---- operator exclusions (helpers/sig_db.h, ignored.txt) ------------
+     * Devices the operator told the app are THEIRS. Held in memory for the
+     * whole session because the gate runs on every companion detection line,
+     * and refreshed in place the moment one is added -- unlike a learned
+     * signature, which only takes effect next start.
+     *
+     * THAT ASYMMETRY IS DELIBERATE. Learning changes how a device is SCORED,
+     * and rebuilding the scoring tables under a live scan is the thing that
+     * restriction avoids. An exclusion only has to drop a line. The operator
+     * presses it because something is beeping at them right now, so "it will
+     * go quiet after you restart the app" is not an answer. */
+    uint32_t ignore_fps[SIG_IGNORED_MAX_FPS];
+    uint8_t ignore_macs[SIG_IGNORED_MAX_MACS][6];
+    size_t ignore_fp_count;
+    size_t ignore_mac_count;
+
     FuriMutex* mutex; /**< protects flock[] and gps_* snapshot */
     /* HEAP, NOT INLINE, so the ESP flasher can have the memory back.
      *
@@ -672,6 +689,7 @@ typedef struct {
     uint32_t diag_accepted; /**< of those, the ones that reached the table */
     uint32_t diag_rej_conf; /**< dropped: scored FlockConfidenceNone */
     uint32_t diag_rej_full; /**< dropped: table full and nothing evictable */
+    uint32_t diag_rej_ignored; /**< dropped: the operator excluded this device */
     uint32_t diag_start_epoch; /**< wall clock at scan_session_start */
 
     /* ---- probe survey (see RECON_SURVEY_PATH) --------------------------- */
@@ -850,6 +868,22 @@ static inline bool recon_esp_chip_has_no_ble(const char* target) {
  * Display only -- it never feeds a confidence rung.
  */
 void recon_app_set_ble_tell(ReconApp* app, const uint8_t mac[6], uint8_t tell);
+
+/**
+ * Exclude a device the operator says is theirs, and make it effective NOW.
+ *
+ * Writes ignored.txt and reloads the in-memory tables the detection gate reads,
+ * so the device goes quiet on the next line rather than on the next app start.
+ * `out_by_fp` reports whether a probe fingerprint was stored as well as the
+ * address, which is what decides whether the exclusion survives the device
+ * randomising its MAC; pass NULL if you do not care.
+ *
+ * @return true if the device is now excluded, including when it already was.
+ */
+bool recon_app_exclude_device(ReconApp* app, const uint8_t* mac, uint32_t fp, bool* out_by_fp);
+
+/** Delete every exclusion, card and memory together (Reports > Forget Ignored). */
+void recon_app_clear_exclusions(ReconApp* app);
 
 /** Record one surveyed wildcard-probe transmitter (see RECON_SURVEY_PATH). */
 void recon_app_survey_add(

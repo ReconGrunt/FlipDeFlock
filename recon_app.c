@@ -48,6 +48,26 @@ void recon_app_report_flock(
         return;
     }
 
+    // THE OPERATOR'S OWN HARDWARE, dropped before it can reach the table, be
+    // geotagged, beep, or land in a report. Above every scoring tier on purpose:
+    // the ladder answers "does this look like a camera", and this answers "the
+    // person holding the Flipper went and looked, and it is their own router".
+    // No confidence rung outranks that, including Confirmed -- an SSID pattern
+    // is a guess about a stranger's device and this is a fact about the
+    // operator's own. Counted so diag.csv can still say the device was heard,
+    // which keeps an exclusion distinguishable from a radio that went deaf.
+    if(flock_is_excluded(
+           mac,
+           ie_fp,
+           app->ignore_macs,
+           app->ignore_mac_count,
+           app->ignore_fps,
+           app->ignore_fp_count)) {
+        app->diag_rej_ignored++;
+        furi_mutex_release(app->mutex);
+        return;
+    }
+
     uint32_t now = furi_get_tick();
     FlockEntry* entry = NULL;
     for(size_t i = 0; i < app->flock_count; i++) {
@@ -429,6 +449,48 @@ void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_proto_version = version;
     app->esp_proto_mismatch = mismatch;
+    furi_mutex_release(app->mutex);
+}
+
+bool recon_app_exclude_device(ReconApp* app, const uint8_t* mac, uint32_t fp, bool* out_by_fp) {
+    if(out_by_fp) *out_by_fp = false;
+    if(!app || !mac) return false;
+
+    // CARD FIRST, THEN THE LOCK. The write reaches the storage service, and the
+    // ESP worker takes app->mutex on every companion line, so holding the mutex
+    // across a filesystem round-trip stalls the radio path behind the SD card --
+    // the same discipline the hit menu uses for a learned signature.
+    bool by_fp = false;
+    bool ok = sig_db_ignore_add(app->storage, mac, fp, &by_fp);
+    if(!ok) return false;
+
+    uint32_t fps[SIG_IGNORED_MAX_FPS];
+    uint8_t macs[SIG_IGNORED_MAX_MACS][6];
+    size_t nf = 0, nm = 0;
+    sig_db_ignored_read(
+        app->storage, fps, SIG_IGNORED_MAX_FPS, macs, SIG_IGNORED_MAX_MACS, &nf, &nm);
+
+    // RE-READ RATHER THAN APPEND IN PLACE, so memory and card cannot disagree.
+    // What the gate enforces is then exactly what survives a restart, and a
+    // write that was refused (a generic skeleton, a full table) cannot leave a
+    // phantom entry live for the rest of the session.
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    memcpy(app->ignore_fps, fps, sizeof(uint32_t) * nf);
+    memcpy(app->ignore_macs, macs, sizeof(uint8_t[6]) * nm);
+    app->ignore_fp_count = nf;
+    app->ignore_mac_count = nm;
+    furi_mutex_release(app->mutex);
+
+    if(out_by_fp) *out_by_fp = by_fp;
+    return true;
+}
+
+void recon_app_clear_exclusions(ReconApp* app) {
+    if(!app) return;
+    sig_db_forget_ignored(app->storage);
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->ignore_fp_count = 0;
+    app->ignore_mac_count = 0;
     furi_mutex_release(app->mutex);
 }
 
@@ -1497,6 +1559,7 @@ void recon_diag_begin(ReconApp* app) {
     app->diag_accepted = 0;
     app->diag_rej_conf = 0;
     app->diag_rej_full = 0;
+    app->diag_rej_ignored = 0;
     app->diag_start_epoch = furi_hal_rtc_get_timestamp();
     furi_mutex_release(app->mutex);
 }
@@ -1535,6 +1598,12 @@ void recon_diag_save(ReconApp* app) {
     uint32_t acc = app->diag_accepted;
     uint32_t rej_c = app->diag_rej_conf;
     uint32_t rej_f = app->diag_rej_full;
+    // SUPPRESSED BY THE OPERATOR'S OWN EXCLUSION LIST. In a field report this is
+    // the difference between "the radio heard nothing" and "it heard the thing
+    // you are asking about and you told it to stay quiet". Somebody who excluded
+    // a device weeks ago has no memory of doing it, and without this column a
+    // report from that card cannot be explained from the outside.
+    uint32_t rej_i = app->diag_rej_ignored;
     uint32_t lines = app->esp_lines;
     uint32_t dropped = app->esp_dropped_lines;
     uint32_t reboots = app->esp_reboots;
@@ -1595,12 +1664,12 @@ void recon_diag_save(ReconApp* app) {
                 "start,end,dur_s,ver,esp_ver,backend,band_req,band_act,band_ch,proto,"
                 "sig_expected,sig_actual,sig_match,sigtest,"
                 "esp_lines,esp_dropped,esp_reboots,esp_frames,esp_hits,"
-                "reports,accepted,rej_conf,rej_full,table\n");
+                "reports,accepted,rej_conf,rej_full,rej_ignored,table\n");
         }
         furi_string_cat_printf(
             s,
             "%lu,%lu,%lu,%s,%s,%u,%u,%u,%u,%u,%s,%s,%d,%d,"
-            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
+            "%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu,%lu\n",
             (unsigned long)start,
             (unsigned long)end,
             (unsigned long)(end - start),
@@ -1624,6 +1693,7 @@ void recon_diag_save(ReconApp* app) {
             (unsigned long)acc,
             (unsigned long)rej_c,
             (unsigned long)rej_f,
+            (unsigned long)rej_i,
             (unsigned long)table);
         storage_file_write(file, furi_string_get_cstr(s), furi_string_size(s));
         furi_string_free(s);
@@ -1874,6 +1944,19 @@ static ReconApp* recon_app_alloc(void) {
     // Optional SD-loaded extra signatures, merged over the built-ins. Fail-safe:
     // a missing/malformed file leaves sig_db NULL and the built-ins intact.
     app->sig_db = sig_db_load(app->storage);
+
+    // Exclusions, read once into the fixed tables the detection gate reads. Same
+    // fail-safe posture as everything else here: an absent or corrupt file
+    // leaves both counts at 0, so a bad exclusions file can never suppress a
+    // detection -- only the operator's own entries can.
+    sig_db_ignored_read(
+        app->storage,
+        app->ignore_fps,
+        SIG_IGNORED_MAX_FPS,
+        app->ignore_macs,
+        SIG_IGNORED_MAX_MACS,
+        &app->ignore_fp_count,
+        &app->ignore_mac_count);
 
     app->view_dispatcher = view_dispatcher_alloc();
     app->scene_manager = scene_manager_alloc(&recon_scene_handlers, app);

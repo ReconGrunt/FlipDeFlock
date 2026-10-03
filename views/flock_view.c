@@ -169,6 +169,15 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     uint32_t reboots = app->esp_reboots;
     bool proto_mismatch = app->esp_proto_mismatch;
     uint8_t proto_version = app->esp_proto_version;
+    // The SIGNATURE-TABLE verdict, which until now only the health screen
+    // showed. It is the one companion-staleness signal worth interrupting a
+    // scan for: it moves only when the detection data itself changed, so a
+    // board that trips it is gating frames on a table this app has already
+    // revised -- new ALPR prefixes it will never match, retracted ones it
+    // still will. Discussion #26 asked to be told when a reflash is actually
+    // needed, and this is that moment, as opposed to the version string
+    // moving on every release.
+    bool sig_mismatch = app->esp_sig_mismatch;
     uint32_t dropped = app->esp_dropped_lines;
     bool port_busy = (app->esp_link_state == EspLinkPortBusy);
     bool generic = (app->settings.backend == EspBackendGeneric);
@@ -452,6 +461,12 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     char tail_s[40] = ""; // a<n> + optional !r<n> + optional !d<n>
     if(proto_mismatch) {
         snprintf(hdr, sizeof(hdr), "! Companion FW proto v%u mismatch", proto_version);
+    } else if(sig_mismatch) {
+        // NAMES THE FIX, like every other fault string on this screen. "sig
+        // mismatch" is what the health screen says and it is fine there, next
+        // to both revisions; here there is no room for the evidence, so the
+        // line has to carry the action instead.
+        snprintf(hdr, sizeof(hdr), "! Companion sigs old: reflash");
     } else if(generic) {
         // Companion status counters stay 0 on a Marauder board, so the title bar
         // carries the RX heartbeat there and the detection count belongs here.
