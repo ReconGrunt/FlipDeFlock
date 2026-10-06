@@ -4,6 +4,7 @@
 // Tests for the shared report field emitters (R8): MAC + coordinate formatting,
 // plus the RSSI->bar-level scale every screen that draws signal bars goes through.
 #include "report_fmt.h"
+#include "flock_store.h" // FLOCK_FTYPE_SET
 #include "test.h"
 
 #include <math.h>
@@ -148,7 +149,11 @@ void suite_report_fmt_redact(void) {
 
     // Every known type passes through unchanged, so a normal entry still reads
     // exactly as it did before the guard existed.
-    for(const char* k = "PBROFL"; *k; k++) {
+    // The set is FLOCK_FTYPE_SET, the same macro the store uses, and 'S' is
+    // asserted by name: the formatter once lagged the store by exactly that
+    // letter, and looping over a private copy of the string is what hid it.
+    CHECK_INT_EQ(fmt_frame_char('S'), 'S');
+    for(const char* k = FLOCK_FTYPE_SET; *k; k++) {
         CHECK_INT_EQ(fmt_frame_char(*k), *k);
     }
 

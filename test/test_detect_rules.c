@@ -8,6 +8,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 static bool nearf(float a, float b, float tol) {
     return fabsf(a - b) <= tol;
@@ -145,4 +146,47 @@ void suite_detect_rules(void) {
     // Confirmed is not a fresh crossing and must not double-alert.
     CHECK(!flock_alert_should_fire(1, 4, false, 100000, 1000, true, loose));
     CHECK(flock_alert_should_fire(1, 4, false, 100000, 1000, true, dflt));
+    // ---- operator exclusions ("it's mine", discussion #27) ---------------
+    //
+    // THE ASSERTIONS THAT MATTER ARE THE NEGATIVE ONES. A suppression rule is
+    // only safe if it suppresses exactly the device it was given, so most of
+    // this block checks that a NEIGHBOUR of an excluded device still reports.
+    {
+        const uint8_t mine[6] = {0x06, 0xFC, 0xCB, 0x3A, 0xF8, 0x9E};
+        const uint8_t camera[6] = {0xB4, 0x1E, 0x52, 0x11, 0x22, 0x33};
+        // Same first five octets as `mine`, different last one: a prefix must
+        // not be enough to silence a separate device.
+        const uint8_t neighbour[6] = {0x06, 0xFC, 0xCB, 0x3A, 0xF8, 0x9F};
+        uint8_t ex_macs[2][6];
+        memcpy(ex_macs[0], mine, 6);
+        memset(ex_macs[1], 0, 6);
+        uint32_t ex_fps[2] = {0xA1B2C3D4u, 0};
+
+        // An empty list suppresses nothing, which is the state every operator
+        // starts in and the state a corrupt or absent file degrades to.
+        CHECK(!flock_is_excluded(mine, 0xA1B2C3D4u, NULL, 0, NULL, 0));
+        CHECK(!flock_is_excluded(camera, 0x11111111u, ex_macs, 0, ex_fps, 0));
+
+        // The excluded address goes quiet, by address alone.
+        CHECK(flock_is_excluded(mine, 0, ex_macs, 1, ex_fps, 0));
+        CHECK(flock_is_excluded(mine, 0x99999999u, ex_macs, 1, NULL, 0));
+
+        // Everything else still reports.
+        CHECK(!flock_is_excluded(camera, 0, ex_macs, 1, ex_fps, 0));
+        CHECK(!flock_is_excluded(neighbour, 0, ex_macs, 1, NULL, 0));
+
+        // The fingerprint half catches the same device after it rotates its
+        // address, which is the only reason it is stored at all.
+        CHECK(flock_is_excluded(camera, 0xA1B2C3D4u, NULL, 0, ex_fps, 1));
+        CHECK(!flock_is_excluded(camera, 0xA1B2C3D5u, NULL, 0, ex_fps, 1));
+
+        // fp 0 is "no fingerprint captured". It must never match a stored entry,
+        // or one corrupt line would silence every BLE and beacon-only sighting
+        // in the table at once.
+        CHECK(!flock_is_excluded(camera, 0, NULL, 0, ex_fps, 2));
+
+        // A NULL address is not a reason to suppress anything.
+        CHECK(!flock_is_excluded(NULL, 0xA1B2C3D4u, ex_macs, 1, NULL, 0));
+        CHECK(flock_is_excluded(NULL, 0xA1B2C3D4u, ex_macs, 1, ex_fps, 1));
+    }
 }
