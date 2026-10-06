@@ -158,6 +158,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
 
     size_t count = app->flock_count;
     bool connected = app->esp_connected;
+    bool lost = app->esp_lost;
     uint32_t hits = app->esp_hits;
     uint8_t channel = app->esp_channel;
     uint32_t lines = app->esp_lines;
@@ -470,7 +471,15 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
     } else if(generic) {
         // Companion status counters stay 0 on a Marauder board, so the title bar
         // carries the RX heartbeat there and the detection count belongs here.
-        snprintf(hdr, sizeof(hdr), "%s  hits %zu%s", connected ? "ESP" : "...", count, drop);
+        snprintf(
+            hdr,
+            sizeof(hdr),
+            "%s  hits %zu%s",
+            connected ? "ESP" :
+            lost      ? "ESP?" :
+                        "...",
+            count,
+            drop);
     } else {
         // Live activity, not a lifetime total. "frames 319" only ever climbed, so
         // it told you the link was up and nothing about whether the radio was
@@ -605,7 +614,11 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
         // nothing is drawn past sub_limit, so the line can never grow into the
         // GPS badge however large the counters get.
         int sx = 0;
-        const char* conn = connected ? "ESP" : "...";
+        // "ESP?" is a board that WAS talking and stopped (see
+        // recon_app_liveness_tick); "..." is one that never has. Different
+        // faults: the first is a loose header or a brownout, the second a port
+        // or power setting.
+        const char* conn = connected ? "ESP" : lost ? "ESP?" : "...";
         canvas_draw_str(canvas, sx, 22, conn);
         sx += canvas_string_width(canvas, conn) + 3;
         if(sx + UI_RADIO_ICON_W < sub_limit) {
@@ -711,6 +724,7 @@ static void flock_view_draw_callback(Canvas* canvas, void* _model) {
             AlignCenter,
             AlignCenter,
             connected  ? "Scanning for ALPR..." :
+            lost       ? "ESP went silent - check" :
             port_busy  ? "UART busy - check port" :
             otg_failed ? "5V refused - use USB" :
             otg_ours   ? "5V on, waiting for ESP" :

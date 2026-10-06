@@ -391,6 +391,10 @@ void recon_app_set_esp_status(
     bool connected) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_connected = connected;
+    if(connected) {
+        app->esp_rx_tick = furi_get_tick();
+        app->esp_lost = false;
+    }
     // (0,0,0) is a keepalive/banner; don't clobber real counters with it.
     if(!(frames == 0 && hits == 0 && channel == 0)) {
         // The companion sends lifetime totals. Rebase per session so the count
@@ -442,7 +446,46 @@ void recon_app_set_esp_lines(ReconApp* app, uint32_t lines) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->esp_lines = lines;
     app->esp_connected = true;
+    app->esp_rx_tick = furi_get_tick();
+    app->esp_lost = false;
     furi_mutex_release(app->mutex);
+}
+
+// How long the companion may go silent before the app stops claiming it is
+// connected. The board sends a status line about once a second and BLE/survey
+// traffic on top, so five seconds of nothing is a dead link, not a quiet one.
+#define RECON_ESP_SILENT_MS 5000u
+// A receiver reports at 1 Hz; five missed fixes is unplugged, not between
+// sentences.
+#define RECON_GPS_STALE_MS  5000u
+
+void recon_app_liveness_tick(ReconApp* app) {
+    uint32_t now = furi_get_tick();
+    bool lost_now = false;
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    // Companion. esp_connected was only ever set back to false on scene entry,
+    // so a board that browned out or a header that worked loose mid-drive kept
+    // showing "ESP" and the last frame rate, frozen, for as long as the screen
+    // was up -- the detector reporting itself healthy while hearing nothing.
+    if(app->esp && app->esp_connected && app->esp_rx_tick &&
+       (now - app->esp_rx_tick) >= RECON_ESP_SILENT_MS) {
+        app->esp_connected = false;
+        app->esp_lost = true;
+        app->esp_frame_rate = -1; // no honest rate from a silent board
+        app->esp_rate_tick = 0;
+        lost_now = true;
+    }
+    // GPS. Same failure, same shape: see gps_publish_fix().
+    if(app->gps_valid && app->gps_fix_tick && (now - app->gps_fix_tick) >= RECON_GPS_STALE_MS) {
+        app->gps_valid = false;
+        app->gps_sats = 0;
+    }
+    furi_mutex_release(app->mutex);
+    // One pulse, outside the lock, on the transition only. Not the configured
+    // alert: that means "camera", and this means "your detector just stopped".
+    if(lost_now && app->notifications) {
+        notification_message(app->notifications, &sequence_single_vibro);
+    }
 }
 
 void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch) {
@@ -591,6 +634,12 @@ void recon_app_report_remote_id(
 
     app->diag_accepted++;
     uint8_t prev_conf = (uint8_t)entry->confidence;
+    // Captured BEFORE the flag is cleared, same as recon_app_report_flock(): a
+    // row restored from hits.csv loads with alerted=true, so without this the
+    // alert rule saw "already announced" and a drone first heard today, after
+    // a restart, never alerted at all -- issue #5's bug on the one class whose
+    // detection is most time-critical.
+    bool was_archived = entry->archived;
     entry->count++;
     entry->last_tick = now;
     entry->archived = false;
@@ -642,7 +691,7 @@ void recon_app_report_remote_id(
            prev_conf,
            (uint8_t)entry->confidence,
            entry->alerted,
-           false,
+           was_archived,
            now,
            app->alert_last_tick,
            app->alert_have_fired,
@@ -1001,6 +1050,11 @@ void recon_app_gps_cfg_tick(ReconApp* app) {
     if(want && app->esp) {
         esp_link_send_band(app->esp);
         esp_link_send_gps_cfg(app->esp);
+        // And the scan mode itself. The companion boots with g_scanning=true but
+        // g_combo=false, i.e. Wi-Fi only; a brownout mid-drive therefore came
+        // back up with BLE detection off and nothing on screen to say so. The
+        // kickoff is an idempotent mode-select, so re-sending it is free.
+        esp_link_send_kickoff(app->esp, NULL);
     }
 }
 
@@ -1151,7 +1205,13 @@ void recon_app_ble_add(
             'L',
             flock_ble_confidence(company, name, raven_gatt),
             0,
-            (cat == BleCatAxon) ? FlockClassBodycam : FlockClassAlpr,
+            // A Raven is Flock's ACOUSTIC gunshot sensor, positively identified
+            // by its own GATT services, and flock_model_name() already spells it
+            // "Flock Raven acoustic" for the acoustic class. Filing it as ALPR
+            // put a microphone on the list as a plate reader.
+            (cat == BleCatAxon) ? FlockClassBodycam :
+            raven_gatt          ? FlockClassAcoustic :
+                                  FlockClassAlpr,
             false,
             0); // BLE advert, not a probe request -- no probe rate exists
         // Record WHAT matched, alongside how sure we are. Two Confirmed rows can
@@ -1450,17 +1510,28 @@ void recon_hits_save(ReconApp* app) {
 
     recon_report_ensure_dirs(app);
 
+    // WRITE BESIDE, THEN REPLACE. This runs every 30 s during a scan, and it
+    // used to truncate hits.csv in place -- so a flat battery or a crash in the
+    // half-second the card was being written took the WHOLE history with it,
+    // every previous session included, which is the one loss the autosave was
+    // added to prevent. The temp file is complete and closed before the old
+    // file is touched, and any failed write abandons it, leaving the previous
+    // hits.csv exactly as it was.
     File* file = storage_file_alloc(app->storage);
-    if(storage_file_open(file, RECON_HITS_PATH, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
-        storage_file_write(file, FLOCK_STORE_SCHEMA "\n", strlen(FLOCK_STORE_SCHEMA) + 1);
-        storage_file_write(file, FLOCK_STORE_HEADER "\n", strlen(FLOCK_STORE_HEADER) + 1);
+    bool ok = false;
+    if(storage_file_open(file, RECON_HITS_TMP_PATH, FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
+        ok = storage_file_write(file, FLOCK_STORE_SCHEMA "\n", strlen(FLOCK_STORE_SCHEMA) + 1) ==
+             strlen(FLOCK_STORE_SCHEMA) + 1;
+        ok = ok &&
+             storage_file_write(file, FLOCK_STORE_HEADER "\n", strlen(FLOCK_STORE_HEADER) + 1) ==
+                 strlen(FLOCK_STORE_HEADER) + 1;
 
         // One record at a time, straight to the card. Never assemble the file in
         // RAM -- same reason the report writers stream (see recon_report.c).
         // Snapshotting per entry also means the lock is never held across an SD
         // write, so a still-running ESP worker can't stall behind the filesystem.
         char line[FLOCK_STORE_LINE_MAX];
-        for(size_t i = 0; i < total; i++) {
+        for(size_t i = 0; ok && i < total; i++) {
             FlockStoreRec rec;
             bool have = false;
             furi_mutex_acquire(app->mutex, FuriWaitForever);
@@ -1472,11 +1543,20 @@ void recon_hits_save(ReconApp* app) {
             if(!have) continue;
 
             size_t n = flock_store_fmt_line(line, sizeof(line), &rec);
-            if(n) storage_file_write(file, line, n);
+            if(n && storage_file_write(file, line, n) != n) ok = false;
         }
     }
     storage_file_close(file);
     storage_file_free(file);
+    if(ok) {
+        // The firmware's rename refuses an existing destination, so the old file
+        // goes first. The gap between the two calls is microseconds, and the
+        // replacement is already complete on the card when it opens.
+        storage_common_remove(app->storage, RECON_HITS_PATH);
+        storage_common_rename(app->storage, RECON_HITS_TMP_PATH, RECON_HITS_PATH);
+    } else {
+        storage_common_remove(app->storage, RECON_HITS_TMP_PATH);
+    }
 }
 
 // How long a detection may sit in RAM before it reaches the card. The bound on
@@ -1891,6 +1971,10 @@ static void recon_tick_event_callback(void* context) {
     // session sent). Doing that transmit on the worker thread would race this
     // thread's own commands on the same UART handle.
     recon_app_gps_cfg_tick(app);
+    // Notice when the companion or the GPS has gone silent. Both used to be
+    // "up until a scene said otherwise", which is how a loose header connector
+    // produced a drive's worth of confident-looking nothing.
+    recon_app_liveness_tick(app);
     // Phone GPS: re-ask for the location stream while it is not delivering. Same
     // hoisted-to-the-dispatcher reasoning as the two above -- the ordinary case is
     // that the operator opens a scan screen and connects the phone afterwards, and

@@ -274,6 +274,7 @@ void recon_scene_firmware_run_on_enter(void* context) {
 
     app->fw_running = true;
     app->fw_ok = false;
+    app->fw_back_warned = false;
     app->fw_log_dirty = false;
     app->fw_thread = furi_thread_alloc_ex("FlipDeFlockFlash", 4096, fw_worker, app);
     furi_thread_start(app->fw_thread);
@@ -291,6 +292,18 @@ bool recon_scene_firmware_run_on_event(void* context, SceneManagerEvent event) {
         app->fw_log_dirty = false;
         furi_mutex_release(app->mutex);
         if(dirty) fw_render(app);
+        return true;
+    }
+    if(event.type == SceneManagerEventTypeBack && app->fw_running) {
+        // Back is LOCKED while a flash or backup is in flight. Unconsumed, it
+        // went straight to on_exit, which aborts the worker -- so one bump of the
+        // key mid-write left a half-flashed ESP32. Recoverable (the ROM loader
+        // always allows a reflash), but in the field that is a dead companion.
+        // Say so once, then keep swallowing presses until the worker is done.
+        if(!app->fw_back_warned) {
+            app->fw_back_warned = true;
+            fw_log_cb(app, "Back locked until done.");
+        }
         return true;
     }
     return false;

@@ -383,6 +383,18 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
     CHECK_INT_EQ(m.u.flock.hidden, true);
 
+    // ALL FIVE trailers the companion can emit on one probe line, in wire order
+    // (fp, sg, pr, cls, hid). 7 + 5 = 12 fields; the array used to hold 10, so
+    // the last two tokens were glued into "pr=7,cls=a,hid=1" and cls/hid were
+    // lost -- silently, because the MAC-derived class fallback usually agreed.
+    // Written on a MAC in NO vendor table so only the wire token can produce
+    // the class, and with pr= present so the glue lands on cls=, not fp=.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,2,,fp=deadbeef,sg=1,pr=7,cls=a,hid=1"), EspMsgFlock);
+    CHECK_INT_EQ((long)m.u.flock.fp, (long)0xdeadbeefu);
+    CHECK_INT_EQ(m.u.flock.probe_rate, 7);
+    CHECK_INT_EQ(m.u.flock.dev_class, FlockClassAcoustic);
+    CHECK_INT_EQ(m.u.flock.hidden, true);
+
     // An SSID that literally begins "hid=" is an SSID, not the attribute.
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,hid=1"), EspMsgFlock);
     CHECK_STR_EQ(m.u.flock.ssid, "hid=1");

@@ -348,7 +348,7 @@ static void preflight_begin(ReconApp* app, bool restart) {
 
     scan_session_start(app);
     if(app->settings.backend == EspBackendCompanion) {
-        esp_link_send(app->esp, "flockcombo");
+        esp_link_send_kickoff(app->esp, "flockcombo");
         esp_link_send(app->esp, "sigtest");
     }
     scan_session_gps_start(app);

@@ -68,6 +68,8 @@ typedef enum {
 #define RECON_REPORT_FOLDER RECON_APP_FOLDER "/reports"
 #define RECON_SETTINGS_PATH RECON_APP_FOLDER "/settings.txt"
 #define RECON_HITS_PATH     RECON_APP_FOLDER "/hits.csv"
+// Written in full first, then swapped in over hits.csv -- see recon_hits_save().
+#define RECON_HITS_TMP_PATH RECON_APP_FOLDER "/hits.tmp"
 // One appended row per scan session. Exists because a drive that finds nothing
 // is INDISTINGUISHABLE from a companion that never scanned, an app that rejected
 // everything, and a road with no cameras on it -- all four render as an empty
@@ -619,8 +621,23 @@ typedef struct {
     float gps_lon;
     float gps_course; /**< course over ground (deg), NAN if unknown */
     int gps_sats;
+    uint32_t gps_fix_tick; /**< tick of the last VALID fix; the GUI tick clears
+                             *   gps_valid once this is RECON_GPS_STALE_MS old,
+                             *   because a receiver that goes silent never sends
+                             *   the "lock lost" sentence that used to be the
+                             *   only way gps_valid could fall. */
 
     bool esp_connected;
+    bool esp_lost; /**< the link WAS up this session and then went silent for
+                     *   RECON_ESP_SILENT_MS. Distinct from !esp_connected so the
+                     *   header can say "ESP?" rather than the never-connected
+                     *   "...", and so the one-shot haptic fires once. */
+    uint32_t esp_rx_tick; /**< tick of the last line of any kind from the companion */
+    char esp_kickoff[12]; /**< the scan mode the current scene asked the board for
+                            *   ("flockcombo"); re-sent after a companion reboot
+                            *   because the board boots WiFi-only (g_combo=false)
+                            *   and the banner handler used to restore only band
+                            *   and GPS, leaving BLE detection silently off. */
     uint32_t esp_frames; /**< 802.11 frames this *session* (companion total minus base) */
     uint32_t esp_hits; /**< Flock hits this session (companion total minus base) */
     // The companion's frame/hit counters are lifetime totals (reset only on ESP
@@ -762,6 +779,7 @@ typedef struct {
     FuriThread* fw_thread;
     volatile bool fw_running;
     volatile bool fw_ok;
+    bool fw_back_warned; /**< "Back locked until done." has been logged this run */
     volatile bool fw_log_dirty; /**< log changed -> re-render */
     /**
      * Flash/backup progress, 0..100, or -1 when no transfer is running.
@@ -970,6 +988,15 @@ void recon_app_request_gps_cfg(ReconApp* app);
 
 /** GUI-tick side: send the relay config if the worker asked for it. */
 void recon_app_gps_cfg_tick(ReconApp* app);
+
+/**
+ * GUI-tick watchdog for the two inputs that used to be "up until told
+ * otherwise": drops esp_connected (and raises esp_lost, with one vibro pulse)
+ * after RECON_ESP_SILENT_MS without a companion line, and drops gps_valid after
+ * RECON_GPS_STALE_MS without a fix. Both only ever fall here or on an explicit
+ * report; a silent device never reports.
+ */
+void recon_app_liveness_tick(ReconApp* app);
 
 /**
  * Opt-in "anomaly": an unnamed, unidentified (no mfg id / no recognized category),

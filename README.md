@@ -212,7 +212,7 @@ firmware; in Marauder mode they explain what's missing.
   | Row tag | Class | What it covers |
   |---|---|---|
   | *(none)* | ALPR camera | Flock Safety and other plate readers |
-  | `ST:` | Acoustic sensor | SoundThinking / ShotSpotter — listens, does not read plates |
+  | `ST:` | Acoustic sensor | SoundThinking / ShotSpotter, or a Flock Raven identified over BLE — listens, does not read plates |
   | `AX:` | Body-worn camera | Axon, Utility BodyWorn, Digital Ally — moves with a person, says nothing about a pole |
   | `VG:` | Vendor gear, kind unknown | Ubicquia, Motorola Solutions, Verkada, Genetec, Avigilon — one OUI carries plate readers *and* hand-held radios, so the vendor is stated and the product is not |
   | `DR:` | Unmanned aircraft | see **Drones** below |
@@ -415,7 +415,8 @@ exact dB. `-33dB` closer to 0 means physically closer.
 - **ESP** (or `...`) — companion connected / still waiting
 - **ch / frames / hits** — channel · 802.11 frames captured · Flock detections, counted this session (reset each time you open the screen)
 - **row tag** — `!` CONFIRMED · `F` probe-fingerprint · `L` Likely · `p` Possible · `.` OUI-only · `*` marked
-- **`ST:` before the name** — a SoundThinking (ShotSpotter) acoustic sensor, not an ALPR camera. Untagged rows are cameras; the detail screen names the class in full
+- **`ST:` before the name** — an acoustic sensor (SoundThinking / ShotSpotter, or a Flock Raven identified over BLE), not an ALPR camera. Untagged rows are cameras; the detail screen names the class and model in full
+- **`ESP?` in the header** — the companion was talking and has gone silent for five seconds (loose header, brownout, or a reboot in progress). `...` means it never answered at all
 - **`AX:`** — a body-worn police camera (Axon, Utility BodyWorn, Digital Ally). Not fixed infrastructure: it moves with a person or a vehicle, so it says nothing about a camera on a pole
 - **`VG:`** — vendor gear of undetermined kind (Ubicquia, Motorola Solutions, Verkada, Genetec, Avigilon). The vendor is known, the product is not: one OUI carries plate readers and hand-held radios alike
 - **`DR:`** — an unmanned aircraft, detected by its Remote ID broadcast

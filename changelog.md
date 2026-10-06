@@ -1,5 +1,63 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **One visit to the Locator stopped the Air Survey for the rest of the run.**
+  The flag that tells the survey poll and the GPS-relay re-send to stay off the
+  radio while the Locator owns it was set on the way in and never cleared on the
+  way out. After any Lock-in, the survey was never asked for again and a
+  rebooted companion never got its GPS config back, until the app was
+  restarted. Cleared on exit; verified on hardware by watching `survey.csv`
+  resume after a Locator round trip.
+
+- **A companion that goes silent is now reported as silent.** `esp_connected`
+  only ever fell on entering a screen, so a board that browned out or a header
+  that worked loose mid-drive kept showing `ESP` and the last frame rate,
+  frozen. After five seconds without a line the header reads `ESP?`, the rate
+  shows `--/s`, the empty list says why, and the Flipper gives one short
+  vibration. A board that never answered still reads `...`, because that is a
+  different fault.
+
+- **A GPS fix now expires.** `gps_valid` fell only when a sentence explicitly
+  reported lost lock. A receiver that was unplugged, a companion that rebooted,
+  or a phone whose link dropped simply stops talking, and the last position
+  stayed "valid" and was written onto every later detection. Five seconds
+  without a fix now clears it.
+
+- **A companion reboot no longer turns BLE detection off.** The board boots
+  Wi-Fi-only; the banner handler restored band and GPS settings but not the
+  scan mode, so after a brownout BLE was silently off for the rest of the
+  session. The scan kickoff is remembered and re-sent with the rest.
+
+- **`hits.csv` is written beside and swapped in, not truncated in place.** The
+  autosave rewrote the file every 30 s, so a flat battery or a crash during the
+  write took the whole history with it, every earlier session included. The
+  new file is complete and closed before the old one is replaced, and any
+  failed write leaves the previous file untouched.
+
+- **A drone restored from `hits.csv` alerts again when it is actually heard.**
+  The Remote ID path passed a literal "not restored" to the alert rule, so a
+  stored row loaded as already-announced and never fired. Same fix the Wi-Fi
+  and BLE paths got for issue #5.
+
+- **A probe line carrying all five trailers no longer loses the last two.** The
+  parser split into ten fields; a line with `fp=`, `sg=`, `pr=`, `cls=` and
+  `hid=` has twelve, so `cls=` and `hid=` were glued onto `pr=` and dropped.
+  Harmless only when the MAC-derived class happened to agree. Pinned by a test
+  that goes red on the old size.
+
+- **Back is locked while the ESP32 flasher is writing.** It went straight to
+  the scene exit, which aborted the worker mid-flash. The log says
+  `Back locked until done.` and the key is swallowed until the worker finishes.
+
+- **A Flock Raven is filed as an acoustic sensor, not an ALPR camera.** The BLE
+  path positively identifies a Raven by its own GATT services and then filed
+  it under the default class. It now carries the `ST:` row tag like the other
+  acoustic sensor, and the detail screen already named the model. Verified on
+  the bench emitter's Raven identity.
+
 ## v0.98
 
 ### Added
