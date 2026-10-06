@@ -793,6 +793,11 @@ typedef struct {
     volatile bool fw_running;
     volatile bool fw_ok;
     bool fw_back_warned; /**< "Back locked until done." has been logged this run */
+    volatile bool fw_writing; /**< the worker is inside flash_file(): ERASE,
+                                *   write and verify. Not derived from fw_pct,
+                                *   because the erase runs before the first
+                                *   progress callback and a Back during it
+                                *   aborted a flash with the chip already wiped. */
     volatile bool fw_log_dirty; /**< log changed -> re-render */
     /**
      * Flash/backup progress, 0..100, or -1 when no transfer is running.
@@ -1104,12 +1109,21 @@ void recon_hits_save(ReconApp* app);
 void recon_hits_clear(ReconApp* app);
 
 /**
- * Delete hits.csv AND empty the detection table, live rows included. For the
+ * Drop every detection row that matches the exclusion lists (by address, or by
+ * a non-zero fingerprint). Returns how many went. Called when an exclusion is
+ * added and after the lists are loaded, so "never alert" applies to what is
+ * already stored and not only to the next sighting.
+ */
+size_t recon_app_purge_excluded(ReconApp* app);
+
+/**
+ * Delete hits.csv AND empty the detection table, live rows included. Returns
+ * false, with the table untouched, if the card refused the delete. For the
  * explicit "Clear Saved Hits" action, where rows left in RAM would be written
  * back by the next save. recon_hits_clear() keeps live rows and is for turning
  * the Save hits setting off, where what is on screen should stay on screen.
  */
-void recon_hits_clear_all(ReconApp* app);
+bool recon_hits_clear_all(ReconApp* app);
 
 /**
  * Persist after the operator DELETED an entry. Writes the table, or removes

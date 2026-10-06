@@ -496,6 +496,34 @@ void recon_app_set_esp_proto(ReconApp* app, uint8_t version, bool mismatch) {
     furi_mutex_release(app->mutex);
 }
 
+size_t recon_app_purge_excluded(ReconApp* app) {
+    if(!app) return 0;
+    size_t removed = 0;
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    size_t w = 0;
+    for(size_t i = 0; i < app->flock_count; i++) {
+        const FlockEntry* e = &app->flock[i];
+        bool gone = false;
+        for(size_t k = 0; k < app->ignore_mac_count && !gone; k++) {
+            gone = memcmp(app->ignore_macs[k], e->mac, 6) == 0;
+        }
+        for(size_t k = 0; e->ie_fp != 0 && k < app->ignore_fp_count && !gone; k++) {
+            gone = app->ignore_fps[k] == e->ie_fp;
+        }
+        if(gone) {
+            removed++;
+            continue;
+        }
+        if(w != i) app->flock[w] = app->flock[i];
+        w++;
+    }
+    app->flock_count = w;
+    if(app->selected >= (int)w) app->selected = w ? (int)w - 1 : 0;
+    if(removed) app->hits_dirty = true;
+    furi_mutex_release(app->mutex);
+    return removed;
+}
+
 bool recon_app_exclude_device(ReconApp* app, const uint8_t* mac, uint32_t fp, bool* out_by_fp) {
     if(out_by_fp) *out_by_fp = false;
     if(!app || !mac) return false;
@@ -524,6 +552,12 @@ bool recon_app_exclude_device(ReconApp* app, const uint8_t* mac, uint32_t fp, bo
     app->ignore_fp_count = nf;
     app->ignore_mac_count = nm;
     furi_mutex_release(app->mutex);
+
+    // AND TAKE IT OUT OF WHAT IS ALREADY ON THE LIST. The gate only stops the
+    // NEXT sighting; the device's existing row -- and any other row carrying
+    // the same fingerprint under a different address -- stayed in the table, in
+    // hits.csv and in every report written from them.
+    recon_app_purge_excluded(app);
 
     if(out_by_fp) *out_by_fp = by_fp;
     return true;
@@ -1145,8 +1179,28 @@ void recon_app_ble_add(
             break;
         }
     }
-    if(!e && app->ble_count < RECON_BLE_MAX) {
+    bool ble_new_row = false;
+    if(e) {
+        e->last_tick = now;
+    } else if(app->ble_count < RECON_BLE_MAX) {
         e = &app->ble[app->ble_count++];
+        ble_new_row = true;
+    } else {
+        // FULL: reuse the row heard longest ago, never a marked one. The table
+        // is small on purpose (see RECON_BLE_MAX), and first-come-first-served
+        // meant the first eight advertisers in range held it for the whole
+        // session and nothing heard later could ever get a row.
+        size_t v = RECON_BLE_MAX;
+        for(size_t i = 0; i < app->ble_count; i++) {
+            if(app->ble[i].marked) continue;
+            if(v == RECON_BLE_MAX || app->ble[i].last_tick < app->ble[v].last_tick) v = i;
+        }
+        if(v < RECON_BLE_MAX) {
+            e = &app->ble[v];
+            ble_new_row = true;
+        }
+    }
+    if(e && ble_new_row) {
         memset(e, 0, sizeof(BleDevice));
         memcpy(e->addr, addr, 6);
         e->first_lat = app->gps_valid ? app->gps_lat : NAN;
@@ -1864,6 +1918,18 @@ static void recon_hits_add(ReconApp* app, const FlockStoreRec* r) {
 void recon_hits_load(ReconApp* app) {
     if(!app->settings.save_hits) return;
 
+    // FINISH AN INTERRUPTED SWAP. recon_hits_save() removes hits.csv only after
+    // hits.tmp is complete and closed, then renames it into place. Power lost
+    // between those two calls leaves no hits.csv and a whole, valid hits.tmp --
+    // so that combination can only mean "the rename did not happen", and
+    // completing it here recovers every row. A hits.tmp NEXT TO a hits.csv is
+    // the opposite case, a write that died part-way, and is left to be
+    // overwritten by the next save.
+    if(!storage_file_exists(app->storage, RECON_HITS_PATH) &&
+       storage_file_exists(app->storage, RECON_HITS_TMP_PATH)) {
+        storage_common_rename(app->storage, RECON_HITS_TMP_PATH, RECON_HITS_PATH);
+    }
+
     File* file = storage_file_alloc(app->storage);
     if(storage_file_open(file, RECON_HITS_PATH, FSAM_READ, FSOM_OPEN_EXISTING)) {
         char chunk[HITS_CHUNK];
@@ -1931,6 +1997,7 @@ void recon_hits_load(ReconApp* app) {
 }
 
 void recon_hits_clear(ReconApp* app) {
+    storage_common_remove(app->storage, RECON_HITS_TMP_PATH);
     storage_common_remove(app->storage, RECON_HITS_PATH);
 
     // Drop the restored entries too. Leaving them on screen after "clear" would
@@ -1947,13 +2014,19 @@ void recon_hits_clear(ReconApp* app) {
     furi_mutex_release(app->mutex);
 }
 
-void recon_hits_clear_all(ReconApp* app) {
-    storage_common_remove(app->storage, RECON_HITS_PATH);
+bool recon_hits_clear_all(ReconApp* app) {
+    // The file first, and only then the table. If the card refuses the delete,
+    // emptying the screen anyway would show "cleared" over hits that come back
+    // on the next launch.
+    storage_common_remove(app->storage, RECON_HITS_TMP_PATH);
+    FS_Error err = storage_common_remove(app->storage, RECON_HITS_PATH);
+    if(err != FSE_OK && err != FSE_NOT_EXIST) return false;
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     app->flock_count = 0;
     app->selected = 0;
     app->hits_dirty = false; // nothing left to flush
     furi_mutex_release(app->mutex);
+    return true;
 }
 
 // ---- view dispatcher glue ------------------------------------------------
@@ -2064,6 +2137,10 @@ static ReconApp* recon_app_alloc(void) {
         SIG_IGNORED_MAX_MACS,
         &app->ignore_fp_count,
         &app->ignore_mac_count);
+    // The saved hits were restored a few lines up, before these lists existed,
+    // so reconcile now: a device excluded in an earlier session must not come
+    // back from hits.csv on every launch.
+    recon_app_purge_excluded(app);
 
     app->view_dispatcher = view_dispatcher_alloc();
     app->scene_manager = scene_manager_alloc(&recon_scene_handlers, app);

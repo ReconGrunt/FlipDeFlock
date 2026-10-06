@@ -1814,7 +1814,7 @@ static void start_promisc() {
  * precisely what this exists to expose. tools/check_oui_parity.py fails CI if
  * they drift.
  */
-#define FLOCK_COMPANION_VERSION "0.98"
+#define FLOCK_COMPANION_VERSION "0.99"
 // First eight hex digits of SHA-256 over the newline-joined PRODUCTION entries
 // in FLOCK_SIG_TABLE. tools/check_oui_parity.py derives and enforces it, and the
 // Flipper compares this advertised value with FDF_SIGNATURE_REVISION.

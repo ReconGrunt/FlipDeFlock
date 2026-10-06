@@ -215,9 +215,13 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
             // is reachable (the scan stopped and wrote them), and leaving them in
             // RAM meant the next save wrote them straight back -- "hits.csv
             // deleted" was true for about as long as it took to start a scan.
-            recon_hits_clear_all(app);
+            bool cleared = recon_hits_clear_all(app);
             recon_scene_reports_build_menu(app);
-            recon_scene_reports_show_popup(app, "Saved Hits Cleared", "hits.csv deleted");
+            if(cleared) {
+                recon_scene_reports_show_popup(app, "Saved Hits Cleared", "hits.csv deleted");
+            } else {
+                recon_scene_reports_show_popup(app, "Could Not Clear", "hits.csv not deleted");
+            }
             consumed = true;
         }
     }

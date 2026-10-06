@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.99
 
 ### Changed
 
@@ -41,6 +41,32 @@
 
 ### Fixed
 
+- **An interrupted save of `hits.csv` is recovered on the next start.** The new
+  file is written beside the old one and renamed into place; power lost between
+  removing the old file and the rename left a complete `hits.tmp` and no
+  `hits.csv`, and only `hits.csv` was read back. That combination is now
+  completed at load.
+
+- **"It's mine: never alert" removes what is already stored.** The exclusion
+  only stopped the next sighting. The device's existing row, and any other row
+  carrying the same fingerprint under another address, stayed in the list, in
+  `hits.csv` and in reports, and an excluded device came back from the saved
+  file on every launch because hits were restored before the exclusion lists
+  were read.
+
+- **A failed exclusion no longer looks like a successful one.** With the address
+  list full the row was deleted anyway and the device alerted again on its next
+  sighting, and a fingerprint could be written without its address. The row now
+  stays, with the error tone, unless the exclusion is actually on the card.
+
+- **Clear Saved Hits says so when the card refuses the delete,** instead of
+  emptying the screen over a file that would restore everything at the next
+  launch.
+
+- **The BLE table reuses its oldest row when full.** At eight rows,
+  first-come-first-served meant the first eight advertisers in range held it for
+  the whole session.
+
 - **Leaving the ESP32 flasher could reboot the Flipper.** The flasher frees the
   detection tables to make room for itself and re-allocates them on the way
   out, as one 19.3 KB block. On a loaded firmware the app has about 24 KB of
@@ -53,11 +79,6 @@
   asks how large a block is available first and falls back to four smaller
   ones rather than halting. Verified on hardware with a full 4 MB backup run
   and exit; the heap fell to 10 KB during the run.
-
-- **Back is locked only while flash is being written.** The first version of
-  the lock also covered the connect phase and backups, which left up to twenty
-  sync attempts with no way off the screen. Connecting and backing up can be
-  cancelled again; nothing is written during either.
 
 - **Holding OK while the alert card is up acts on the device on the card.** The
   card covers the list, so the highlighted row is invisible, and the hold used
@@ -129,15 +150,44 @@
   Harmless only when the MAC-derived class happened to agree. Pinned by a test
   that goes red on the old size.
 
-- **Back is locked while the ESP32 flasher is writing.** It went straight to
-  the scene exit, which aborted the worker mid-flash. The log says
-  `Back locked until done.` and the key is swallowed until the worker finishes.
+- **Back is locked while the ESP32 flasher is erasing and writing.** It went
+  straight to the scene exit, which aborted the worker and could leave a wiped
+  or half-written board. The lock covers the whole flash operation, erase
+  included, and nothing else: connecting can still be cancelled, because that
+  is up to twenty sync attempts with nothing touched yet, and so can a backup,
+  which only reads. The log says `Back locked until done.` once.
 
 - **A Flock Raven is filed as an acoustic sensor, not an ALPR camera.** The BLE
   path positively identifies a Raven by its own GATT services and then filed
   it under the default class. It now carries the `ST:` row tag like the other
   acoustic sensor, and the detail screen already named the model. Verified on
   the bench emitter's Raven identity.
+
+### Verified
+
+- On hardware, against the bench emitter: the survey and hit files keep updating
+  after a Locator round trip; a silent companion reads `ESP?` and recovers; the
+  Raven shows as acoustic; a probe request for a Flock network name stores as
+  `Likely` where the previous build stored `CONFIRMED`; holding OK on the alert
+  card opens that device; Clear Saved Hits leaves only later rows; a full 4 MB
+  backup, exit and app exit complete without a reboot; and the reflashed
+  companion reaches `READY` with the signature self-test passing.
+- Compile-verified only: the companion's probe-response rung and its
+  public-address check for BLE prefixes (no bench identity exercises either
+  yet), the GPS expiry, the drone re-alert, the survey re-report gate, and the
+  recovery of an interrupted save.
+
+### Not fixed in this build
+
+- A camera on a randomised MAC with no usable fingerprint is still invisible to
+  the detection list. Nothing here changes that.
+- `ouis`, `ssid_confirmed` and `ssid_likely` in `signatures.json` cannot create
+  a detection on the Companion backend, only on Marauder, despite what
+  `docs/signatures.md` says.
+- BLE scanning is active, so the companion sends scan requests.
+- The flasher writes any `.bin` it is given at offset 0 without checking that it
+  is a merged image for the connected chip.
+- Free memory is still thin on firmware that loads a lot alongside the app.
 
 ## v0.98
 

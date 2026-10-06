@@ -129,7 +129,10 @@ bool recon_scene_hit_menu_on_event(void* context, SceneManagerEvent event) {
             exclude_fp = e->ie_fp;
             exclude = true;
         }
-        if(event.event == HitMenuDelete || event.event == HitMenuIgnore) {
+        // Delete removes the row here. "It's mine" does NOT: the row goes only
+        // once the exclusion is safely on the card (recon_app_exclude_device
+        // purges it), so a full list cannot make the press look like it worked.
+        if(event.event == HitMenuDelete) {
             size_t i = (size_t)app->hit_menu_idx;
             // Close the gap rather than leaving a hole: every other consumer
             // walks flock[0..flock_count) and a tombstone would render.
@@ -157,7 +160,15 @@ bool recon_scene_hit_menu_on_event(void* context, SceneManagerEvent event) {
     if(learn_fp) sig_db_learn_fp(app->storage, learn_fp);
     // After the hit table is saved, so a card that fails here cannot also lose
     // the deletion the operator already saw happen on screen.
-    if(exclude) recon_app_exclude_device(app, exclude_mac, exclude_fp, NULL);
+    if(exclude) {
+        if(recon_app_exclude_device(app, exclude_mac, exclude_fp, NULL)) {
+            recon_hits_save_after_delete(app);
+        } else {
+            // Not saved (the list is full, or the card refused). The row is
+            // still there, and that is the message: the device is NOT excluded.
+            notification_message(app->notifications, &sequence_error);
+        }
+    }
     scene_manager_previous_scene(app->scene_manager);
     return true;
 }

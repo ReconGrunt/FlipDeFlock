@@ -22,7 +22,7 @@ who *does* have that board is often the only way a bug gets found at all.
   retracted two probe fingerprints this project had recommended, `89c3debf` and
   `ba9fafa0` ([#25](https://github.com/ReconGrunt/FlipDeFlock/issues/25),
   [#27](https://github.com/ReconGrunt/FlipDeFlock/discussions/27)). He was told to
-  pin `89c3debf` in his own `signatures.json` as the camera; his next drive found
+  pin `89c3debf` in his own `signatures.json` as a candidate for the camera; his next drive found
   it on ten devices over 7.9 km, and ten of the nineteen rows in the hits file he
   sent back were phones. Both hashes are denylisted now, a regression fixture that
   asserted the wrong answer was inverted, and the precision work in v0.97 and v0.98

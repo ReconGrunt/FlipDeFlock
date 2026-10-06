@@ -459,6 +459,24 @@ the code and confirm the behavior yourself.
 
 ## What's new
 
+**v0.99** - **A stability and honesty release.** The app now notices when the
+companion or the GPS goes silent instead of showing the last good state forever
+(`ESP?` in the header, one vibration, and a fix that expires). One visit to the
+Locator no longer stops the Air Survey for the rest of the run, a companion
+reboot no longer leaves BLE detection off, `hits.csv` survives a crash during a
+save, and leaving the ESP32 flasher can no longer run the Flipper out of memory.
+
+Precision: a Flock network name in a probe **request** no longer confirms the
+device that sent it, because that name is what the sender is looking for, not
+what it is. Two prefixes left the table, one registered to a chip vendor and one
+that was never a registered prefix at all. "It's mine: never alert" now removes
+what is already stored and says so when it could not be saved.
+
+**Reflash the companion** for this release: the prefix table and the scoring
+changes live on the board as well as in the app. See
+[changelog.md](changelog.md) for what was verified on hardware and what this
+build deliberately leaves alone.
+
 **v0.98** - **A zero-hit session can now prove that the detector was actually
 working.** The new **Health / Preflight** screen checks the live UART, app and
 companion build labels, protocol compatibility, signature-table revision, the

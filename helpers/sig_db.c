@@ -635,7 +635,12 @@ bool sig_db_ignore_add(Storage* storage, const uint8_t* mac, uint32_t fp, bool* 
             break;
         }
     }
-    if(!dup_mac && nm < SIG_IGNORED_MAX_MACS) {
+    // NO ROOM FOR THE ADDRESS MEANS NO EXCLUSION AT ALL. The contract is that
+    // the address is always recorded; writing only the fingerprint and calling
+    // that success left the device excluded on the sightings that carried the
+    // fingerprint and alerting again on the ones that did not.
+    if(!dup_mac && nm >= SIG_IGNORED_MAX_MACS) return false;
+    if(!dup_mac) {
         char line[16];
         if(snprintf(
                line,

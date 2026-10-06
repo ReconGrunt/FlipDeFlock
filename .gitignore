@@ -47,7 +47,13 @@ flipdeflock-*handoff*.md
 # public form; they belong outside the repo, and this is the net under that rule.
 *HANDOFF*.md
 *HANDOFF*.txt
+*handoff*.md
+*handoff*.txt
+*Handoff*.md
+*Handoff*.txt
 NOTES*.md
+notes*.md
+Notes*.md
 *-internal*.md
 *.internal.md
 *.local.md
