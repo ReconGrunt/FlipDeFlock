@@ -99,6 +99,17 @@ void suite_esp_parser(void) {
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,3,test_flck"), EspMsgFlock);
     CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
 
+    // A perfectly anchored name in a PROBE REQUEST names the network the sender
+    // wants, not the sender. A phone probing for a camera's provisioning AP must
+    // not become a Confirmed camera under the phone's own MAC. Beacon ('B') and
+    // probe response ('R') carry the transmitter's own name and still Confirm.
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,Flock-A1B2C3"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,P,3,test_flck"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceLikely);
+    CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,R,3,Flock-A1B2C3"), EspMsgFlock);
+    CHECK_INT_EQ(m.u.flock.conf, FlockConfidenceConfirmed);
+
     // The cap only ever lowers. A companion reporting a WEAKER rung than the
     // SSID would justify is left alone -- it knows things this line does not.
     CHECK_INT_EQ(P("D,a1b2c3d4e5f6,-40,6,B,1,Flock-A1B2C3"), EspMsgFlock);

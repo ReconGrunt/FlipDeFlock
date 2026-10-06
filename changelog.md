@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Changed
+
+- **A Flock network name in a probe request no longer confirms the sender.**
+  Beacons and probe responses carry the transmitter's own SSID. A probe request
+  carries the one the sender is looking for, so a phone that once joined a
+  camera's provisioning AP probed for `Flock-A1B2C3` from its own address and
+  was listed as a CONFIRMED camera. Capped at `Likely` on the Flipper, at the
+  same trust boundary that already re-derives a claimed Confirmed, so it holds
+  with a companion that has not been reflashed. The companion applies the same
+  cap. The bench emitter gained identity 12 for exactly this case: on the
+  previous build it stored as Confirmed, on this one as Likely, and the same
+  name in a beacon still Confirms.
+
+- **The BLE `Penguin` name rule is anchored on `Penguin-`.** Unit names are
+  `Penguin-<digits>`; the bare word is a product name other vendors use, and
+  this rule stakes Confirmed.
+
+- **Companion: a probe response addressed to a tracked prefix scores like a
+  directed probe request addressed to one.** An access point only answers a
+  station that probed it moments ago, so the response is evidence the station
+  is present and transmitting. Same rung, no new class of evidence.
+  Compile-verified; not yet exercised on the air.
+
+- **Companion: the BLE address-prefix fallback applies to public addresses
+  only.** A random BLE address has no registered prefix, so a three-byte match
+  on one named nothing and produced a steady trickle of `Possible` rows from
+  phones. Compile-verified; not yet exercised on the air.
+
 ### Fixed
 
 - **One visit to the Locator stopped the Air Survey for the rest of the run.**

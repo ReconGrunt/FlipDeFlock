@@ -86,6 +86,17 @@ static EspMsgType parse_flock(char** f, int n, EspMsg* out) {
         FlockConfidence by_ssid = flock_ssid_confidence(ssid);
         if(by_ssid < conf) conf = by_ssid;
     }
+    // A NAME IN A PROBE REQUEST BELONGS TO THE NETWORK SOUGHT, NOT THE SENDER.
+    //
+    // Beacons and probe responses carry the transmitter's OWN SSID, so an
+    // anchored "Flock-XXXXXX" there names the device. A probe REQUEST carries
+    // the SSID the sender is LOOKING FOR: a phone that once joined a camera's
+    // provisioning AP, or an installer's laptop, probes for "Flock-A1B2C3" from
+    // its own address, and until this cap that phone was CONFIRMED as a camera.
+    // It is the same attribution error the companion fixed for its rx side,
+    // from the other direction. Likely keeps it on the list and alertable; it
+    // still says a Flock network is known to something nearby.
+    if(conf == FlockConfidenceConfirmed && ftype == 'P') conf = FlockConfidenceLikely;
 
     // Trailing key=value fields. Older firmware omits them and newer firmware may
     // add more, so unknown keys are skipped rather than treated as an error.
