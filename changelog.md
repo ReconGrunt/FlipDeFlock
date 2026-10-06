@@ -41,6 +41,24 @@
 
 ### Fixed
 
+- **Leaving the ESP32 flasher could reboot the Flipper.** The flasher frees the
+  detection tables to make room for itself and re-allocates them on the way
+  out, as one 19.3 KB block. On a loaded firmware the app has about 24 KB of
+  heap free and a largest block of about 17 KB, so after the flasher had
+  fragmented the heap the block could not be placed and the firmware halted on
+  out-of-memory. Seen once, on backing out after a successful flash. Two
+  changes: the Wi-Fi and BLE tables drop from 48 rows to 8, because the only
+  reader is the Locator picker and nothing marks rows in them any more, which
+  returns 5.6 KB and brings the block to 13.5 KB; and the re-allocation now
+  asks how large a block is available first and falls back to four smaller
+  ones rather than halting. Verified on hardware with a full 4 MB backup run
+  and exit; the heap fell to 10 KB during the run.
+
+- **Back is locked only while flash is being written.** The first version of
+  the lock also covered the connect phase and backups, which left up to twenty
+  sync attempts with no way off the screen. Connecting and backing up can be
+  cancelled again; nothing is written during either.
+
 - **Holding OK while the alert card is up acts on the device on the card.** The
   card covers the list, so the highlighted row is invisible, and the hold used
   to open the menu for whatever was highlighted underneath. Reaching for

@@ -31,8 +31,18 @@
 #include "views/locator_view.h"
 
 #define RECON_FLOCK_MAX  64
-#define RECON_WIFI_MAX   48
-#define RECON_BLE_MAX    48
+// 8 EACH, DOWN FROM 48, AND THE REASON IS RAM. Both tables are written by the
+// link and read by exactly one thing, the Locator picker, which lists only rows
+// with `marked` set -- and the Wi-Fi and BLE list screens that set it are gone,
+// so today nothing does. At 48 rows they cost 6.9 KB of the single tables block
+// (19.3 KB), which is more than the largest free block this app has left on a
+// loaded firmware (16.9 KB measured at the main menu, 24 KB free in total), and
+// the flasher screen has to free and re-allocate that block. When it could not
+// be placed again the firmware halted on out-of-memory and rebooted the
+// Flipper, seen on leaving the flasher after a successful flash. 8 keeps the
+// code paths alive for when a picker returns; raise it only with a measurement.
+#define RECON_WIFI_MAX   8
+#define RECON_BLE_MAX    8
 #define RECON_TEXT_STORE 160
 #define RECON_SSID_LEN   33
 /** Shown on the main menu and About, so a bug report can name the build.
@@ -545,6 +555,9 @@ typedef struct {
      * wedged. One block frees one clean hole for the plugin and takes the same
      * hole back afterwards. */
     void* tables_block;
+    bool tables_split; /**< the one block did not fit, so each table is its own
+                         *   allocation and must be freed as such. See
+                         *   recon_tables_acquire(). */
     FlockEntry* flock;
     size_t flock_count;
     int selected; /**< selected flock index for the detail scene */

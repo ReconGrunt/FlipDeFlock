@@ -2,6 +2,7 @@
 // Copyright (c) 2026 ReconGrunt
 #include "recon_app_i.h"
 #include <furi_hal_power.h>
+#include <furi/core/memmgr_heap.h>
 #include "helpers/esp_link.h"
 #include "helpers/esp_parser.h" // esp_hexval, for the guarded-BSSID setting
 #include "helpers/gps_link.h"
@@ -2125,14 +2126,28 @@ static ReconApp* recon_app_alloc(void) {
 #define TBL_SURVEY_SZ TBL_ALIGN(RECON_SURVEY_MAX * sizeof(SurveyEntry))
 #define TBL_TOTAL_SZ  (TBL_FLOCK_SZ + TBL_WIFI_SZ + TBL_BLE_SZ + TBL_SURVEY_SZ)
 
+/** Free whichever shape the tables were allocated in. Caller holds the mutex,
+ *  or is the teardown path where nothing else is running. */
+static void recon_tables_free_storage(ReconApp* app) {
+    if(app->tables_split) {
+        free(app->flock);
+        free(app->wifi);
+        free(app->ble);
+        free(app->survey);
+        app->tables_split = false;
+    } else {
+        free(app->tables_block);
+    }
+    app->tables_block = NULL;
+}
+
 void recon_tables_release(ReconApp* app) {
     // Persist before dropping, or a screen that merely wants memory becomes data
     // loss. A no-op when Save Hits is off, same contract as everywhere else.
     recon_hits_save(app);
 
     furi_mutex_acquire(app->mutex, FuriWaitForever);
-    free(app->tables_block);
-    app->tables_block = NULL;
+    recon_tables_free_storage(app);
     app->flock = NULL;
     app->wifi = NULL;
     app->ble = NULL;
@@ -2148,7 +2163,23 @@ void recon_tables_release(ReconApp* app) {
 
 void recon_tables_acquire(ReconApp* app) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
-    if(!app->tables_block) {
+    if(!app->tables_block && !app->flock) {
+        // malloc on this firmware does not return NULL: it halts the device on
+        // out-of-memory. So ASK FIRST. If one contiguous block is not available
+        // -- which is what a fragmented heap looks like after the flasher
+        // plugin, its thread stack and the file browser have come and gone --
+        // take four smaller ones instead. That costs the fragmentation the
+        // single block was introduced to avoid, and it is still strictly better
+        // than rebooting the Flipper on the way out of a successful flash.
+        if(memmgr_heap_get_max_free_block() < TBL_TOTAL_SZ + 512u) {
+            app->flock = calloc(1, TBL_FLOCK_SZ);
+            app->wifi = calloc(1, TBL_WIFI_SZ);
+            app->ble = calloc(1, TBL_BLE_SZ);
+            app->survey = calloc(1, TBL_SURVEY_SZ);
+            app->tables_split = true;
+        }
+    }
+    if(!app->tables_block && !app->flock) {
         // ONE BLOCK, carved. Four separate allocations left the heap a little
         // worse after every release/acquire round trip, because the plugin that
         // borrows the space in between is one big block and the four that come
@@ -2205,7 +2236,7 @@ static void recon_app_free(ReconApp* app) {
     furi_string_free(app->fw_log);
     // One block backing all four tables (see recon_tables_acquire). Freed before
     // the mutex, since release takes it.
-    free(app->tables_block);
+    recon_tables_free_storage(app);
 
     furi_mutex_free(app->mutex);
     free(app);

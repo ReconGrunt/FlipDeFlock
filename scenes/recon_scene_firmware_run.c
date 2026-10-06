@@ -294,12 +294,19 @@ bool recon_scene_firmware_run_on_event(void* context, SceneManagerEvent event) {
         if(dirty) fw_render(app);
         return true;
     }
-    if(event.type == SceneManagerEventTypeBack && app->fw_running) {
-        // Back is LOCKED while a flash or backup is in flight. Unconsumed, it
+    if(event.type == SceneManagerEventTypeBack && app->fw_running && app->fw_op == 1 &&
+       app->fw_pct >= 0) {
+        // Back is LOCKED while flash is actually being WRITTEN. Unconsumed, it
         // went straight to on_exit, which aborts the worker -- so one bump of the
         // key mid-write left a half-flashed ESP32. Recoverable (the ROM loader
         // always allows a reflash), but in the field that is a dead companion.
         // Say so once, then keep swallowing presses until the worker is done.
+        //
+        // ONLY THE WRITE. fw_pct is -1 until the transfer starts, so the connect
+        // phase stays cancellable -- that is up to twenty sync attempts, over two
+        // minutes of a screen with no way out when the board is simply not in
+        // its bootloader, and nothing has been written yet. A backup (fw_op 0)
+        // only reads, so aborting it costs a partial file and nothing else.
         if(!app->fw_back_warned) {
             app->fw_back_warned = true;
             fw_log_cb(app, "Back locked until done.");
