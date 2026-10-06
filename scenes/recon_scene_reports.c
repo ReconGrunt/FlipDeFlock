@@ -210,7 +210,12 @@ bool recon_scene_reports_on_event(void* context, SceneManagerEvent event) {
             recon_scene_reports_show_popup(app, "Exclusions Cleared", "Hearing them again");
             consumed = true;
         } else if(event.event == ReportItemClearSaved) {
-            recon_hits_clear(app); // deletes hits.csv AND drops the restored entries
+            // The WHOLE table, not just the rows restored from disk. Rows found
+            // earlier in this app run are saved hits too by the time this menu
+            // is reachable (the scan stopped and wrote them), and leaving them in
+            // RAM meant the next save wrote them straight back -- "hits.csv
+            // deleted" was true for about as long as it took to start a scan.
+            recon_hits_clear_all(app);
             recon_scene_reports_build_menu(app);
             recon_scene_reports_show_popup(app, "Saved Hits Cleared", "hits.csv deleted");
             consumed = true;

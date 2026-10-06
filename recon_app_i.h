@@ -1091,6 +1091,14 @@ void recon_hits_save(ReconApp* app);
 void recon_hits_clear(ReconApp* app);
 
 /**
+ * Delete hits.csv AND empty the detection table, live rows included. For the
+ * explicit "Clear Saved Hits" action, where rows left in RAM would be written
+ * back by the next save. recon_hits_clear() keeps live rows and is for turning
+ * the Save hits setting off, where what is on screen should stay on screen.
+ */
+void recon_hits_clear_all(ReconApp* app);
+
+/**
  * Persist after the operator DELETED an entry. Writes the table, or removes
  * `hits.csv` entirely when they deleted the last one.
  *

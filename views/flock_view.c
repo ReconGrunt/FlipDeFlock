@@ -904,15 +904,39 @@ static bool flock_view_input_callback(InputEvent* event, void* context) {
     // the display position back to a table index exactly as the short press does.
     if(event->key == InputKeyOk && event->type == InputTypeLong) {
         int hold_idx = -1;
+        int card_idx = -1;
+        ReconApp* app = NULL;
         with_view_model(
             fv->view,
             FlockViewModel * model,
             {
+                app = model->app;
+                card_idx = model->card_index;
                 if(model->selected >= 0 && model->selected < model->order_count) {
                     hold_idx = model->order[model->selected];
                 }
             },
             false);
+        // WHILE THE HIT CARD IS UP, THE HOLD MEANS THE DEVICE ON THE CARD.
+        //
+        // The card covers the list, so the highlighted row is invisible, and the
+        // natural reaction to your own phone beeping is to hold OK and pick
+        // "It's mine: never alert". That used to act on whatever row happened to
+        // be highlighted UNDERNEATH -- permanently excluding a device the
+        // operator never saw, which could be the one real camera on the list.
+        // card_index is already a table index, which is what hold_cb takes.
+        if(app && card_idx >= 0) {
+            furi_mutex_acquire(app->mutex, FuriWaitForever);
+            bool live = app->alert_card_tick != 0;
+            if(live) app->alert_card_tick = 0; // the hold dismisses it, like any key
+            bool valid = card_idx < (int)app->flock_count;
+            furi_mutex_release(app->mutex);
+            if(live) {
+                with_view_model(
+                    fv->view, FlockViewModel * model, { model->card_index = -1; }, true);
+                if(valid) hold_idx = card_idx;
+            }
+        }
         if(hold_idx >= 0 && fv->hold_cb) fv->hold_cb(fv->hold_ctx, hold_idx);
         return true;
     }

@@ -719,9 +719,16 @@ void recon_app_survey_add(
     const char* sig) {
     furi_mutex_acquire(app->mutex, FuriWaitForever);
     SurveyEntry* e = NULL;
+    // The count this row had after the PREVIOUS dump (0 = first time seen).
+    // The companion sends running totals every poll, so "count went up" is the
+    // only thing that says the device was actually heard again since.
+    uint16_t prev_count = 0;
+    bool known = false;
     for(size_t i = 0; i < app->survey_count; i++) {
         if(memcmp(app->survey[i].mac, mac, 6) == 0) {
             e = &app->survey[i];
+            prev_count = e->count;
+            known = true;
             break;
         }
     }
@@ -794,6 +801,12 @@ void recon_app_survey_add(
     FlockConfidence fp_conf = flock_ie_fp_confidence(fp, mac);
     FlockConfidence pin_conf = flock_mac_pin_confidence(mac);
     if(pin_conf > fp_conf) fp_conf = pin_conf;
+    // ONLY WHEN IT WAS HEARD AGAIN. Every 10 s dump repeats every row, so
+    // reporting unconditionally re-announced a device that left minutes ago on
+    // each poll: its sighting count climbed, its "last seen" stayed fresh, and
+    // its row kept showing live bars for a transmitter that was long gone. A
+    // row whose running total has not moved has not been heard since last time.
+    if(known && count <= prev_count) return;
     if(fp_conf != FlockConfidenceNone) {
         // 'F' is the "probe-fp" source label, matching what the companion-line
         // parser stamps on a fingerprint match. No SSID, because a survey row has
@@ -1930,6 +1943,15 @@ void recon_hits_clear(ReconApp* app) {
     }
     app->flock_count = w;
     if(app->selected >= (int)w) app->selected = w ? (int)w - 1 : 0;
+    furi_mutex_release(app->mutex);
+}
+
+void recon_hits_clear_all(ReconApp* app) {
+    storage_common_remove(app->storage, RECON_HITS_PATH);
+    furi_mutex_acquire(app->mutex, FuriWaitForever);
+    app->flock_count = 0;
+    app->selected = 0;
+    app->hits_dirty = false; // nothing left to flush
     furi_mutex_release(app->mutex);
 }
 

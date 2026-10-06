@@ -43,6 +43,17 @@ FEATURE_BRIEF.md
 # Internal audit / handoff notes (kept local, not part of the project)
 HANDOFF-audit.md
 flipdeflock-*handoff*.md
+# Any handoff, notes or internal doc, whatever it is called. None of these has a
+# public form; they belong outside the repo, and this is the net under that rule.
+*HANDOFF*.md
+*HANDOFF*.txt
+NOTES*.md
+*-internal*.md
+*.internal.md
+*.local.md
+_internal/
+OPSEC/
+.claude/
 
 # Roadmap and go-to-market planning (kept local, not part of the project)
 ROADMAP.md

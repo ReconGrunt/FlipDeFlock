@@ -32,6 +32,32 @@
 
 ### Fixed
 
+- **Holding OK while the alert card is up acts on the device on the card.** The
+  card covers the list, so the highlighted row is invisible, and the hold used
+  to open the menu for whatever was highlighted underneath. Reaching for
+  `It's mine: never alert` when your own phone beeped could permanently
+  exclude a device you never saw. Verified on hardware.
+
+- **Clear Saved Hits clears the hits found in this run too.** It dropped only
+  the rows restored from disk, so anything found since the app was opened
+  stayed in memory and was written straight back by the next save. Verified on
+  hardware: scan, clear, scan again, and only the second scan's rows exist.
+
+- **A Mark set from the detail screen is saved.** It toggled the row without
+  flagging the table as changed, so it reached the card only if something else
+  happened to.
+
+- **A device heard once is no longer re-announced on every survey poll.** A
+  survey row matching a learned fingerprint or a flagged MAC was reported again
+  on each ten-second dump whether or not the device had been heard since, so
+  its sighting count climbed and its row stayed fresh long after it had gone.
+  It is now reported only when the companion's running count has moved.
+
+- **Signature-match detections print their frame type in reports.** The report
+  formatter kept its own copy of the known frame-type letters and missed `S`,
+  so those rows printed `?`. The store and the formatter now share one
+  definition.
+
 - **One visit to the Locator stopped the Air Survey for the rest of the run.**
   The flag that tells the survey poll and the GPS-relay re-send to stay off the
   radio while the Locator owns it was set on the way in and never cleared on the
