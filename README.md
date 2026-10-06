@@ -33,7 +33,7 @@ department actually buys from, only one holds an IEEE MAC block, so a prefix lis
 cannot see the rest.
 
 **Passive recon only.** Detection is listen-only — no deauth,
-injection, or jamming, ever, and nothing is transmitted at any point. Detections
+injection, or jamming, ever. Personal identifiers are never transmitted. Detections
 are indicators, not proof: OUI-only matches are possible, not confirmed, so verify
 by eye. Use it only where you are authorized to.
 
@@ -390,9 +390,9 @@ instead of the detection table.
 
 CI enforces this on every push rather than trusting anyone to remember:
 
-- 6 prefixes that were published and later withdrawn cannot come back
+- 7 prefixes that were published and later withdrawn cannot come back
 - 15 look-alike registrations, right-sounding name and wrong company, are blocked
-- 26 chip-vendor and shared IEEE blocks are blocked, including the one above
+- 27 chip-vendor and shared IEEE blocks are blocked, including the one above
 - the Flipper and companion tables must agree, and the signature table carries a
   revision hash the app checks against the companion it is actually talking to
 

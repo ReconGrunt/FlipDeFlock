@@ -218,7 +218,7 @@ static inline const uint8_t* fble_addr_bytes(BLEAddress& a) {
 #endif
 #endif
 
-// ---- Flock-associated OUI prefixes (32) ----------------------------------
+// ---- Flock-associated OUI prefixes (30) ----------------------------------
 // MUST stay byte-identical to flock_ouis[] in helpers/flock_db.c. There is no
 // shared header (an Arduino sketch cannot include the app's), so editing one
 // side alone would silently desync ESP-side `conf` scoring from the Flipper's.
@@ -239,7 +239,11 @@ static inline const uint8_t* fble_addr_bytes(BLEAddress& a) {
 // because that commit drifted this table and flock_db.c identically. The gate
 // now also enforces the declared count and a retracted-prefix denylist.
 //
-// The last entry, b4:1e:52, is Flock Safety's own registered OUI (GainSec).
+// REMOVED 2026-10-05: 3c:71:bf (registered to Espressif, a chip vendor -- it
+// would score our own class of board) and 82:6b:f2 (locally-administered bit
+// set, so not a registered prefix at all). See flock_db.c.
+//
+// b4:1e:52 is Flock Safety's own registered OUI (GainSec).
 // Row layout matches flock_db.c line-for-line -- EXACTLY four entries per row --
 // so the two can be diffed by eye. The 5-on-one-row drift is what hid 93beede.
 static const uint8_t FLOCK_OUIS[][3] = {
@@ -248,9 +252,9 @@ static const uint8_t FLOCK_OUIS[][3] = {
     {0x9c, 0x2f, 0x9d}, {0xc0, 0x35, 0x32}, {0x94, 0x08, 0x53}, {0xe4, 0xaa, 0xea},
     {0xf4, 0x6a, 0xdd}, {0x24, 0xb2, 0xb9}, {0x00, 0xf4, 0x8d}, {0xd0, 0x39, 0x57},
     {0xe8, 0xd0, 0xfc}, {0xe0, 0x4f, 0x43}, {0xb8, 0x1e, 0xa4}, {0x70, 0x08, 0x94},
-    {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x3c, 0x71, 0xbf}, {0x58, 0x00, 0xe3},
-    {0x90, 0x35, 0xea}, {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69}, {0x82, 0x6b, 0xf2},
-    {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6}, {0x38, 0x5b, 0x44}, {0x14, 0xb5, 0xcd},
+    {0x58, 0x8e, 0x81}, {0xec, 0x1b, 0xbd}, {0x58, 0x00, 0xe3}, {0x90, 0x35, 0xea},
+    {0x5c, 0x93, 0xa2}, {0x64, 0x6e, 0x69}, {0xb4, 0x1e, 0x52}, {0xe0, 0x0a, 0xf6},
+    {0x38, 0x5b, 0x44}, {0x14, 0xb5, 0xcd},
 };
 static const size_t FLOCK_OUI_COUNT = sizeof(FLOCK_OUIS) / sizeof(FLOCK_OUIS[0]);
 

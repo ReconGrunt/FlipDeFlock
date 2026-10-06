@@ -4,6 +4,15 @@
 
 ### Changed
 
+- **Two prefixes are out of the Flock table.** `3c:71:bf` is registered to
+  Espressif, a chip vendor, and every other Espressif prefix was already
+  rejected for that reason; this one predated the sweep. Any ESP32 gadget on
+  that block sending a wildcard probe scored `Likely`. `82:6b:f2` has the
+  locally-administered bit set, so it is not a registered prefix at all. A
+  camera that keeps one fixed randomised address is what the `macs` pin in
+  `signatures.json` is for. Both are blocked in CI so they cannot return. The
+  table is in the companion too, so this takes effect after a reflash.
+
 - **A Flock network name in a probe request no longer confirms the sender.**
   Beacons and probe responses carry the transmitter's own SSID. A probe request
   carries the one the sender is looking for, so a phone that once joined a
