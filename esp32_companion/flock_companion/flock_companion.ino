@@ -135,11 +135,14 @@
  * CONFIG_BT_ENABLED / CONFIG_BLUEDROID_ENABLED come from sdkconfig.h, already
  * pulled in by Arduino.h above.
  */
-#if defined(CONFIG_BT_ENABLED) && defined(CONFIG_BLUEDROID_ENABLED)
+#if defined(CONFIG_BT_ENABLED) && (defined(CONFIG_BLUEDROID_ENABLED) || defined(CONFIG_BT_NIMBLE_ENABLED))
 #define FLOCK_HAS_BLE 1
 #else
 #define FLOCK_HAS_BLE 0
 #endif
+ #if defined(CONFIG_BT_NIMBLE_ENABLED) && !defined(BLE_ADDR_TYPE_PUBLIC)
+ #define BLE_ADDR_TYPE_PUBLIC BLE_ADDR_PUBLIC
+ #endif
 
 #if FLOCK_HAS_BLE
 #include <BLEDevice.h>
